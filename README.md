@@ -1,1 +1,3 @@
-# Get ready for readable and easy to run code for generating and evaluating transaction generation!!!
+# Get ready for readable and easy to run code!!! 
+### 1. Generating transactions
+### 2. Evaluating generated transactions
