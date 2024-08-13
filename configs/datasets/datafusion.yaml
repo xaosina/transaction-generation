@@ -1,0 +1,100 @@
+log_dir: log/datafusion
+patience: 3
+n_classes: 4
+main_metric: MulticlassAccuracy
+main_loss: 
+  name: nn.CrossEntropyLoss
+
+cc: 
+  mcc_code: 327
+  currency_rk: 4
+nn:
+  - days_since_first_tx
+  - transaction_amt
+
+data:
+  dataset:
+    parquet_path: "data/datafusion/orig_train/data"
+    random_split: true
+    split_seed: 42
+
+    split_sizes: 
+      - 0.7   # train
+      - 0.15  # train_val
+      - 0.15  # hpo_val
+
+  preprocessing:
+    common_pipeline: &common_pipeline
+      max_seq_len: 1000
+      time_name: days_since_first_tx
+      index_name: user_id
+      target_name: customer_age
+      cat_cardinalities: ${cc}
+      num_names: ${nn}
+      batch_transforms:
+        - RescaleTime:
+            loc: 0.0
+            scale: 183
+        - TimeToFeatures:
+            process_type: ${model.preprocess.params.time_process}
+        - TargetToLong
+    contrastive_pipeline:
+      <<: *common_pipeline
+      batch_transforms:
+        - RescaleTime:
+            loc: 0.0
+            scale: 1000.0
+        - TimeToFeatures:
+            process_type: ${model.preprocess.params.time_process}
+        - ContrastiveTarget
+        - RandomSlices:
+            split_count: 5
+            cnt_min: 25
+            cnt_max: 200
+            short_seq_crop_rate: 0.8
+            seed: 0
+
+  loaders:
+    train:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      drop_incomplete: true
+      shuffle: true
+      loop: false
+      num_workers: 4
+      random_seed: 42
+    full_train:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+    train_val:
+      split_idx: 1
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+    hpo_val:
+      split_idx: 2
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+
+test_data:
+  dataset:
+    parquet_path: "data/datafusion/orig_test/data"
+    split_sizes: 
+      - 1.0
+  preprocessing:
+    common_pipeline: *common_pipeline
+  loaders:
+    test:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+
+metrics:
+  - name: ${main_metric}
+    params: 
+      num_classes: ${n_classes}
