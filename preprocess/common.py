@@ -2,11 +2,11 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
-from pyspark.sql import Window, SparkSession
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import LongType
-
+from pyspark.sql.types import FloatType, LongType
 
 NA_VALUE = 0
 
@@ -210,3 +210,47 @@ def train_test_split(
     train_df = df.join(train_index, on=index_col)
 
     return train_df, test_df
+
+
+def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=False):
+    mode = "overwrite" if overwrite else "error"
+    spark = SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
+    if isinstance(data, Path) or isinstance(data, str):
+        data = Path(data)
+        df = spark.read.csv(data.as_posix(), header=True)
+    elif isinstance(data, pd.DataFrame):
+        df = spark.createDataFrame(data)
+    else:
+        raise TypeError
+    index_columns = metadata.get("index_columns", [])
+    cat_features = metadata.get("cat_features", [])
+    num_features = metadata.get("num_features", [])
+    ordering_columns = metadata.get("ordering_columns", [])
+    assert len(index_columns + cat_features + num_features + ordering_columns) == len(
+        set(index_columns + cat_features + num_features + ordering_columns)
+    ), "Sets intersect"
+
+    for_selection = []
+    for_selection += [F.col(name).cast(LongType()) for name in index_columns]
+    for_selection += [F.col(name).cast(LongType()) for name in cat_features]
+    for_selection += [F.col(name).cast(FloatType()) for name in num_features]
+    for_selection += [F.col(name).cast(FloatType()) for name in ordering_columns]
+    df = df.select(*for_selection)
+
+    if cat_codes_path is None:
+        print("Creating new cat codes.")
+        vcs = cat_freq(df, cat_features)
+        for vc in vcs:
+            df = vc.encode(df)
+            vc.write(save_path / "cat_codes" / vc.feature_name, mode=mode)
+    else:
+        print("Reading cat codes.")
+        for cat_col in cat_features:
+            vc = CatMap.read(cat_codes_path / cat_col)
+            df = vc.encode(df)
+    df = collect_lists(
+        df,
+        group_by=index_columns,
+        order_by=ordering_columns,
+    )
+    df.coalesce(1).write.parquet((save_path / "data").as_posix(), mode=mode)

@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument(
         "-d", "--data-path", type=str, default="data/datafusion/preprocessed_with_id_train.csv"
     )
-    parser.add_argument("-e", "--epochs", type=int, default=40)
+    parser.add_argument("-e", "--epochs", type=int, default=100)
     parser.add_argument("-b", "--batch-size", type=int, default=128)
 
     parser.add_argument("-s", "--sample-size", type=float, default=1.)

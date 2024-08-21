@@ -44,6 +44,7 @@ def collect_config(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--train-data", type=Path, default="orig_train")
+    parser.add_argument("-d", "--dataset", type=str, default="datafusion")
     parser.add_argument("-m", "--method", type=str, default="gru")
     parser.add_argument("-e", "--experiment", type=str, default="test")
     parser.add_argument("-s", "--specify", type=str, default=None)
@@ -55,7 +56,7 @@ if __name__ == "__main__":
 
     tqdm.__init__ = partialmethod(tqdm.__init__, disable=not args.tqdm)  # type: ignore
     config = collect_config(
-        "datafusion", args.method, args.experiment, args.specify, args.gpu
+        args.dataset, args.method, args.experiment, args.specify, args.gpu
     )
     config.data.dataset.parquet_path = args.train_data
     config.run_name = args.train_data.parts[-2]
