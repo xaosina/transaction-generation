@@ -1,5 +1,5 @@
 log_dir: log/datafusion_detection
-patience: 3
+patience: 2
 n_classes: 2
 main_metric: MulticlassAUROC
 main_loss: 

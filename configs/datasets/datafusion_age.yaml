@@ -1,4 +1,4 @@
-log_dir: log/datafusion
+log_dir: log/datafusion_age
 patience: 3
 n_classes: 4
 main_metric: MulticlassAccuracy

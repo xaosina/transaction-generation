@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument(
         "--orig",
         help="Path to orig dataset containing CSV files",
-        default="data/datafusion/preprocessed_with_id_train.csv",
+        default="data/datafusion/preprocessed_with_id_test.csv",
         type=Path,
     )
     parser.add_argument(
@@ -103,6 +103,7 @@ def prepare_orig(data_path, n_rows, n_users):
 
     client_ids = df["user_id"].unique()
     if (n_users > 0) and (n_users < len(client_ids)):
+        print(f"Reducing original data from {len(client_ids)} to {n_users} users to match the numbers")
         client_ids = df["user_id"].unique()
         gen = np.random.default_rng(0)
         train_ids = pd.Series(

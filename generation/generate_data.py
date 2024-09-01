@@ -1,17 +1,18 @@
 import argparse
 import logging
-
 import os
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sdv.metadata import SingleTableMetadata
 from sdv.sequential import PARSynthesizer
-from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
 
 def get_unique_folder_suffix(folder_path):
     folder_path = str(folder_path)
@@ -24,15 +25,19 @@ def get_unique_folder_suffix(folder_path):
             return suffix
         n += 1
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-d", "--data-path", type=str, default="data/datafusion/preprocessed_with_id_train.csv"
+        "-d",
+        "--data-path",
+        type=str,
+        default="data/datafusion/preprocessed_with_id_train.csv",
     )
     parser.add_argument("-e", "--epochs", type=int, default=100)
     parser.add_argument("-b", "--batch-size", type=int, default=128)
 
-    parser.add_argument("-s", "--sample-size", type=float, default=1.)
+    parser.add_argument("-s", "--sample-size", type=float, default=1.0)
     parser.add_argument("-g", "--gpu", type=str, default="cuda:3")
     parser.add_argument("-n", "--name", type=str, default="test")
     args = parser.parse_args()
@@ -67,8 +72,9 @@ def process_datafusion(df, sample_size=1.0):
 
 if __name__ == "__main__":
     args = parse_args()
-    dataset, metadata = process_datafusion(pd.read_csv(args.data_path), args.sample_size)
-
+    dataset, metadata = process_datafusion(
+        pd.read_csv(args.data_path), args.sample_size
+    )
     synthesizer = PARSynthesizer(
         metadata,
         context_columns=["customer_age", "dummy_binclass"],
