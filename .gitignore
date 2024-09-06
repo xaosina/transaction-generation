@@ -1,5 +1,9 @@
 log/*
-data/*
+data/**/*.csv
+data/**/*.crc
+data/**/*.parquet
+data/**/*_SUCCESS
+
 ebes/*
 
 # Byte-compiled / optimized / DLL files

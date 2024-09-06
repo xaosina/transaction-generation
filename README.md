@@ -14,14 +14,16 @@
 4. Report GRU ROC-AUC on Cross Validation
 #### 2. How to use
 1. Preprocess data
-> python preprocess/datafusion_detection.py -t tabsyn -n 16 -match-user -d log/generation/tabsyn/synth_dropped_2.csv -s data/detection/tabsyn_16
-2. Run GRU
-> python main.py -t data/datafusion/detection/tabsyn_16/data/ -e detection  --tqdm -d datafusion_detection
+> python preprocess/datafusion_detection.py --match-user -t tabsyn -n 16 -d log/generation/tabsyn/synth_dropped_2.csv -s data/detection/tabsyn_16
+2. Run GRU. ATTENTION! Dont forget to add "/data" at the **end** of data path
+> python main.py -t data/detection/tabsyn_16/data/ -e detection  --tqdm -d datafusion_detection
 
 ### Table metric
 Table metrics measure how well generated data simulate each row individually.
 1. Shape and trend score
 > python evaluation/eval_density.py -d log/generation/tabsyn/synth_16.csv
+
+See results in log/density/{name_of_file}.
 
 ### TCT metric
 Evaluate how well mcc code intervals generated
