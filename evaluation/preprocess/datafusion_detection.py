@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
-import os
 from pathlib import Path
+import random
 import tempfile
 import pandas as pd
 import numpy as np
@@ -80,7 +80,6 @@ def prepare_generated(data_path):
 
 
 def prepare_orig(data_path, n_rows, n_users):
-    np.random.seed(0)
     print("Prepare orig started")
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
@@ -134,6 +133,8 @@ def main(
     save_path: Path,
     overwrite: bool = False,
 ):
+    random.seed(42)
+    np.random.seed(42)
     if data_type == "tabsyn":
         gen_df, n_users = prepare_tabsyn(data, n_rows)
     else:
@@ -152,21 +153,19 @@ def main(
     final_df = pd.concat([gen_df, orig_df], ignore_index=True)
 
     # Create a temporary file to save the CSV
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_csv_file:
+    with tempfile.NamedTemporaryFile(suffix=".csv") as temp_csv_file:
+        print("Temp csv", temp_csv_file.name)
         temp_csv_path = temp_csv_file.name
         final_df.to_csv(temp_csv_path)
 
-    # Convert CSV to Parquet
-    csv_to_parquet(
-        data=temp_csv_path,
-        save_path=save_path,
-        metadata=METADATA,
-        cat_codes_path=None,
-        overwrite=overwrite,
-    )
-
-    # Clean up the temporary file
-    os.remove(temp_csv_path)
+        # Convert CSV to Parquet
+        csv_to_parquet(
+            data=temp_csv_path,
+            save_path=save_path,
+            metadata=METADATA,
+            cat_codes_path=None,
+            overwrite=overwrite,
+        )
 
 
 if __name__ == "__main__":
