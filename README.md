@@ -13,10 +13,13 @@
 3. Join and shuffle
 4. Report GRU ROC-AUC on Cross Validation
 #### 2. How to use
+##### In one step(RECOMMENDED)
+1. python evaluation/eval_detection.py -t tabsyn -m -d log/generation/tabsyn/unet_16.csv -n 16 --tqdm
+##### In two steps
 1. Preprocess data
-> python preprocess/datafusion_detection.py --match-user -t tabsyn -n 16 -d log/generation/tabsyn/synth_dropped_2.csv -s data/detection/tabsyn_16
+> python evaluation/preprocess/datafusion_detection.py --match-user -t tabsyn -n 16 -d log/generation/tabsyn/synth_16_099.csv -s data/detection/tabsyn_16_099
 2. Run GRU. ATTENTION! Dont forget to add "/data" at the **end** of data path
-> python main.py -t data/detection/tabsyn_16/data/ -e detection  --tqdm -d datafusion_detection
+> python evaluation/run_model.py -t data/detection/tabsyn_16_099/data/ -e configs/experiments/detection.yaml --use-tqdm -d configs/datasets/datafusion_detection.yaml
 
 ### Table metric
 Table metrics measure how well generated data simulate each row individually.

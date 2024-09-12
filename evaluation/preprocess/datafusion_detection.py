@@ -1,8 +1,10 @@
 from argparse import ArgumentParser
+import os
 from pathlib import Path
+import tempfile
 import pandas as pd
 import numpy as np
-from common import csv_to_parquet
+from .common import csv_to_parquet
 
 
 METADATA = {
@@ -16,7 +18,7 @@ METADATA = {
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument(
-        "-t", "--type", type=str, choices=["general", "tabsyn"], required=True
+        "-t", "--data-type", type=str, choices=["general", "tabsyn"], required=True
     )
     parser.add_argument("-n", "--n-rows", type=int)
     parser.add_argument("-m", "--match-users", action="store_true")
@@ -53,7 +55,9 @@ def prepare_tabsyn(data_path, n_rows):
     df["user_id"] = np.repeat(np.arange(df.shape[0] // n_rows), n_rows)
     df["days_since_first_tx"] = df.groupby("user_id")["time_diff_days"].cumsum()
 
-    df["customer_age"] = df.groupby("user_id")["customer_age"].transform(lambda x: x.mode()[0])    
+    df["customer_age"] = df.groupby("user_id")["customer_age"].transform(
+        lambda x: x.mode()[0]
+    )
     age_uniqueness = df.groupby("user_id")["customer_age"].nunique()
     assert age_uniqueness.eq(1).all(), age_uniqueness[age_uniqueness > 1]
     df["generated"] = 1
@@ -76,6 +80,7 @@ def prepare_generated(data_path):
 
 
 def prepare_orig(data_path, n_rows, n_users):
+    np.random.seed(0)
     print("Prepare orig started")
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
@@ -90,20 +95,22 @@ def prepare_orig(data_path, n_rows, n_users):
         )
         df = df.loc[slices]
         return df
+
     if n_rows > 0:
         # Filter
         df = df.groupby("user_id").filter(lambda x: len(x) >= n_rows)
         df = sample_subsequences(df)
 
-        time_offset = (
-            df.groupby("user_id")["days_since_first_tx"].transform("first") -
-            df.groupby("user_id")["time_diff_days"].transform("first")
-        )
+        time_offset = df.groupby("user_id")["days_since_first_tx"].transform(
+            "first"
+        ) - df.groupby("user_id")["time_diff_days"].transform("first")
         df["days_since_first_tx"] -= time_offset
 
     client_ids = df["user_id"].unique()
     if (n_users > 0) and (n_users < len(client_ids)):
-        print(f"Reducing original data from {len(client_ids)} to {n_users} users to match the numbers")
+        print(
+            f"Reducing original data from {len(client_ids)} to {n_users} users to match the numbers"
+        )
         client_ids = df["user_id"].unique()
         gen = np.random.default_rng(0)
         train_ids = pd.Series(
@@ -118,23 +125,51 @@ def prepare_orig(data_path, n_rows, n_users):
     return df
 
 
+def main(
+    data_type: str,
+    data: Path,
+    orig: Path,
+    n_rows: int,
+    match_users: bool,
+    save_path: Path,
+    overwrite: bool = False,
+):
+    if data_type == "tabsyn":
+        gen_df, n_users = prepare_tabsyn(data, n_rows)
+    else:
+        gen_df, n_users = prepare_generated(data)
+
+    if not match_users:
+        n_users = -1
+
+    orig_df = prepare_orig(orig, n_rows, n_users)
+
+    assert set(orig_df.columns) == set(gen_df.columns), (
+        orig_df.columns,
+        gen_df.columns,
+    )
+
+    final_df = pd.concat([gen_df, orig_df], ignore_index=True)
+
+    # Create a temporary file to save the CSV
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as temp_csv_file:
+        temp_csv_path = temp_csv_file.name
+        final_df.to_csv(temp_csv_path)
+
+    # Convert CSV to Parquet
+    csv_to_parquet(
+        data=temp_csv_path,
+        save_path=save_path,
+        metadata=METADATA,
+        cat_codes_path=None,
+        overwrite=overwrite,
+    )
+
+    # Clean up the temporary file
+    os.remove(temp_csv_path)
+
+
 if __name__ == "__main__":
     args = parse_args()
     print(vars(args))
-    if args.type == "tabsyn":
-        gen_df, n_users = prepare_tabsyn(args.data, args.n_rows)
-    else:
-        gen_df, n_users = prepare_generated(args.data)
-    if not args.match_users:
-        n_users = -1
-    orig_df = prepare_orig(args.orig, args.n_rows, n_users)
-    assert set(orig_df.columns) == set(gen_df.columns), (orig_df.columns, gen_df.columns)
-    final_df = pd.concat([gen_df, orig_df], ignore_index=True)
-    final_df.to_csv(f"log/generation/temp/{str(args.data.stem)}.csv")
-    csv_to_parquet(
-        data=f"log/generation/temp/{str(args.data.stem)}.csv",
-        save_path=args.save_path,
-        metadata=METADATA,
-        cat_codes_path=None,
-        overwrite=args.overwrite,
-    )
+    main(**vars(args))

@@ -213,6 +213,10 @@ def train_test_split(
 
 
 def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=False):
+    if isinstance(save_path, str):
+        save_path = Path(save_path)
+    if isinstance(cat_codes_path, str):
+        cat_codes_path = Path(cat_codes_path)
     mode = "overwrite" if overwrite else "error"
     spark = SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
     if isinstance(data, Path) or isinstance(data, str):
