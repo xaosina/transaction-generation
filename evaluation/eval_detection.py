@@ -1,10 +1,13 @@
 from argparse import ArgumentParser
 from pathlib import Path
 import tempfile
+import os
 
-from preprocess.datafusion_detection import main as prepare_data
-from run_model import main as run_model
+from .preprocess.datafusion_detection import main as prepare_data
+from .run_model import main as run_model
 
+DIRPATH = os.path.dirname(__file__)
+print(DIRPATH)
 
 def parse_args():
     parser = ArgumentParser()
@@ -33,9 +36,9 @@ def prepare_and_detect(
     orig: Path,
     n_rows: int,
     match_users: bool,
-    dataset: str = "configs/datasets/datafusion_detection.yaml",
-    method: str = "configs/methods/gru.yaml",
-    experiment="configs/experiments/detection.yaml",
+    dataset: str = DIRPATH + "/configs/datasets/datafusion_detection.yaml",
+    method: str = DIRPATH + "/configs/methods/gru.yaml",
+    experiment= DIRPATH + "/configs/experiments/detection.yaml",
     tqdm: bool = False,
 ):
     with tempfile.TemporaryDirectory() as temp_dir:

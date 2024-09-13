@@ -30,6 +30,40 @@ def parse_args():
     )
     return parser.parse_args()
 
+def run_eval_density(
+    data: Path, 
+    orig: Path=Path("data/datafusion/preprocessed_with_id_test.csv"), 
+    log_cols = ["transaction_amt"]):
+    
+    class Args:
+        pass
+    args = Args()
+    args.data = data
+    args.orig = orig
+    args.log_cols = log_cols
+
+    syn_path = args.data
+    real_path = args.orig
+    # Load
+    syn_data = pd.read_csv(syn_path)
+    real_data = pd.read_csv(real_path)
+    with open(real_path.with_name("metadata_for_density.json"), "r") as f:
+        metadata = json.load(f)["metadata"]
+    # Preprocess
+    for col in args.log_cols:
+        print(col)
+        syn_data[col] = log10_scale(syn_data[col])
+        real_data[col] = log10_scale(real_data[col])
+    syn_data = syn_data[[col for col in syn_data.columns if col in metadata["columns"].keys()]]
+    real_data = real_data[[col for col in real_data.columns if col in metadata["columns"].keys()]]
+    # Calculate 
+    qual_report = QualityReport()
+    qual_report.generate(real_data, syn_data, metadata)
+    quality = qual_report.get_properties()
+    Shape = quality["Score"][0]
+    Trend = quality["Score"][1]
+    return dict(shape=Shape, trend=Trend)
+
 if __name__ == "__main__":
     args = parse_args()
     print(vars(args))
