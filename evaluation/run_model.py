@@ -4,10 +4,11 @@
 import argparse
 from functools import partialmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 from collections.abc import Mapping
 import signal
 import pdb
+import pandas as pd
 
 from omegaconf import OmegaConf
 from tqdm import tqdm
@@ -52,19 +53,51 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(dataset: str, method: str, experiment: str, train_data: Path, specify: str=None, use_tqdm: bool = False):
+def main(
+    dataset: str, 
+    method: str, 
+    experiment: str, 
+    train_data: Path, 
+    specify: str=None, 
+    use_tqdm: bool = False,
+    gpu_ids : List[int] | None = None,
+    logging_lvl : str = 'info'
+) -> pd.DataFrame:
+    '''
+    Output is a DataFrame which looks like:
+                                       0          1          2       mean       std
+    MulticlassAUROC             0.817996   0.805227   0.808816   0.810679  0.005377
+    loss                        0.316283   0.311917   0.308628   0.312276  0.003136
+    train_MulticlassAUROC       0.889246   0.856822   0.862033   0.869367  0.014217
+    train_loss                  0.235925   0.266894   0.259100   0.253973  0.013152
+    train_val_MulticlassAUROC   0.817843   0.805163   0.801275   0.808094  0.007074
+    train_val_loss              0.310729   0.309233   0.314676   0.311546  0.002296
+    test_MulticlassAUROC        0.000000   0.000000   0.000000   0.000000  0.000000
+    test_loss                   0.000000   0.000000   0.000000   0.000000  0.000000
+    memory_after               82.000000  82.000000  82.000000  82.000000  0.000000
+    '''
+    assert logging_lvl in ['error', 'info']
     if isinstance(train_data, str):
         train_data = Path(train_data)
     signal.signal(signal.SIGUSR1, start_debugging)
 
     tqdm.__init__ = partialmethod(tqdm.__init__, disable=not use_tqdm)  # type: ignore
     config = collect_config(dataset, method, experiment, specify)
+    config.logging.file_lvl = logging_lvl
+    config.logging.cons_lvl = logging_lvl
+    if gpu_ids is not None:
+        gpu_devices = [f"cuda:{num}" for num in gpu_ids]
+        config.device = gpu_devices[0]
+        config.runner.device_list = gpu_devices
+        config.runner.params.n_runs = len(gpu_devices)
+        config.runner.params.n_workers = len(gpu_devices)
     config.data.dataset.parquet_path = train_data
     config.run_name = train_data.parts[-2]
 
     runner = Runner.get_runner(config["runner"]["name"])
     res = runner.run(config)
     print(res)
+    return res
 
 if __name__ == "__main__":
     args = parse_args()

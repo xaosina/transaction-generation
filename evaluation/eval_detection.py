@@ -2,35 +2,41 @@ from argparse import ArgumentParser
 from pathlib import Path
 import tempfile
 import os
+from typing import List
+import pandas as pd
 
 from .preprocess.datafusion_detection import main as prepare_data
 from .run_model import main as run_model
 
 DIRPATH = os.path.dirname(__file__)
-print(DIRPATH)
 
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument(
-        "-t", "--data-type", type=str, choices=["general", "tabsyn"], required=True
+        "-t", "--data-type", 
+        type=str, choices=["general", "tabsyn"], default="tabsyn"
     )
-    parser.add_argument("-n", "--n-rows", type=int)
+    parser.add_argument("-n", "--n-rows", type=int, required=True)
     parser.add_argument("-m", "--match-users", action="store_true")
     parser.add_argument(
-        "-d", "--data", help="generated data csv path", type=Path, required=True
+        "-d", "--data", 
+        help="generated data csv path", 
+        type=Path, required=True
     )
     parser.add_argument(
-        "--orig",
+        "-o", "--orig",
         help="Path to orig dataset containing CSV files",
-        default="data/datafusion/preprocessed_with_id_test.csv",
-        type=Path,
+        type=Path, required=True
     )
-    parser.add_argument("--dataset", type=str, default="configs/datasets/datafusion_detection.yaml")
-    parser.add_argument("--tqdm", action="store_true")
+    parser.add_argument("--dataset", type=str, default=None)
+    parser.add_argument("--method", type=str, default=None)
+    parser.add_argument("--experiment", type=str, default=None)
+    parser.add_argument('--gpu_ids', type=int, nargs='*', default=None)
+    parser.add_argument("-v", "--verbose", action="store_true", default=False)
     return parser.parse_args()
 
 
-def prepare_and_detect(
+def run_eval_detection(
     data_type: str,
     data: Path,
     orig: Path,
@@ -39,8 +45,9 @@ def prepare_and_detect(
     dataset: str = DIRPATH + "/configs/datasets/datafusion_detection.yaml",
     method: str = DIRPATH + "/configs/methods/gru.yaml",
     experiment= DIRPATH + "/configs/experiments/detection.yaml",
-    tqdm: bool = False,
-):
+    gpu_ids: List[int] | None = None,
+    verbose: bool = False,
+) -> pd.DataFrame:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)
@@ -53,16 +60,22 @@ def prepare_and_detect(
             match_users=match_users,
             save_path=temp_dir,
         )
-        run_model(
+        return run_model(
             dataset=dataset,
             method=method,
             experiment=experiment,
             train_data=temp_dir / "data",
-            use_tqdm=tqdm,
+            use_tqdm=verbose,
+            gpu_ids=gpu_ids,
+            logging_lvl= 'info' if verbose else 'error'
         )
 
 
 if __name__ == "__main__":
     args = parse_args()
-    print(vars(args))
-    prepare_and_detect(**vars(args))
+    vars_args = vars(args)
+    print(vars_args)
+    for name in ['dataset', 'method', 'experiment']:
+        if not vars_args[name]:
+            del vars_args[name]
+    run_eval_detection(**vars(args))
