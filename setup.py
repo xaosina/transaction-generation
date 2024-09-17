@@ -12,7 +12,7 @@ if not os.path.exists(destination):
 try:
     setup(
         name="transaction_metrics",
-        version="0.0.1",
+        version="0.0.2",
         packages=['tmetrics', 'tmetrics.preprocess'],
         package_dir = {'tmetrics': 'evaluation'},
         package_data={'tmetrics': ['configs/*/*.yaml']},
