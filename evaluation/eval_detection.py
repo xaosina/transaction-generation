@@ -5,7 +5,8 @@ import os
 from typing import List
 import pandas as pd
 
-from .preprocess.datafusion_detection import main as prepare_data
+from .preprocess.mbd_detection import main as prepare_mbd
+from .preprocess.datafusion_detection import main as prepare_datafusion
 from .run_model import main as run_model
 
 DIRPATH = os.path.dirname(__file__)
@@ -42,12 +43,18 @@ def run_eval_detection(
     orig: Path,
     n_rows: int,
     match_users: bool,
-    dataset: str = DIRPATH + "/configs/datasets/datafusion_detection.yaml",
+    dataset: str = "datafusion",
     method: str = DIRPATH + "/configs/methods/gru.yaml",
     experiment= DIRPATH + "/configs/experiments/detection.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
+    if dataset == "mbd":
+        dataset = DIRPATH + "/configs/datasets/mbd_detection.yaml"
+        prepare_data = prepare_mbd
+    elif dataset == "datafusion":
+        dataset = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
+        prepare_data = prepare_datafusion
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)

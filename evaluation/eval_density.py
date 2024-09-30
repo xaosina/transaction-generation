@@ -27,34 +27,22 @@ def parse_args():
         type=Path, required=True
     )
     parser.add_argument(
-        "--log-cols", type=list, default=["transaction_amt"]
-    )
-    parser.add_argument(
         '--save-res', action='store_const', const=True, default=False)
     return parser.parse_args()
 
 def run_eval_density(
     data: Path,
     orig: Path,
-    log_cols = ["transaction_amt"],
     save_results: bool = False):
-
-    class Args:
-        pass
-    args = Args()
-    args.data = data
-    args.orig = orig
-    args.log_cols = log_cols
-
-    syn_path = args.data
-    real_path = args.orig
+    syn_path = data
+    real_path = orig
     # Load
     syn_data = pd.read_csv(syn_path)
     real_data = pd.read_csv(real_path)
     with open(real_path.with_name("metadata_for_density.json"), "r") as f:
         metadata = json.load(f)["metadata"]
     # Preprocess
-    for col in args.log_cols:
+    for col in metadata["log_cols_for_density"]:
         print(col)
         syn_data[col] = log10_scale(syn_data[col])
         real_data[col] = log10_scale(real_data[col])
@@ -82,4 +70,4 @@ def run_eval_density(
 if __name__ == "__main__":
     args = parse_args()
     print(vars(args))
-    run_eval_density(args.data, args.orig, args.log_cols, save_results=args.save_res)
+    run_eval_density(args.data, args.orig, save_results=args.save_res)

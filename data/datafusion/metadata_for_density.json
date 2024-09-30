@@ -20,6 +20,7 @@
             }
         },
         "sequence_key": "user_id",
-        "sequence_index": "days_since_first_tx"
+        "sequence_index": "days_since_first_tx",
+        "log_cols_for_density": ["transaction_amt"]
     }
 }
