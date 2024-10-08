@@ -52,6 +52,9 @@ def run_eval_detection(
     if dataset == "mbd":
         dataset = DIRPATH + "/configs/datasets/mbd_detection.yaml"
         prepare_data = prepare_mbd
+    elif dataset == "mbd_short":
+        dataset = DIRPATH + "/configs/datasets/mbd_short_detection.yaml"
+        prepare_data = prepare_mbd
     elif dataset == "datafusion":
         dataset = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
         prepare_data = prepare_datafusion

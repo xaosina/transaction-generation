@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+import json
 from pathlib import Path
 import random
 import tempfile
@@ -6,12 +7,12 @@ import pandas as pd
 import numpy as np
 from .common import csv_to_parquet
 
-METADATA = {
-    "cat_features": ["event_type", "event_subtype", "currency", "src_type11", "src_type12", "dst_type11", "dst_type12", "src_type21", "src_type22", "src_type31", "src_type32"],
-    "num_features": ["amount"],
-    "index_columns": ["client_id", "generated"],
-    "ordering_columns": ["days_since_first_tx"],
-}
+# METADATA = {
+#     "cat_features": ["event_type", "event_subtype", "currency", "src_type11", "src_type12", "dst_type11", "dst_type12", "src_type21", "src_type22", "src_type31", "src_type32"],
+#     "num_features": ["amount"],
+#     "index_columns": ["client_id", "generated"],
+#     "ordering_columns": ["event_time"],
+# }
 
 
 def parse_args():
@@ -46,13 +47,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def prepare_tabsyn(data_path, n_rows):
+def prepare_tabsyn(data_path, n_rows, metadata):
     print("Prepare tabsyn started")
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
     assert (df.shape[0] % n_rows) == 0
     df["client_id"] = np.repeat(np.arange(df.shape[0] // n_rows), n_rows)
-    df["days_since_first_tx"] = df.groupby("client_id")["time_diff_days"].cumsum()
+    print(df.columns)
+    df[metadata["ordering_columns"][0]] = df.groupby("client_id")["time_diff_days"].cumsum()
 
     df["generated"] = 1
 
@@ -73,10 +75,23 @@ def prepare_generated(data_path):
     return df, n_users
 
 
-def prepare_orig(data_path, n_rows, n_users):
+def prepare_orig(data_path, n_rows, n_users, metadata):
     print("Prepare orig started")
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
+    print('Downloaded orig')
+    client_ids = df["client_id"].unique()
+    if (n_users > 0) and (n_users < len(client_ids)):
+        print(
+            f"Reducing original data from {len(client_ids)} to {n_users} users to match the numbers"
+        )
+        client_ids = df["client_id"].unique()
+        gen = np.random.default_rng(0)
+        train_ids = pd.Series(
+            gen.choice(client_ids, size=n_users, replace=False),
+            name="client_id",
+        )
+        df = df.merge(train_ids, on="client_id")
 
     def sample_subsequences(df):
         # Slice
@@ -94,23 +109,11 @@ def prepare_orig(data_path, n_rows, n_users):
         df = df.groupby("client_id").filter(lambda x: len(x) >= n_rows)
         df = sample_subsequences(df)
 
-        time_offset = df.groupby("client_id")["days_since_first_tx"].transform(
+        time_offset = df.groupby("client_id")[metadata["ordering_columns"][0]].transform(
             "first"
         ) - df.groupby("client_id")["time_diff_days"].transform("first")
-        df["days_since_first_tx"] -= time_offset
+        df[metadata["ordering_columns"][0]] -= time_offset
 
-    client_ids = df["client_id"].unique()
-    if (n_users > 0) and (n_users < len(client_ids)):
-        print(
-            f"Reducing original data from {len(client_ids)} to {n_users} users to match the numbers"
-        )
-        client_ids = df["client_id"].unique()
-        gen = np.random.default_rng(0)
-        train_ids = pd.Series(
-            gen.choice(client_ids, size=n_users, replace=False),
-            name="client_id",
-        )
-        df = df.merge(train_ids, on="client_id")
     df["client_id"] = pd.factorize(df["client_id"])[0]
     df["client_id"] += n_users
     df["generated"] = 0
@@ -127,17 +130,19 @@ def main(
     save_path: Path,
     overwrite: bool = False,
 ):
+    with open(orig.with_name("metadata_for_detection.json"), "r") as f:
+        metadata = json.load(f)["METADATA"]
     random.seed(42)
     np.random.seed(42)
     if data_type == "tabsyn":
-        gen_df, n_users = prepare_tabsyn(data, n_rows)
+        gen_df, n_users = prepare_tabsyn(data, n_rows, metadata)
     else:
         gen_df, n_users = prepare_generated(data)
 
     if not match_users:
         n_users = -1
 
-    orig_df = prepare_orig(orig, n_rows, n_users)
+    orig_df = prepare_orig(orig, n_rows, n_users, metadata)
 
     assert set(orig_df.columns) == set(gen_df.columns), (
         orig_df.columns,
@@ -156,7 +161,7 @@ def main(
         csv_to_parquet(
             data=temp_csv_path,
             save_path=save_path,
-            metadata=METADATA,
+            metadata=metadata,
             cat_codes_path=None,
             overwrite=overwrite,
         )

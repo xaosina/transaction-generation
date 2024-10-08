@@ -37,8 +37,10 @@ def run_eval_density(
     syn_path = data
     real_path = orig
     # Load
-    syn_data = pd.read_csv(syn_path)
-    real_data = pd.read_csv(real_path)
+    syn_data = pd.read_csv(syn_path, nrows=1000000)
+    print('Synth ready')
+    real_data = pd.read_csv(real_path, nrows=1000000)
+    print('Real ready')
     with open(real_path.with_name("metadata_for_density.json"), "r") as f:
         metadata = json.load(f)["metadata"]
     # Preprocess
