@@ -1,22 +1,46 @@
 {
     "metadata": {
         "columns": {
-            "amount": {
-                "sdtype": "numerical"
-            },
             "event_type": {
+                "sdtype": "categorical"
+            },
+            "event_subtype": {
                 "sdtype": "categorical"
             },
             "src_type11": {
                 "sdtype": "categorical"
             },
+            "src_type12": {
+                "sdtype": "categorical"
+            },
+            "src_type21": {
+                "sdtype": "categorical"
+            },
+            "src_type22": {
+                "sdtype": "categorical"
+            },
+            "src_type31": {
+                "sdtype": "categorical"
+            },
             "dst_type11": {
+                "sdtype": "categorical"
+            },
+            "dst_type12": {
                 "sdtype": "categorical"
             },
             "src_type32": {
                 "sdtype": "categorical"
             },
+            "currency": {
+                "sdtype": "categorical"
+            },
             "time_diff_days": {
+                "sdtype": "numerical"
+            },
+            "days_since_first_tx": {
+                "sdtype": "numerical"
+            },
+            "amount": {
                 "sdtype": "numerical"
             }
         },
