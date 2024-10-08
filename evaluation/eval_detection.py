@@ -9,7 +9,7 @@ from .preprocess.mbd_detection import main as prepare_mbd
 from .preprocess.datafusion_detection import main as prepare_datafusion
 from .run_model import main as run_model
 
-DIRPATH = os.path.dirname(__file__)
+DIRPATH = os.path.dirname(__file__) + "/.."
 
 def parse_args():
     parser = ArgumentParser()
