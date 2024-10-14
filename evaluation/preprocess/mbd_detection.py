@@ -58,7 +58,7 @@ def prepare_tabsyn(data_path, n_rows, metadata):
 
     df["generated"] = 1
 
-    df["client_id"] = pd.factorize(df["client_id"])[0]
+    df["client_id"] = df["client_id"].astype(str)
     n_users = df["client_id"].nunique()
     print("Prepare tabsyn finished")
     return df, n_users
@@ -69,7 +69,7 @@ def prepare_generated(data_path):
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
     df["generated"] = 1
-    df["client_id"] = pd.factorize(df["client_id"])[0]
+    df["client_id"] = df["client_id"].astype(str)
     n_users = df["client_id"].nunique()
     print("Prepare tabsyn finished")
     return df, n_users
@@ -114,8 +114,7 @@ def prepare_orig(data_path, n_rows, n_users, metadata):
         ) - df.groupby("client_id")["time_diff_days"].transform("first")
         df[metadata["ordering_columns"][0]] -= time_offset
 
-    df["client_id"] = pd.factorize(df["client_id"])[0]
-    df["client_id"] += n_users
+    df["client_id"] = "orig_" + df["client_id"].astype(str)
     df["generated"] = 0
     print("Prepare orig finished")
     return df
