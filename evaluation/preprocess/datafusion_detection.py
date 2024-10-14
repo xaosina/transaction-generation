@@ -10,7 +10,8 @@ from .common import csv_to_parquet
 METADATA = {
     "cat_features": ["mcc_code", "currency_rk", "customer_age"],
     "num_features": ["transaction_amt"],
-    "index_columns": ["user_id", "generated"],
+    "index_columns": ["user_id"],
+    "target_columns": ["generated"],
     "ordering_columns": ["days_since_first_tx"],
 }
 
