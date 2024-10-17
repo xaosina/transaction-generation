@@ -58,6 +58,8 @@ def run_eval_detection(
     elif dataset == "datafusion":
         dataset = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
         prepare_data = prepare_datafusion
+    else:
+        raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)

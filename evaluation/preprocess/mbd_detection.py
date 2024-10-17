@@ -104,7 +104,12 @@ def prepare_orig(data_path, n_rows, n_users, metadata):
         df = df.loc[slices]
         return df
 
-    if n_rows > 0:
+    if n_rows == 1:
+        print("Using all rows in orig, assuming full reconstruction.")
+        range_number = df.groupby('client_id').cumcount()
+        df['client_id'] = range_number.astype(str) + '_' + df['client_id'].astype(str)
+        df[metadata["ordering_columns"][0]] = df["time_diff_days"]
+    elif n_rows > 1:
         # Filter
         df = df.groupby("client_id").filter(lambda x: len(x) >= n_rows)
         df = sample_subsequences(df)
