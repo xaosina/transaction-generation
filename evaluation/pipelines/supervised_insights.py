@@ -49,7 +49,11 @@ class InsightsTrainer(Trainer):
                 loss = self._loss(pred, gt).cpu()
                 self._metrics["loss"].update(loss.cpu())
             loss_per_index.extend(
-                zip(batch.index, manual_loss(pred, gt).cpu().tolist(), pred.argmax(1).eq(gt).cpu().tolist())
+                zip(
+                    batch.index,
+                    manual_loss(pred, gt).cpu().tolist(),
+                    pred.argmax(1).eq(gt).cpu().tolist(),
+                )
             )
             if gt is not None:
                 gt = gt.to("cpu")
@@ -67,8 +71,7 @@ class InsightsTrainer(Trainer):
                 break
         if log_dir is None:
             raise ValueError("No log directory found in logger handlers")
-        breakpoint()
-        df = pd.DataFrame(loss_per_index, columns=["index", "loss"])
+        df = pd.DataFrame(loss_per_index, columns=["index", "loss", "correct"])
         df.to_csv(log_dir + "/losses_per_index.csv", index=False)
         return self.compute_metrics("val")
 
