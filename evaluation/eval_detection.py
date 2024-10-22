@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import tempfile
 import os
-from typing import List
+from typing import List, Optional
 import pandas as pd
 
 from .preprocess.mbd_detection import main as prepare_mbd
@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument("--experiment", type=str, default=None)
     parser.add_argument('--gpu_ids', type=int, nargs='*', default=None)
     parser.add_argument("-v", "--verbose", action="store_true", default=False)
+    parser.add_argument("--time-process", action="store_true", default=False)
     return parser.parse_args()
 
 
@@ -48,6 +49,7 @@ def run_eval_detection(
     experiment= DIRPATH + "/configs/experiments/detection.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
+    time_process: bool | None = None,
 ) -> pd.DataFrame:
     if dataset == "mbd":
         dataset = DIRPATH + "/configs/datasets/mbd_detection.yaml"
@@ -74,7 +76,8 @@ def run_eval_detection(
             train_data=temp_dir / "data",
             use_tqdm=verbose,
             gpu_ids=gpu_ids,
-            logging_lvl= 'info' if verbose else 'error'
+            logging_lvl= 'info' if verbose else 'error',
+            time_process = time_process
         )
 
 

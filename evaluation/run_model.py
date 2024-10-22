@@ -4,7 +4,7 @@
 import argparse
 from functools import partialmethod
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 from collections.abc import Mapping
 import signal
 import pdb
@@ -61,7 +61,8 @@ def main(
     specify: str=None, 
     use_tqdm: bool = False,
     gpu_ids : List[int] | None = None,
-    logging_lvl : str = 'info'
+    logging_lvl : str = 'info',
+    time_process: bool | None = None,
 ) -> pd.DataFrame:
     '''
     Output is a DataFrame which looks like:
@@ -83,6 +84,8 @@ def main(
 
     tqdm.__init__ = partialmethod(tqdm.__init__, disable=not use_tqdm)  # type: ignore
     config = collect_config(dataset, method, experiment, specify)
+    if time_process is not None:
+        config.model.preprocess.params.time_process = "cat" if time_process else "none"
     config.logging.file_lvl = logging_lvl
     config.logging.cons_lvl = logging_lvl
     if gpu_ids is not None:

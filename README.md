@@ -34,7 +34,7 @@ pip install -r requirements.txt
 From command line
 
 ```bash
-python -m tmetrics.eval_detection --dataset mbd -t tabsyn -m -n 16 -d tabsyn-concat/synthetic/datafusion_with_id/ae_train_16.csv -o tabsyn-concat/data/datafusion/preprocessed_with_id_test.csv --gpu_ids 0 2 3 --verbose
+python -m tmetrics.eval_detection --dataset mbd -t tabsyn -m -n 16 -d tabsyn-concat/synthetic/datafusion_with_id/ae_train_16.csv -o tabsyn-concat/data/datafusion/preprocessed_with_id_test.csv --gpu_ids 0 2 3 --verbose --time-process
 ```
 
 From python file:
@@ -47,8 +47,9 @@ data_type='tabsyn'
 syn = Path('synthetic/datafusion_with_id/ae_train_16.csv')
 orig = Path('data/datafusion/preprocessed_with_id_test.csv')
 n_rows = 16 # length of generated/original sequences
+time_process=True # whether to take time features when metric compute
 
-result = run_eval_detection(data_type, syn, orig, n_rows, match_users=True, verbose=True)
+result = run_eval_detection(data_type, syn, orig, n_rows, match_users=True, verbose=True, time_process=time_process)
 ```
 
 ## **Using without package build (not recommended)**
