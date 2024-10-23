@@ -54,16 +54,17 @@ def parse_args():
 
 
 def main(
-    dataset: str, 
-    method: str, 
-    experiment: str, 
-    train_data: Path, 
-    specify: str=None, 
+    dataset: str,
+    method: str,
+    experiment: str,
+    train_data: Path,
+    test_data: Path = None,
+    specify: str = None,
     use_tqdm: bool = False,
-    gpu_ids : List[int] | None = None,
-    logging_lvl : str = 'info'
+    gpu_ids: List[int] | None = None,
+    logging_lvl: str = "info",
 ) -> pd.DataFrame:
-    '''
+    """
     Output is a DataFrame which looks like:
                                        0          1          2       mean       std
     MulticlassAUROC             0.817996   0.805227   0.808816   0.810679  0.005377
@@ -75,10 +76,8 @@ def main(
     test_MulticlassAUROC        0.000000   0.000000   0.000000   0.000000  0.000000
     test_loss                   0.000000   0.000000   0.000000   0.000000  0.000000
     memory_after               82.000000  82.000000  82.000000  82.000000  0.000000
-    '''
-    assert logging_lvl in ['error', 'info']
-    if isinstance(train_data, str):
-        train_data = Path(train_data)
+    """
+    assert logging_lvl in ["error", "info"]
     signal.signal(signal.SIGUSR1, start_debugging)
 
     tqdm.__init__ = partialmethod(tqdm.__init__, disable=not use_tqdm)  # type: ignore
@@ -91,13 +90,21 @@ def main(
         config.runner.device_list = gpu_devices
         config.runner.params.n_runs = len(gpu_devices)
         config.runner.params.n_workers = len(gpu_devices)
-    config.data.dataset.parquet_path = train_data
-    config.run_name = train_data.parts[-2]
+
+    if isinstance(train_data, (str, Path)):
+        train_data = Path(train_data)
+        config.data.dataset.parquet_path = train_data
+        config.run_name = train_data.parts[-2]
+
+    if isinstance(test_data, (str, Path)):
+        test_data = Path(test_data)
+        config.test_data.dataset.parquet_path = test_data
 
     runner = Runner.get_runner(config["runner"]["name"])
     res = runner.run(config)
     print(res)
     return res
+
 
 if __name__ == "__main__":
     args = parse_args()

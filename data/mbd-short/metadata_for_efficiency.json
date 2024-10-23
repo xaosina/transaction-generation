@@ -1,0 +1,9 @@
+{
+    "METADATA": {
+        "cat_features": ["event_type", "src_type11" ,"dst_type11", "src_type32"],
+        "num_features": ["amount"],
+        "index_columns": ["client_id"],
+        "target_columns": ["src_type22"],
+        "ordering_columns": ["event_time"]
+    }
+}

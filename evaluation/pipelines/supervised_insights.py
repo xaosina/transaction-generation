@@ -80,6 +80,8 @@ class InsightsRunner(Runner):
     def pipeline(self, config: Mapping) -> dict[str, float]:
 
         loaders = build_loaders(**config["data"])
+        test_loaders = build_loaders(**config["test_data"])
+
         net = build_model(config["model"])
         opt = get_optimizer(net.parameters(), **config["optimizer"])
         lr_scheduler = None
@@ -108,11 +110,14 @@ class InsightsRunner(Runner):
         train_metrics = trainer.validate(loaders["full_train"])
         train_val_metrics = trainer.validate(loaders["train_val"])
         hpo_metrics = trainer.validate_with_insights(loaders["hpo_val"])
+        test_metrics = trainer.validate(test_loaders["test"])
+
 
         train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         train_val_metrics = {"train_val_" + k: v for k, v in train_val_metrics.items()}
+        test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
-        return dict(**hpo_metrics, **train_metrics, **train_val_metrics)
+        return dict(**hpo_metrics, **train_metrics, **train_val_metrics, **test_metrics)
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)

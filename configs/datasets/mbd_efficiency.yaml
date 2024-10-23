@@ -1,0 +1,92 @@
+log_dir: log/mbd/efficiency
+patience: 2
+n_classes: 84
+main_metric: MulticlassAccuracy
+main_loss: 
+  name: nn.CrossEntropyLoss
+
+cc:
+  event_type: 19
+  src_type11: 11
+  dst_type11: 13
+  src_type32: 37 
+nn:
+  - amount
+
+data:
+  dataset:
+    parquet_path: 
+    random_split: true
+    split_seed: 42
+
+    split_sizes: 
+      - 0.85   # train
+      - 0.15  # train_val
+      - 0.  # hpo_val
+
+  preprocessing:
+    common_pipeline: &common_pipeline
+      max_seq_len: 150
+      time_name: event_time
+      index_name: client_id
+      target_name: src_type22
+      cat_cardinalities: ${cc}
+      num_names: ${nn}
+      batch_transforms:
+        # - DatetimeToFloat:
+        #     loc: "2022-01-01"
+        #     scale: [365, "D"]
+        # - RescaleTime:
+        #     loc: 0.0
+        #     scale: 183
+        - TimeToFeatures:
+            process_type: ${model.preprocess.params.time_process}
+        - TargetToLong
+        - MaskValid
+        - Logarithm:
+            names: ["amount"]
+
+  loaders:
+    train:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      drop_incomplete: true
+      shuffle: true
+      loop: false
+      num_workers: 4
+      random_seed: 42
+    full_train:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+    train_val:
+      split_idx: 1
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+    hpo_val:
+      split_idx: 2
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+
+test_data:
+  dataset:
+    parquet_path: 
+    split_sizes: 
+      - 1.0
+  preprocessing:
+    common_pipeline: *common_pipeline
+  loaders:
+    test:
+      split_idx: 0
+      preprocessing: common_pipeline
+      batch_size: 128
+      num_workers: 4
+
+metrics:
+  - name: ${main_metric}
+    params: 
+      num_classes: ${n_classes}
