@@ -6,7 +6,7 @@ main_loss:
   name: nn.CrossEntropyLoss
 
 cc: 
-  mcc_code: 327
+  mcc_code: 332
   currency_rk: 4
   customer_age: 4
 nn:
