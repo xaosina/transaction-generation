@@ -34,7 +34,6 @@ def parse_args():
     parser.add_argument("--experiment", type=str, default=None)
     parser.add_argument('--gpu_ids', type=int, nargs='*', default=None)
     parser.add_argument("-v", "--verbose", action="store_true", default=False)
-    parser.add_argument("--time-process", action="store_true", default=False)
     return parser.parse_args()
 
 
