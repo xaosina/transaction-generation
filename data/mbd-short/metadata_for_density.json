@@ -1,0 +1,27 @@
+{
+    "metadata": {
+        "columns": {
+            "amount": {
+                "sdtype": "numerical"
+            },
+            "event_type": {
+                "sdtype": "categorical"
+            },
+            "src_type11": {
+                "sdtype": "categorical"
+            },
+            "dst_type11": {
+                "sdtype": "categorical"
+            },
+            "src_type32": {
+                "sdtype": "categorical"
+            },
+            "time_diff_days": {
+                "sdtype": "numerical"
+            }
+        },
+        "sequence_key": "client_id",
+        "sequence_index": "event_time",
+        "log_cols_for_density": ["amount"]
+    }
+}

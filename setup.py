@@ -26,7 +26,7 @@ try:
     setup(
         name="transaction_metrics",
         version="0.0.3",
-        packages=['tmetrics', 'tmetrics.preprocess'],
+        packages=['tmetrics', 'tmetrics.preprocess', 'tmetrics.pipelines', 'tmetrics.models'],
         package_dir = {'tmetrics': 'evaluation'},
         package_data={'tmetrics': ['configs/*/*.yaml', 'data/*/*.json']},
         install_requires=[

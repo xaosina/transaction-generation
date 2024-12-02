@@ -1,4 +1,4 @@
-run_name: "${method_name}/correlation"
+run_name: "${method_name}/ml_efficiency"
 common_seed: 0
 device: "cuda:0"
 
@@ -10,7 +10,7 @@ runner:
     - "data.loaders.train.random_seed"
     - "data.dataset.split_seed"
   params:
-    n_runs: 20
+    n_runs: 3
     n_workers: 3
   device_list: ['cuda:0', 'cuda:1', 'cuda:2']
 

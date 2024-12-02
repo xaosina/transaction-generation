@@ -10,3 +10,7 @@ ebes/*
 __pycache__/
 *.py[cod]
 *$py.class
+
+build/*
+
+transaction_me*/*

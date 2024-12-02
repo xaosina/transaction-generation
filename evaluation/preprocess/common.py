@@ -6,7 +6,7 @@ import pandas as pd
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import FloatType, LongType
+from pyspark.sql.types import FloatType, LongType, StringType
 
 NA_VALUE = 0
 
@@ -227,6 +227,7 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=Fal
     else:
         raise TypeError
     index_columns = metadata.get("index_columns", [])
+    target_columns = metadata.get("target_columns", [])
     cat_features = metadata.get("cat_features", [])
     num_features = metadata.get("num_features", [])
     ordering_columns = metadata.get("ordering_columns", [])
@@ -235,7 +236,8 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=Fal
     ), "Sets intersect"
 
     for_selection = []
-    for_selection += [F.col(name).cast(LongType()) for name in index_columns]
+    for_selection += [F.col(name).cast(StringType()) for name in index_columns]
+    for_selection += [F.col(name).cast(LongType()) for name in target_columns]
     for_selection += [F.col(name).cast(LongType()) for name in cat_features]
     for_selection += [F.col(name).cast(FloatType()) for name in num_features]
     for_selection += [F.col(name).cast(FloatType()) for name in ordering_columns]
@@ -254,7 +256,7 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=Fal
             df = vc.encode(df)
     df = collect_lists(
         df,
-        group_by=index_columns,
+        group_by=index_columns + target_columns,
         order_by=ordering_columns,
     )
     df.coalesce(1).write.parquet((save_path / "data").as_posix(), mode=mode)
