@@ -72,6 +72,7 @@ def run_eval_detection(
             match_users=match_users,
             save_path=temp_dir,
         )
+        breakpoint()
         return run_model(
             dataset=dataset,
             method=method,
