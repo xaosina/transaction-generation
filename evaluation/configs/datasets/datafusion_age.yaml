@@ -6,7 +6,7 @@ main_loss:
   name: nn.CrossEntropyLoss
 
 cc: 
-  mcc_code: 332
+  mcc_code: 327
   currency_rk: 4
 nn:
   - transaction_amt
@@ -18,9 +18,9 @@ data:
     split_seed: 42
 
     split_sizes: 
-      - 0.85   # train
+      - 0.7   # train
       - 0.15  # train_val
-      - 0  # hpo_val
+      - 0.15  # hpo_val
 
   preprocessing:
     common_pipeline: &common_pipeline

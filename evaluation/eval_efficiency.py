@@ -6,6 +6,7 @@ from typing import List
 import pandas as pd
 
 from .preprocess.mbd_efficiency import main as prepare_mbd
+from .preprocess.datafusion_age_prediction import main as prepare_datafusion
 from .run_model import main as run_model
 
 DIRPATH = os.path.dirname(__file__)
@@ -39,7 +40,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_eval_detection(
+def run_ml_efficiency(
     tabsyn: bool,
     data: Path,
     orig: Path,
@@ -54,6 +55,9 @@ def run_eval_detection(
     if dataset == "mbd_short":
         dataset = DIRPATH + "/configs/datasets/mbd_efficiency.yaml"
         prepare_data = prepare_mbd
+    if dataset == "datafusion":
+        dataset = DIRPATH + "/configs/datasets/datafusion_age.yaml"
+        prepare_data = prepare_datafusion
     else:
         raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -87,4 +91,4 @@ if __name__ == "__main__":
     for name in ["dataset", "method", "experiment"]:
         if not vars_args[name]:
             del vars_args[name]
-    run_eval_detection(**vars(args))
+    run_ml_efficiency(**vars(args))
