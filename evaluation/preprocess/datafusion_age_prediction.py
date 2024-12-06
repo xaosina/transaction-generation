@@ -6,7 +6,7 @@ import tempfile
 import numpy as np
 import pandas as pd
 
-from common import csv_to_parquet
+from .common import csv_to_parquet
 
 
 METADATA = {

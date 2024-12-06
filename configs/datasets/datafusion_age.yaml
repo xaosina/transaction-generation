@@ -13,7 +13,7 @@ nn:
 
 data:
   dataset:
-    parquet_path: "data/datafusion/downstream/orig_train/data"
+    parquet_path:
     random_split: true
     split_seed: 42
 
@@ -81,7 +81,7 @@ data:
 
 test_data:
   dataset:
-    parquet_path: "data/datafusion/downstream/orig_test/data"
+    parquet_path:
     split_sizes: 
       - 1.0
   preprocessing:
