@@ -50,18 +50,24 @@ def run_eval_detection(
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
+    
+    dataset2preparefn = dict(
+        mbd = prepare_mbd,
+        mbd_short = prepare_mbd,
+        datafusion = prepare_datafusion,
+    )
+
+    prepare_data = dataset2preparefn[dataset]
+
+    dataset2defaultconfig = dict(
+        mbd = DIRPATH + "/configs/datasets/mbd_detection.yaml",
+        mbd_short = DIRPATH + "/configs/datasets/mbd_short_detection.yaml",
+        datafusion = DIRPATH + "/configs/datasets/datafusion_detection.yaml",
+    )
+   
     if dataset_config is None:
-        if dataset == "mbd":
-            dataset_config = DIRPATH + "/configs/datasets/mbd_detection.yaml"
-            prepare_data = prepare_mbd
-        elif dataset == "mbd_short":
-            dataset_config = DIRPATH + "/configs/datasets/mbd_short_detection.yaml"
-            prepare_data = prepare_mbd
-        elif dataset == "datafusion":
-            dataset_config = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
-            prepare_data = prepare_datafusion
-        else:
-            raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
+        dataset_config = dataset2defaultconfig[dataset]
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)
