@@ -44,22 +44,24 @@ def run_eval_detection(
     n_rows: int,
     match_users: bool,
     dataset: str = "datafusion",
+    dataset_config: str | None = None,
     method: str = DIRPATH + "/configs/methods/gru.yaml",
     experiment= DIRPATH + "/configs/experiments/detection.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
-    if dataset == "mbd":
-        dataset = DIRPATH + "/configs/datasets/mbd_detection.yaml"
-        prepare_data = prepare_mbd
-    elif dataset == "mbd_short":
-        dataset = DIRPATH + "/configs/datasets/mbd_short_detection.yaml"
-        prepare_data = prepare_mbd
-    elif dataset == "datafusion":
-        dataset = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
-        prepare_data = prepare_datafusion
-    else:
-        raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
+    if dataset_config is None:
+        if dataset == "mbd":
+            dataset_config = DIRPATH + "/configs/datasets/mbd_detection.yaml"
+            prepare_data = prepare_mbd
+        elif dataset == "mbd_short":
+            dataset_config = DIRPATH + "/configs/datasets/mbd_short_detection.yaml"
+            prepare_data = prepare_mbd
+        elif dataset == "datafusion":
+            dataset_config = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
+            prepare_data = prepare_datafusion
+        else:
+            raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)
@@ -73,7 +75,7 @@ def run_eval_detection(
             save_path=temp_dir,
         )
         return run_model(
-            dataset=dataset,
+            dataset=dataset_config,
             method=method,
             experiment=experiment,
             train_data=temp_dir / "data",
