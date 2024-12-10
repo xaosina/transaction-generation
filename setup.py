@@ -26,7 +26,7 @@ try:
             "lightgbm==4.3.0",
             "mamba_ssm==1.2.2",
             "torchcde==0.2.5",
-            "ebes==0.0.2",
+            "ebes==0.0.3",
             "sdmetrics==0.15.1"
         ],
     )
