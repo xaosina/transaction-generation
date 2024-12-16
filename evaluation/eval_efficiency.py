@@ -32,7 +32,8 @@ def parse_args():
         type=Path,
         required=True,
     )
-    parser.add_argument("--dataset", type=str, default="mbd_short")
+    parser.add_argument("--dataset", type=str, default=None)
+    parser.add_argument("--dataset-config", type=str, default=None)
     parser.add_argument("--method", type=str, default=None)
     parser.add_argument("--experiment", type=str, default=None)
     parser.add_argument("--gpu_ids", type=int, nargs="*", default=None)
@@ -46,20 +47,28 @@ def run_ml_efficiency(
     orig: Path,
     n_rows: int,
     sample_size: int = -1,
-    dataset: str = "mbd_short",
+    dataset: str = "datafusion",
+    dataset_config: str | None = None,
     method: str = DIRPATH + "/configs/methods/gru.yaml",
-    experiment=DIRPATH + "/configs/experiments/ml_efficiency.yaml",
+    experiment: str = DIRPATH + "/configs/experiments/ml_efficiency.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
-    if dataset == "mbd_short":
-        dataset = DIRPATH + "/configs/datasets/mbd_efficiency.yaml"
-        prepare_data = prepare_mbd
-    if dataset == "datafusion":
-        dataset = DIRPATH + "/configs/datasets/datafusion_age.yaml"
-        prepare_data = prepare_datafusion
-    else:
-        raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
+    
+    dataset2preparefn = dict(
+        mbd_short = prepare_mbd,
+        datafusion = prepare_datafusion,
+    )
+    prepare_data = dataset2preparefn[dataset]
+
+    dataset2defaultconfig = dict(
+        mbd_short = DIRPATH + "/configs/datasets/mbd_efficiency.yaml",
+        datafusion = DIRPATH + "/configs/datasets/datafusion_age.yaml",
+    )
+
+    if dataset_config is None:
+        dataset_config = dataset2defaultconfig[dataset]
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)
@@ -73,7 +82,7 @@ def run_ml_efficiency(
             save_path=temp_dir,
         )
         return run_model(
-            dataset=dataset,
+            dataset=dataset_config,
             method=method,
             experiment=experiment,
             train_data=temp_dir / "train/data",
@@ -88,7 +97,7 @@ if __name__ == "__main__":
     args = parse_args()
     vars_args = vars(args)
     print(vars_args)
-    for name in ["dataset", "method", "experiment"]:
+    for name in ["dataset", "dataset_config", "method", "experiment",]:
         if not vars_args[name]:
             del vars_args[name]
     run_ml_efficiency(**vars(args))

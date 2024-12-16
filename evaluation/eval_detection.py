@@ -17,7 +17,7 @@ def parse_args():
         "-t", "--data-type", 
         type=str, choices=["general", "tabsyn"], default="tabsyn"
     )
-    parser.add_argument("-n", "--n-rows", type=int, required=True)
+    parser.add_argument("-n", "--n-rows", type=int, default=0)
     parser.add_argument("-m", "--match-users", action="store_true")
     parser.add_argument(
         "-d", "--data", 
@@ -30,6 +30,7 @@ def parse_args():
         type=Path, required=True
     )
     parser.add_argument("--dataset", type=str, default=None)
+    parser.add_argument("--dataset-config", type=str, default=None)
     parser.add_argument("--method", type=str, default=None)
     parser.add_argument("--experiment", type=str, default=None)
     parser.add_argument('--gpu_ids', type=int, nargs='*', default=None)
@@ -46,7 +47,7 @@ def run_eval_detection(
     dataset: str = "datafusion",
     dataset_config: str | None = None,
     method: str = DIRPATH + "/configs/methods/gru.yaml",
-    experiment= DIRPATH + "/configs/experiments/detection.yaml",
+    experiment: str = DIRPATH + "/configs/experiments/detection.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     args = parse_args()
     vars_args = vars(args)
     print(vars_args)
-    for name in ['dataset', 'method', 'experiment']:
+    for name in ['dataset', "dataset_config", 'method', 'experiment',]:
         if not vars_args[name]:
             del vars_args[name]
     run_eval_detection(**vars(args))
