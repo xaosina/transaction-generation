@@ -13,7 +13,7 @@ try:
     setup(
         name="transaction_metrics",
         version="0.0.2",
-        packages=['tmetrics', 'tmetrics.preprocess', 'tmetrics.pipelines'],
+        packages=['tmetrics', 'tmetrics.preprocess', 'tmetrics.pipelines', 'tmetrics.models'],
         package_dir = {'tmetrics': 'evaluation'},
         package_data={'tmetrics': ['configs/*/*.yaml']},
         install_requires=[
@@ -24,7 +24,13 @@ try:
             "torcheval==0.0.7",
             "omegaconf==2.3.0",
             "lightgbm==4.3.0",
+<<<<<<< HEAD
             "ebes==0.0.4",
+=======
+            "mamba_ssm==1.2.2",
+            "torchcde==0.2.5",
+            "ebes==0.0.3",
+>>>>>>> 2ee8e228027c1951528dfb72efce7bfd153ac6aa
             "sdmetrics==0.15.1"
         ],
     )

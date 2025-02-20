@@ -63,7 +63,7 @@ def prepare_tabsyn(data_path, n_rows):
     assert age_uniqueness.eq(1).all(), age_uniqueness[age_uniqueness > 1]
     df["generated"] = 1
 
-    df["user_id"] = pd.factorize(df["user_id"])[0]
+    df["user_id"] = df["user_id"].astype(str)
     n_users = df["user_id"].nunique()
     print("Prepare tabsyn finished")
     return df, n_users
@@ -74,7 +74,7 @@ def prepare_generated(data_path):
     data_path = Path(data_path)
     df = pd.read_csv(data_path)
     df["generated"] = 1
-    df["user_id"] = pd.factorize(df["user_id"])[0]
+    df["user_id"] = df["user_id"].astype(str)
     n_users = df["user_id"].nunique()
     print("Prepare tabsyn finished")
     return df, n_users
@@ -118,8 +118,7 @@ def prepare_orig(data_path, n_rows, n_users):
             name="user_id",
         )
         df = df.merge(train_ids, on="user_id")
-    df["user_id"] = pd.factorize(df["user_id"])[0]
-    df["user_id"] += n_users
+    df["user_id"] = "orig_" + df["user_id"].astype(str)
     df["generated"] = 0
     print("Prepare orig finished")
     return df

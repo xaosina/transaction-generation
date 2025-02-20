@@ -41,6 +41,7 @@ def run_eval_density(
     print('Synth ready')
     real_data = pd.read_csv(real_path, nrows=1000000)
     print('Real ready')
+    
     try:
             
         with open(real_path.with_name("metadata_for_density.json"), "r") as f:
