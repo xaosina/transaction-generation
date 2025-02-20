@@ -41,8 +41,37 @@ def run_eval_density(
     print('Synth ready')
     real_data = pd.read_csv(real_path, nrows=1000000)
     print('Real ready')
-    with open(real_path.with_name("metadata_for_density.json"), "r") as f:
-        metadata = json.load(f)["metadata"]
+    try:
+            
+        with open(real_path.with_name("metadata_for_density.json"), "r") as f:
+            metadata = json.load(f)["metadata"]
+            
+    except FileNotFoundError:
+        metadata = {
+            "columns": {
+                "amount": {
+                    "sdtype": "numerical"
+                },
+                "event_type": {
+                    "sdtype": "categorical"
+                },
+                "src_type11": {
+                    "sdtype": "categorical"
+                },
+                "dst_type11": {
+                    "sdtype": "categorical"
+                },
+                "src_type32": {
+                    "sdtype": "categorical"
+                },
+                "time_diff_days": {
+                    "sdtype": "numerical"
+                }
+            },
+            "sequence_key": "client_id",
+            "sequence_index": "event_time",
+            "log_cols_for_density": ["amount"]
+        }
     # Preprocess
     for col in metadata["log_cols_for_density"]:
         print(col)

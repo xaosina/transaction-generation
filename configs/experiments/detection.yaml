@@ -16,7 +16,7 @@ runner:
 
 logging:
   file_lvl: info
-  cons_lvl: info
+  cons_lvl: error
 
 # OVERWRITE
 data:

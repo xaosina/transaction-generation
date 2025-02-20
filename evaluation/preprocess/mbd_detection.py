@@ -134,8 +134,18 @@ def main(
     save_path: Path,
     overwrite: bool = False,
 ):
-    with open(orig.with_name("metadata_for_detection.json"), "r") as f:
-        metadata = json.load(f)["METADATA"]
+    try:   
+        with open(orig.with_name("metadata_for_detection.json"), "r") as f:
+            metadata = json.load(f)["METADATA"]
+    except FileNotFoundError:
+        metadata = {
+            "cat_features": ["event_type", "src_type11" ,"dst_type11", "src_type32"],
+            "num_features": ["amount"],
+            "index_columns": ["client_id"],
+            "target_columns": ["generated"],
+            "ordering_columns": ["event_time"]
+        }
+        
     random.seed(42)
     np.random.seed(42)
     if data_type == "tabsyn":
