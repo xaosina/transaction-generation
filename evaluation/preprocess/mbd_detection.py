@@ -134,10 +134,6 @@ def main(
     save_path: Path,
     overwrite: bool = False,
 ):
-<<<<<<< HEAD
-=======
-    
->>>>>>> 2ee8e228027c1951528dfb72efce7bfd153ac6aa
     try:   
         with open(orig.with_name("metadata_for_detection.json"), "r") as f:
             metadata = json.load(f)["METADATA"]
@@ -149,10 +145,7 @@ def main(
             "target_columns": ["generated"],
             "ordering_columns": ["event_time"]
         }
-<<<<<<< HEAD
         
-=======
->>>>>>> 2ee8e228027c1951528dfb72efce7bfd153ac6aa
     random.seed(42)
     np.random.seed(42)
     if data_type == "tabsyn":

@@ -1,7 +1,7 @@
 log_dir: log/mbd/efficiency
 patience: 2
-n_classes: 84
-main_metric: MulticlassAccuracy
+n_classes: 2
+main_metric: MulticlassAUROC
 main_loss: 
   name: nn.CrossEntropyLoss
 
@@ -54,23 +54,23 @@ data:
       drop_incomplete: true
       shuffle: true
       loop: false
-      num_workers: 4
+      num_workers: 0
       random_seed: 42
     full_train:
       split_idx: 0
       preprocessing: common_pipeline
       batch_size: 128
-      num_workers: 4
+      num_workers: 0
     train_val:
       split_idx: 1
       preprocessing: common_pipeline
       batch_size: 128
-      num_workers: 4
+      num_workers: 0
     hpo_val:
       split_idx: 2
       preprocessing: common_pipeline
       batch_size: 128
-      num_workers: 4
+      num_workers: 0
 
 test_data:
   dataset:
@@ -84,7 +84,7 @@ test_data:
       split_idx: 0
       preprocessing: common_pipeline
       batch_size: 128
-      num_workers: 4
+      num_workers: 0
 
 metrics:
   - name: ${main_metric}
