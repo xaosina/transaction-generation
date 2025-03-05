@@ -1,4 +1,4 @@
-method_name: gru
+method_name: transformer
 runner_name: SupervisedRunner
 
 loss:
@@ -16,20 +16,23 @@ model:
     params:
       cat_cardinalities: ${cc}
       num_features: ${nn}
-      cat_emb_dim: 16
-      num_emb_dim: 16
+      cat_emb_dim: 32
+      num_emb_dim: 32
       time_process: "cat" # "diff" | "cat" | "none"
       num_norm: true
   encoder: 
-    name: GRU
+    name: Transformer
     params:
       input_size: output_dim_from_prev
-      hidden_size: 128
-      num_layers: 1
-      dropout: 0.
-      initial_hidden: static
+      max_len: ${data.preprocessing.common_pipeline.max_seq_len}
+      num_layers: 2
+      scale_hidden: 4
+      dropout: 0.1
+      pos_dropout: 0.1 
+      pos_enc_type: "base"
+      num_heads: 8
   aggregation:
-    name: ValidHiddenMean
+    name: TakeLastHidden
   head:
     name: nn.Linear
     params:
@@ -39,8 +42,8 @@ model:
 optimizer:
   name: Adam
   params:
-    lr: 3.e-4
-    weight_decay: 1.e-7
+    lr: 3.e-3
+    weight_decay: 1.e-4
 
 optuna:
   params:
@@ -49,9 +52,15 @@ optuna:
     request_list: 
       - 'optimizer.params.weight_decay': 1.e-05
         'optimizer.params.lr': 3.e-4
-        'model.encoder.params.hidden_size': 200
-        'model.encoder.params.num_layers': 1
-        'model.encoder.params.dropout': 1.e-10
+        'model.encoder.params.num_layers' : 3
+        'model.encoder.params.scale_hidden': 16
+        'model.encoder.params.dropout': 0.1
+        'model.encoder.params.pos_dropout': 0.1
+        'model.encoder.params.pos_enc_type': "base"
+        'model.encoder.params.num_heads': 8
+
+        'model.preprocess.params.cat_emb_dim': 128
+        'model.preprocess.params.num_emb_dim': 128
         'model.preprocess.params.time_process': 'diff'
         'model.preprocess.params.num_norm': True
     target_metric: ${main_metric}
@@ -59,13 +68,16 @@ optuna:
     optimizer.params.weight_decay: [suggest_float, {low: 1.e-15, high: 1.e-3, log: True}]
     optimizer.params.lr: [suggest_float, {low: 1.e-5, high: 1.e-1, log: True}]
 
-    model.encoder.params.hidden_size: [suggest_int, {low: 10, high: 1200, log: True}]
     model.encoder.params.num_layers: [suggest_int, {low: 1, high: 3, log: False}]
-    model.encoder.params.dropout: [suggest_float, {low: 1.e-10, high: 0.3, log: True}]
-
+    model.encoder.params.scale_hidden: [suggest_int, {low: 1, high: 16, log: False}]
+    model.encoder.params.dropout: [suggest_float, {low: 0, high: 0.6, log: False}]
+    model.encoder.params.pos_dropout: [suggest_float, {low: 0, high: 0.6, log: False}]
+    model.encoder.params.pos_enc_type: [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]
+    model.encoder.params.num_heads: [suggest_categorical, {choices: [1, 2, 4, 8]}]
+    
     model.preprocess.params.time_process: [suggest_categorical, {choices: ["diff", "cat", "none"]}]
     model.preprocess.params.num_norm: [suggest_categorical, {choices: [true, false]}]
-    model.preprocess.params.cat_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
-    model.preprocess.params.num_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
+    model.preprocess.params.cat_emb_dim: [suggest_int, {low: 8, high: 128, log: False, step: 8}]
+    model.preprocess.params.num_emb_dim: [suggest_int, {low: 8, high: 128, log: False, step: 8}]
 
     model.aggregation.name: [suggest_categorical, {choices: ["TakeLastHidden", "ValidHiddenMean"]}]

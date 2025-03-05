@@ -4,10 +4,13 @@ data/**/*.crc
 data/**/*.parquet
 data/**/*_SUCCESS
 dev/**
-
 ebes/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+build/*
+
+transaction_me*/*

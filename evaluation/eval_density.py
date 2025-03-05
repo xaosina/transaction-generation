@@ -14,41 +14,70 @@ def log10_scale(x):
     y = np.abs(y)
     return np.where(linear, x / (np.e * np.log(10)), np.sign(x) * np.log10(y))
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-o", "--orig",
+        "-o",
+        "--orig",
         help="Path to orig dataset containing CSV files",
-        type=Path, required=True
+        type=Path,
+        required=True,
     )
     parser.add_argument(
-        "-d", "--data", 
-        help="generated data csv path", 
-        type=Path, required=True
+        "-d", "--data", help="generated data csv path", type=Path, required=True
     )
     parser.add_argument(
-        '--save-res', action='store_const', const=True, default=False)
+        "-m",
+        "--max-rows",
+        help="Maximum rows to download form csv",
+        type=int,
+        default=None,
+    )
+    parser.add_argument("--save-res", action="store_const", const=True, default=False)
     return parser.parse_args()
 
-def run_eval_density(
-    data: Path,
-    orig: Path,
-    save_results: bool = False):
+
+def run_eval_density(data: Path, orig: Path, save_results: bool = False, max_rows=None):
     syn_path = data
     real_path = orig
     # Load
-    syn_data = pd.read_csv(syn_path)
-    real_data = pd.read_csv(real_path)
-    with open(real_path.with_name("metadata_for_density.json"), "r") as f:
-        metadata = json.load(f)["metadata"]
+    syn_data = pd.read_csv(syn_path, nrows=max_rows)
+    print("Synth ready")
+    real_data = pd.read_csv(real_path, nrows=max_rows)
+    print("Real ready")
+
+    try:
+
+        with open(real_path.with_name("metadata_for_density.json"), "r") as f:
+            metadata = json.load(f)["metadata"]
+
+    except FileNotFoundError:
+        metadata = {
+            "columns": {
+                "amount": {"sdtype": "numerical"},
+                "event_type": {"sdtype": "categorical"},
+                "src_type11": {"sdtype": "categorical"},
+                "dst_type11": {"sdtype": "categorical"},
+                "src_type32": {"sdtype": "categorical"},
+                "time_diff_days": {"sdtype": "numerical"},
+            },
+            "sequence_key": "client_id",
+            "sequence_index": "event_time",
+            "log_cols_for_density": ["amount"],
+        }
     # Preprocess
     for col in metadata["log_cols_for_density"]:
         print(col)
         syn_data[col] = log10_scale(syn_data[col])
         real_data[col] = log10_scale(real_data[col])
-    syn_data = syn_data[[col for col in syn_data.columns if col in metadata["columns"].keys()]]
-    real_data = real_data[[col for col in real_data.columns if col in metadata["columns"].keys()]]
-    # Calculate 
+    syn_data = syn_data[
+        [col for col in syn_data.columns if col in metadata["columns"].keys()]
+    ]
+    real_data = real_data[
+        [col for col in real_data.columns if col in metadata["columns"].keys()]
+    ]
+    # Calculate
     qual_report = QualityReport()
     qual_report.generate(real_data, syn_data, metadata)
     quality = qual_report.get_properties()
@@ -67,7 +96,10 @@ def run_eval_density(
         trends.to_csv(f"{save_dir}/trend.csv")
     return dict(shape=Shape, trend=Trend)
 
+
 if __name__ == "__main__":
     args = parse_args()
     print(vars(args))
-    run_eval_density(args.data, args.orig, save_results=args.save_res)
+    run_eval_density(
+        args.data, args.orig, save_results=args.save_res, max_rows=args.max_rows
+    )

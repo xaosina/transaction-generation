@@ -1,0 +1,18 @@
+run_name: "${method_name}"
+common_seed: 0
+device: "cuda:0"
+
+runner:
+  name: ${runner_name}
+  run_type: simple
+  seed_keys:
+    - "common_seed"
+    - "data.dataset.split_seed"
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list: ['cuda:0']
+
+logging:
+  file_lvl: info
+  cons_lvl: info

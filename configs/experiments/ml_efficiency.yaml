@@ -1,4 +1,4 @@
-run_name: "${method_name}/detection"
+run_name: "${method_name}/ml_efficiency"
 common_seed: 0
 device: "cuda:0"
 
@@ -16,12 +16,12 @@ runner:
 
 logging:
   file_lvl: info
-  cons_lvl: error
+  cons_lvl: info
 
 # OVERWRITE
 data:
   dataset:
     split_sizes:
-      - 0.70   # train
+      - 0.85   # train
       - 0.15  # train_val
-      - 0.15  # hpo_val
+      - 0.  # hpo_val
