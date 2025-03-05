@@ -3,7 +3,7 @@ data/**/*.csv
 data/**/*.crc
 data/**/*.parquet
 data/**/*_SUCCESS
-
+dev/**
 ebes/*
 
 # Byte-compiled / optimized / DLL files
