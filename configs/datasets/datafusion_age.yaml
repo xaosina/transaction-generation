@@ -6,21 +6,21 @@ main_loss:
   name: nn.CrossEntropyLoss
 
 cc: 
-  mcc_code: 327
+  mcc_code: 332
   currency_rk: 4
 nn:
   - transaction_amt
 
 data:
   dataset:
-    parquet_path: "data/datafusion/downstream/orig_train/data"
+    parquet_path:
     random_split: true
     split_seed: 42
 
     split_sizes: 
-      - 0.7   # train
+      - 0.85   # train
       - 0.15  # train_val
-      - 0.15  # hpo_val
+      - 0  # hpo_val
 
   preprocessing:
     common_pipeline: &common_pipeline
@@ -81,7 +81,7 @@ data:
 
 test_data:
   dataset:
-    parquet_path: "data/datafusion/downstream/orig_test/data"
+    parquet_path:
     split_sizes: 
       - 1.0
   preprocessing:

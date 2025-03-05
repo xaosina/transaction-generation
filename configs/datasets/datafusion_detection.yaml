@@ -1,12 +1,12 @@
 log_dir: log/datafusion_detection
-patience: 2
+patience: 15
 n_classes: 2
 main_metric: MulticlassAUROC
 main_loss: 
   name: nn.CrossEntropyLoss
 
 cc: 
-  mcc_code: 327
+  mcc_code: 332
   currency_rk: 4
   customer_age: 4
 nn:

@@ -12,7 +12,7 @@ runner:
   params:
     n_runs: 3
     n_workers: 3
-  device_list: ['cuda:0', 'cuda:1', 'cuda:2']
+  device_list: ['cuda:0']
 
 logging:
   file_lvl: info

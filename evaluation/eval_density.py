@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 from sdmetrics.reports.single_table import QualityReport
 
+DIRPATH = os.path.dirname(__file__)
+
 
 def log10_scale(x):
     linear = (x <= np.e) & (x >= -np.e)  # to match the derivatives
@@ -35,10 +37,19 @@ def parse_args():
         default=None,
     )
     parser.add_argument("--save-res", action="store_const", const=True, default=False)
+    parser.add_argument(
+        "--dataset", type=str, choices=["datafusion", "mdb"], default="datafusion"
+    )
     return parser.parse_args()
 
 
-def run_eval_density(data: Path, orig: Path, save_results: bool = False, max_rows=None):
+def run_eval_density(
+    data: Path,
+    orig: Path,
+    dataset: str = "datafusion",
+    save_results: bool = False,
+    max_rows=None,
+):
     syn_path = data
     real_path = orig
     # Load
@@ -49,7 +60,8 @@ def run_eval_density(data: Path, orig: Path, save_results: bool = False, max_row
 
     try:
 
-        with open(real_path.with_name("metadata_for_density.json"), "r") as f:
+        metadata_path = DIRPATH + f"/data/{dataset}/metadata_for_density.json"
+        with open(metadata_path, "r") as f:
             metadata = json.load(f)["metadata"]
 
     except FileNotFoundError:
@@ -101,5 +113,9 @@ if __name__ == "__main__":
     args = parse_args()
     print(vars(args))
     run_eval_density(
-        args.data, args.orig, save_results=args.save_res, max_rows=args.max_rows
+        args.data,
+        args.orig,
+        dataset=args.dataset,
+        save_results=args.save_res,
+        max_rows=args.max_rows,
     )

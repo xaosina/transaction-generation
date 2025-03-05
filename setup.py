@@ -2,20 +2,33 @@ from distutils.core import setup
 import shutil
 import os
 
-source = "configs"
-destination = "evaluation/configs"
-dest_was_created = False
-if not os.path.exists(destination):
-    dest_was_created = True
-    shutil.copytree(source, destination)
+package_data = [
+    dict(
+        source='configs',
+        destination="evaluation/configs",
+        dest_was_created=False,
+    ),
+    dict(
+        source='data',
+        destination="evaluation/data",
+        dest_was_created=False,
+    )
+]
+
+for pack_dt in package_data:
+    source = pack_dt['source']
+    destination = pack_dt['destination']
+    if not os.path.exists(destination):
+        pack_dt['dest_was_created'] = True
+        shutil.copytree(source, destination)
 
 try:
     setup(
         name="transaction_metrics",
-        version="0.0.2",
+        version="0.0.4",
         packages=['tmetrics', 'tmetrics.preprocess', 'tmetrics.pipelines', 'tmetrics.models'],
         package_dir = {'tmetrics': 'evaluation'},
-        package_data={'tmetrics': ['configs/*/*.yaml']},
+        package_data={'tmetrics': ['configs/*/*.yaml', 'data/*/*.json']},
         install_requires=[
             "pandas==2.2.0",
             "pyspark==3.5.0",
@@ -31,5 +44,8 @@ try:
 except Exception:
     pass
 finally:
-    if dest_was_created:
-        shutil.rmtree(destination)
+    for pack_dt in package_data:
+        dest_was_created = pack_dt['dest_was_created']
+        destination = pack_dt['destination']
+        if dest_was_created:
+            shutil.rmtree(destination)

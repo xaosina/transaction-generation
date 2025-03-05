@@ -17,7 +17,7 @@ def parse_args():
         "-t", "--data-type", 
         type=str, choices=["general", "tabsyn"], default="tabsyn"
     )
-    parser.add_argument("-n", "--n-rows", type=int, required=True)
+    parser.add_argument("-n", "--n-rows", type=int, default=0)
     parser.add_argument("-m", "--match-users", action="store_true")
     parser.add_argument(
         "-d", "--data", 
@@ -30,6 +30,7 @@ def parse_args():
         type=Path, required=True
     )
     parser.add_argument("--dataset", type=str, default=None)
+    parser.add_argument("--dataset-config", type=str, default=None)
     parser.add_argument("--method", type=str, default=None)
     parser.add_argument("--experiment", type=str, default=None)
     parser.add_argument('--gpu_ids', type=int, nargs='*', default=None)
@@ -44,22 +45,30 @@ def run_eval_detection(
     n_rows: int,
     match_users: bool,
     dataset: str = "datafusion",
+    dataset_config: str | None = None,
     method: str = DIRPATH + "/configs/methods/gru.yaml",
-    experiment= DIRPATH + "/configs/experiments/detection.yaml",
+    experiment: str = DIRPATH + "/configs/experiments/detection.yaml",
     gpu_ids: List[int] | None = None,
     verbose: bool = False,
 ) -> pd.DataFrame:
-    if dataset == "mbd":
-        dataset = DIRPATH + "/configs/datasets/mbd_detection.yaml"
-        prepare_data = prepare_mbd
-    elif dataset == "mbd_short":
-        dataset = DIRPATH + "/configs/datasets/mbd_short_detection.yaml"
-        prepare_data = prepare_mbd
-    elif dataset == "datafusion":
-        dataset = DIRPATH + "/configs/datasets/datafusion_detection.yaml"
-        prepare_data = prepare_datafusion
-    else:
-        raise NotImplementedError(f"There is no preprocess for {dataset} Dataset")
+    
+    dataset2preparefn = dict(
+        mbd = prepare_mbd,
+        mbd_short = prepare_mbd,
+        datafusion = prepare_datafusion,
+    )
+
+    prepare_data = dataset2preparefn[dataset]
+
+    dataset2defaultconfig = dict(
+        mbd = DIRPATH + "/configs/datasets/mbd_detection.yaml",
+        mbd_short = DIRPATH + "/configs/datasets/mbd_short_detection.yaml",
+        datafusion = DIRPATH + "/configs/datasets/datafusion_detection.yaml",
+    )
+   
+    if dataset_config is None:
+        dataset_config = dataset2defaultconfig[dataset]
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir = Path(temp_dir) / data.stem
         print("Temp parquet located in:", temp_dir)
@@ -73,13 +82,13 @@ def run_eval_detection(
             save_path=temp_dir,
         )
         return run_model(
-            dataset=dataset,
+            dataset=dataset_config,
             method=method,
             experiment=experiment,
             train_data=temp_dir / "data",
             use_tqdm=verbose,
             gpu_ids=gpu_ids,
-            logging_lvl= 'info' if verbose else 'error'
+            logging_lvl= 'info' if verbose else 'error',
         )
 
 
@@ -87,7 +96,7 @@ if __name__ == "__main__":
     args = parse_args()
     vars_args = vars(args)
     print(vars_args)
-    for name in ['dataset', 'method', 'experiment']:
+    for name in ['dataset', "dataset_config", 'method', 'experiment',]:
         if not vars_args[name]:
             del vars_args[name]
     run_eval_detection(**vars(args))
