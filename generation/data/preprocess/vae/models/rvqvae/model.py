@@ -1,0 +1,575 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.init as nn_init
+import torch.nn.functional as F
+from torch import Tensor
+
+import typing as ty
+import math
+
+class Tokenizer(nn.Module):
+
+    def __init__(self, d_numerical, categories, d_token, bias):
+        super().__init__()
+        if categories is None:
+            d_bias = d_numerical
+            self.category_offsets = None
+            self.category_embeddings = None
+        else:
+            d_bias = d_numerical + len(categories)
+            category_offsets = torch.tensor([0] + categories[:-1]).cumsum(0)
+            self.register_buffer('category_offsets', category_offsets)
+            self.category_embeddings = nn.Embedding(sum(categories), d_token)
+            nn_init.kaiming_uniform_(self.category_embeddings.weight, a=math.sqrt(5))
+            print(f'{self.category_embeddings.weight.shape=}')
+
+        # take [CLS] token into account
+        # self.weight = nn.Parameter(Tensor(d_numerical + 1 - 1, d_token)) # 0
+        self.weight = nn.Parameter(Tensor(d_numerical + 1, d_token)) # 0
+        self.bias = nn.Parameter(Tensor(d_bias, d_token)) if bias else None
+        # The initialization is inspired by nn.Linear
+        nn_init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            nn_init.kaiming_uniform_(self.bias, a=math.sqrt(5))
+        
+        # self.cnn_1d = nn.Conv1d(in_channels=1, out_channels=6, kernel_size=1) # 0.5
+
+    @property
+    def n_tokens(self):
+        return len(self.weight) + (
+            0 if self.category_offsets is None else len(self.category_offsets)
+        )
+
+    def forward(self, x_num, x_cat):
+        x_some = x_num if x_cat is None else x_cat
+        assert x_some is not None
+        # x_amount = x_num[:, None, 0, None] #1
+        x_num = torch.cat(
+            [torch.ones(len(x_some), 1, device=x_some.device)] 
+            # + ([] if x_num is None else [x_num[:, 1, None]]), #2
+            + ([] if x_num is None else [x_num]), #2
+            dim=1,
+        )
+
+        x = self.weight[None] * x_num[:, :, None] # 3 Изначально это применялось на всех numerical, теперь без amount
+
+        # x_amount_emb = self.cnn_1d(x_amount) # 4
+        # x_amount_emb = x_amount_emb.transpose(1, 2) # 5
+                
+        if x_cat is not None:
+            x = torch.cat(
+                # [x[:, 0, None], x_amount_emb, x[:, 1, None],  self.category_embeddings(x_cat + self.category_offsets[None])], # 6
+                [x, self.category_embeddings(x_cat + self.category_offsets[None])], # 6
+                dim=1,
+            )
+        if self.bias is not None:
+            bias = torch.cat(
+                [
+                    torch.zeros(1, self.bias.shape[1], device=x.device),
+                    self.bias,
+                ]
+            )
+            x = x + bias[None]
+
+        return x
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.5):
+        super(MLP, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.dropout = dropout
+
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
+class MultiheadAttention(nn.Module):
+    def __init__(self, d, n_heads, dropout, initialization = 'kaiming'):
+
+        if n_heads > 1:
+            assert d % n_heads == 0
+        assert initialization in ['xavier', 'kaiming']
+
+        super().__init__()
+        self.W_q = nn.Linear(d, d)
+        self.W_k = nn.Linear(d, d)
+        self.W_v = nn.Linear(d, d)
+        self.W_out = nn.Linear(d, d) if n_heads > 1 else None
+        self.n_heads = n_heads
+        self.dropout = nn.Dropout(dropout) if dropout else None
+
+        for m in [self.W_q, self.W_k, self.W_v]:
+            if initialization == 'xavier' and (n_heads > 1 or m is not self.W_v):
+                # gain is needed since W_qkv is represented with 3 separate layers
+                nn_init.xavier_uniform_(m.weight, gain=1 / math.sqrt(2))
+            nn_init.zeros_(m.bias)
+        if self.W_out is not None:
+            nn_init.zeros_(self.W_out.bias)
+
+    def _reshape(self, x):
+        batch_size, n_tokens, d = x.shape
+        d_head = d // self.n_heads
+        return (
+            x.reshape(batch_size, n_tokens, self.n_heads, d_head)
+            .transpose(1, 2)
+            .reshape(batch_size * self.n_heads, n_tokens, d_head)
+        )
+
+    def forward(self, x_q, x_kv, key_compression = None, value_compression = None):
+  
+        q, k, v = self.W_q(x_q), self.W_k(x_kv), self.W_v(x_kv)
+        for tensor in [q, k, v]:
+            assert tensor.shape[-1] % self.n_heads == 0
+        if key_compression is not None:
+            assert value_compression is not None
+            k = key_compression(k.transpose(1, 2)).transpose(1, 2)
+            v = value_compression(v.transpose(1, 2)).transpose(1, 2)
+        else:
+            assert value_compression is None
+
+        batch_size = len(q)
+        d_head_key = k.shape[-1] // self.n_heads
+        d_head_value = v.shape[-1] // self.n_heads
+        n_q_tokens = q.shape[1]
+
+        q = self._reshape(q)
+        k = self._reshape(k)
+
+        a = q @ k.transpose(1, 2)
+        b = math.sqrt(d_head_key)
+        attention = F.softmax(a/b , dim=-1)
+
+        
+        if self.dropout is not None:
+            attention = self.dropout(attention)
+        x = attention @ self._reshape(v)
+        x = (
+            x.reshape(batch_size, self.n_heads, n_q_tokens, d_head_value)
+            .transpose(1, 2)
+            .reshape(batch_size, n_q_tokens, self.n_heads * d_head_value)
+        )
+        if self.W_out is not None:
+            x = self.W_out(x)
+
+        return x
+        
+class Transformer(nn.Module):
+
+    def __init__(
+        self,
+        n_layers: int,
+        d_token: int,
+        n_heads: int,
+        d_out: int,
+        d_ffn_factor: int,
+        attention_dropout = 0.0,
+        ffn_dropout = 0.0,
+        residual_dropout = 0.0,
+        activation = 'relu',
+        prenormalization = True,
+        initialization = 'kaiming',      
+    ):
+        super().__init__()
+
+        def make_normalization():
+            return nn.LayerNorm(d_token)
+
+        d_hidden = int(d_token * d_ffn_factor)
+        self.layers = nn.ModuleList([])
+        for layer_idx in range(n_layers):
+            layer = nn.ModuleDict(
+                {
+                    'attention': MultiheadAttention(
+                        d_token, n_heads, attention_dropout, initialization
+                    ),
+                    'linear0': nn.Linear(
+                        d_token, d_hidden
+                    ),
+                    'linear1': nn.Linear(d_hidden, d_token),
+                    'norm1': make_normalization(),
+                }
+            )
+            if not prenormalization or layer_idx:
+                layer['norm0'] = make_normalization()
+   
+            self.layers.append(layer)
+
+        self.activation = nn.ReLU()
+        self.last_activation = nn.ReLU()
+        # self.activation = lib.get_activation_fn(activation)
+        # self.last_activation = lib.get_nonglu_activation_fn(activation)
+        self.prenormalization = prenormalization
+        self.last_normalization = make_normalization() if prenormalization else None
+        self.ffn_dropout = ffn_dropout
+        self.residual_dropout = residual_dropout
+        self.head = nn.Linear(d_token, d_out)
+
+
+    def _start_residual(self, x, layer, norm_idx):
+        x_residual = x
+        if self.prenormalization:
+            norm_key = f'norm{norm_idx}'
+            if norm_key in layer:
+                x_residual = layer[norm_key](x_residual)
+        return x_residual
+
+    def _end_residual(self, x, x_residual, layer, norm_idx):
+        if self.residual_dropout:
+            x_residual = F.dropout(x_residual, self.residual_dropout, self.training)
+        x = x + x_residual
+        if not self.prenormalization:
+            x = layer[f'norm{norm_idx}'](x)
+        return x
+
+    def forward(self, x):
+        for layer_idx, layer in enumerate(self.layers):
+            is_last_layer = layer_idx + 1 == len(self.layers)
+
+            x_residual = self._start_residual(x, layer, 0)
+            x_residual = layer['attention'](
+                # for the last attention, it is enough to process only [CLS]
+                x_residual,
+                x_residual,
+            )
+
+            x = self._end_residual(x, x_residual, layer, 0)
+
+            x_residual = self._start_residual(x, layer, 1)
+            x_residual = layer['linear0'](x_residual)
+            x_residual = self.activation(x_residual)
+            if self.ffn_dropout:
+                x_residual = F.dropout(x_residual, self.ffn_dropout, self.training)
+            x_residual = layer['linear1'](x_residual)
+            x = self._end_residual(x, x_residual, layer, 1)
+        return x
+
+
+class AE(nn.Module):
+    def __init__(self, hid_dim, n_head):
+        super(AE, self).__init__()
+ 
+        self.hid_dim = hid_dim
+        self.n_head = n_head
+
+
+        self.encoder = MultiheadAttention(hid_dim, n_head)
+        self.decoder = MultiheadAttention(hid_dim, n_head)
+
+    def get_embedding(self, x):
+        return self.encoder(x, x).detach() 
+
+    def forward(self, x):
+
+        z = self.encoder(x, x)
+        h = self.decoder(z, z)
+        
+        return h
+
+
+class VectorQuantizerEMA(nn.Module):
+    def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay, epsilon=1e-5):
+        super(VectorQuantizerEMA, self).__init__()
+
+        self._embedding_dim = embedding_dim
+        self._num_embeddings = num_embeddings
+
+        self._embedding = nn.Embedding(self._num_embeddings, self._embedding_dim)
+        self._embedding.weight.data.normal_()
+        self._commitment_cost = commitment_cost
+
+        self.register_buffer('_ema_cluster_size', torch.zeros(num_embeddings))
+        self._ema_w = nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim))
+        self._ema_w.data.normal_()
+
+        self._decay = decay
+        self._epsilon = epsilon
+
+    def forward(self, inputs):
+
+        input_shape = inputs.shape
+
+        # Flatten input
+        flat_input = inputs.view(-1, self._embedding_dim)
+
+        distances = (torch.sum(flat_input**2, dim=1, keepdim=True)
+                    + torch.sum(self._embedding.weight**2, dim=1)
+                    - 2 * torch.matmul(flat_input, self._embedding.weight.t()))
+
+        # Encoding
+        encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+        encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+        encodings.scatter_(1, encoding_indices, 1)
+
+        # Quantize and unflatten
+        quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
+
+        # Use EMA to update the embedding vectors
+        if self.training:
+            self._ema_cluster_size = self._ema_cluster_size * self._decay + \
+                                     (1 - self._decay) * torch.sum(encodings, 0)
+
+            # Laplace smoothing of the cluster size
+            n = torch.sum(self._ema_cluster_size.data)
+            self._ema_cluster_size = (
+                (self._ema_cluster_size + self._epsilon)
+                / (n + self._num_embeddings * self._epsilon) * n)
+
+            dw = torch.matmul(encodings.t(), flat_input)
+            self._ema_w = nn.Parameter(self._ema_w * self._decay + (1 - self._decay) * dw)
+
+            self._embedding.weight = nn.Parameter(self._ema_w / self._ema_cluster_size.unsqueeze(1))
+
+        # Loss
+        e_latent_loss = F.mse_loss(quantized.detach(), inputs)
+        loss = self._commitment_cost * e_latent_loss
+
+        # Straight Through Estimator
+        quantized = inputs + (quantized - inputs).detach()
+
+        avg_probs = torch.mean(encodings, dim=0)
+        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+        perplexity = perplexity / self._num_embeddings
+
+        # return loss, quantized, perplexity, encodings
+        return quantized, encoding_indices, loss
+
+
+
+class MultiStageRVQ(nn.Module):
+    def __init__(self, n_stages, num_embeddings, embedding_dim,
+                 commitment_cost, ema_decay):
+        super().__init__()
+        self.n_stages = n_stages
+        self.vq_layers = nn.ModuleList([
+            VectorQuantizerEMA(num_embeddings=num_embeddings, 
+                               embedding_dim=embedding_dim, 
+                               commitment_cost=commitment_cost,
+                               decay=ema_decay,) for _ in range(self.n_stages)
+        ])
+
+    def forward(self, z, save_zq=False):
+        """
+        z: латеное представление после энкодера
+        """
+
+        residual = z
+        sum_quant = torch.zeros_like(z)
+        total_commitment_loss = .0
+        all_codes = []
+        if save_zq:
+            zqs = []
+        for i, vq in enumerate(self.vq_layers):
+            z_q, codes, commitment_loss = vq(residual)
+            all_codes.append(codes)
+            
+            total_commitment_loss += commitment_loss
+            
+            sum_quant = sum_quant + z_q
+
+            residual = z - sum_quant
+            if save_zq:
+                zqs.append(z_q)
+        if save_zq:
+            return sum_quant, all_codes, total_commitment_loss / self.n_stages, zqs 
+        else:
+            return sum_quant, all_codes, total_commitment_loss / self.n_stages
+    
+    def decode_codes(self, all_codes):
+
+        stage0 = self.vq_layers[0]
+        embedding_dim = stage0._embedding.weight.shape[1]
+        
+        device = stage0._embedding.weight.device
+        # assert self.n_stages == all_codes.shape[1]
+
+        B = all_codes.shape[0]
+        sum_quant = torch.zeros((B, embedding_dim), device=device)
+
+        for l, vq_layer in enumerate(self.vq_layers):
+            codes_l = all_codes[:, l]  
+            embed_l = vq_layer._embedding.weight
+            z_q_l = embed_l[codes_l]              
+            sum_quant += z_q_l
+
+        return sum_quant  
+
+
+
+class VQ_VAE(nn.Module):
+    def __init__(self, d_numerical, categories, num_layers, hid_dim, 
+                 num_embeddings, n_head = 1, factor = 4, bias = True, 
+                 decay = 0.99, commitment_cost = 0.25, rvq_stages=0):
+        super(VQ_VAE, self).__init__()
+ 
+        self.d_numerical = d_numerical
+        self.categories = categories
+        self.hid_dim = hid_dim
+        d_token = hid_dim
+        self.n_head = n_head
+ 
+        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias = bias)
+
+        self.encoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
+
+        self.decoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
+
+        self.rvq_ema = MultiStageRVQ(
+            rvq_stages, num_embeddings, hid_dim*(d_numerical + len(categories)), 
+            commitment_cost, decay
+        )
+        
+
+    def forward(self, x_num, x_cat, save_zq=False):
+        x = self.Tokenizer(x_num, x_cat)
+        z = self.encoder(x)
+
+        if save_zq:
+        
+            quantized, codes, tcl, zqs = self.rvq_ema(z[:,1:], save_zq)
+        else:
+            quantized, codes, tcl = self.rvq_ema(z[:,1:])
+
+        # batch_size = x_num.size(0)
+        h = self.decoder(quantized)
+        
+        return (
+            h, 
+            {
+                "latent_loss": tcl,
+                "codes": codes, 
+                "zqs": zqs if save_zq else None
+                # "perplexity": perplexity
+            }
+        )
+
+
+class Reconstructor(nn.Module):
+    def __init__(self, d_numerical, categories, d_token):
+        super(Reconstructor, self).__init__()
+
+        self.d_numerical = d_numerical
+        self.categories = categories
+        self.d_token = d_token
+        
+        self.weight = nn.Parameter(Tensor(d_numerical, d_token))  
+        nn.init.xavier_uniform_(self.weight, gain=1 / math.sqrt(2))
+        self.cat_recons = nn.ModuleList()
+
+        for d in categories:
+            recon = nn.Linear(d_token, d)
+            nn.init.xavier_uniform_(recon.weight, gain=1 / math.sqrt(2))
+            self.cat_recons.append(recon)
+
+    def forward(self, h):
+        h_num  = h[:, :self.d_numerical]
+        h_cat  = h[:, self.d_numerical:]
+
+        recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
+        recon_x_cat = []
+
+        for i, recon in enumerate(self.cat_recons):
+      
+            recon_x_cat.append(recon(h_cat[:, i]))
+
+        return recon_x_num, recon_x_cat
+
+
+class Model_VAE(nn.Module):
+    def __init__(self, num_layers, d_numerical, categories, d_token, n_head = 1, factor = 4,  bias = True, 
+                 num_embeddings=None,
+                 decay=0.0,
+                 commitment_cost=0.0,
+                 rvq_stages=0
+                 ):
+        super(Model_VAE, self).__init__()
+
+        self.RVQ_VAE = VQ_VAE(d_numerical, categories, num_layers, 
+                            d_token, n_head = n_head, factor = factor, 
+                            bias = bias, num_embeddings=num_embeddings, 
+                            commitment_cost=commitment_cost, decay=decay,
+                            rvq_stages=rvq_stages)
+            
+        self.Reconstructor = Reconstructor(d_numerical, categories, d_token)
+
+    def get_embedding(self, x_num, x_cat):
+        x = self.Tokenizer(x_num, x_cat)
+        return self.VAE.get_embedding(x)
+
+    def forward(self, x_num, x_cat):
+
+        h, params = self.RVQ_VAE(x_num, x_cat)
+
+        # recon_x_num, recon_x_cat = self.Reconstructor(h[:, 1:])
+        recon_x_num, recon_x_cat = self.Reconstructor(h)
+
+        return recon_x_num, recon_x_cat, params
+    
+
+
+
+class Encoder_model(nn.Module):
+    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
+        super(Encoder_model, self).__init__()
+        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias)
+        self.VAE_Encoder = Transformer(num_layers, d_token, n_head, d_token, factor)
+
+    def load_weights(self, Pretrained_VAE):
+        self.Tokenizer.load_state_dict(Pretrained_VAE.RVQ_VAE.Tokenizer.state_dict())
+        self.VAE_Encoder.load_state_dict(Pretrained_VAE.RVQ_VAE.encoder.state_dict())
+
+    def forward(self, x_num, x_cat):
+        x = self.Tokenizer(x_num, x_cat)
+        z = self.VAE_Encoder(x)
+
+        return z
+    
+
+class VectorQuantizer(nn.Module):
+    def __init__(self, rvq_stages, num_embeddings, hid_dim, d_numerical, 
+                 categories, commitment_cost, decay):
+        super(VectorQuantizer, self).__init__()
+
+        self.rvq_ema = MultiStageRVQ(
+            rvq_stages, num_embeddings, hid_dim*(d_numerical + len(categories)), 
+            commitment_cost, decay
+        )
+
+    def load_weights(self, Pretrained_VAE):
+        self.rvq_ema.load_state_dict(Pretrained_VAE.RVQ_VAE.rvq_ema.state_dict())
+        
+    def forward(self, z, save_z=False):
+        if save_z:
+            quantized, codes, _, zqs = self.rvq_ema(z[:,1:], save_z)
+            zqs = torch.stack(zqs).permute(1, 0, 2, 3)
+            return quantized.view(quantized.shape[0], -1), torch.stack(codes).squeeze(-1).T, zqs.view(zqs.shape[0], zqs.shape[1], -1)
+        else:
+            quantized, codes, _ = self.rvq_ema(z[:,1:])
+            return quantized.view(quantized.shape[0], -1), torch.stack(codes).squeeze(-1).T
+        
+
+
+class Decoder_model(nn.Module):
+    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
+        super(Decoder_model, self).__init__()
+        self.VAE_Decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
+        self.Detokenizer = Reconstructor(d_numerical, categories, d_token)
+        
+    def load_weights(self, Pretrained_VAE):
+        self.VAE_Decoder.load_state_dict(Pretrained_VAE.RVQ_VAE.decoder.state_dict())
+        self.Detokenizer.load_state_dict(Pretrained_VAE.Reconstructor.state_dict())
+
+    def forward(self, z):
+
+        h = self.VAE_Decoder(z)
+        x_hat_num, x_hat_cat = self.Detokenizer(h)
+
+        return x_hat_num, x_hat_cat
