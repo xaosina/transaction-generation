@@ -5,6 +5,7 @@ data/**/*.parquet
 data/**/*_SUCCESS
 dev/**
 ebes/*
+**.parquet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
