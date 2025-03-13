@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Subset, Dataset
 import numpy as np
 import time
-
+from torch.profiler import profile, ProfilerActivity, schedule, record_function
 
 def dictprettyprint(data: Dict):
     return yaml.dump(data, default_flow_style=False)
@@ -24,7 +24,27 @@ class DummyProfiler:
 def dummy_profiler():
     yield DummyProfiler()
 
+def get_profiler(activate: bool = False, save_path=None):
+    assert save_path is None, "Set profiling save path"
+    def on_trace_ready(prof):
+        prof.export_chrome_trace("trace.json")
 
+    profiler = profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=schedule(
+                skip_first=5,
+                wait=1,
+                warmup=2,
+                active=10,
+                repeat=1,
+            ),
+            record_shapes=True,
+            on_trace_ready=on_trace_ready,
+            )
+    profiler_record = record_function
+
+    return ((profiler, profiler_record) if activate else (dummy_profiler(), None)
+    )
 
 def find_ar_paths(
         ar_id: str

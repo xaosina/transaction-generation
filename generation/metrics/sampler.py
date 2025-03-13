@@ -14,7 +14,7 @@ from tabsyn.utils.latent_utils import (
     recover_data,
 )
 
-from tabsyn.utils.metric_utils import MetricEstimator
+from .metric_utils import MetricEstimator
 
 import delu
 
@@ -43,102 +43,97 @@ class SampleEvaluator:
 
 
     def __generate_samples(self, data_loader):
-        gen_coef = 1
         self.model.eval()
-
+        
         pbar = tqdm(data_loader, total=len(data_loader))
 
         gen_samples = []
         gt_samples = []
         gt_client_ids = []
 
-
-        for batch_idx, samp_batch_info in enumerate(pbar):
+        for batch_idx, samp_batch in enumerate(pbar):
             if self.blim is not None and batch_idx > self.blim:
                 break
-            samp_inputs = samp_batch_info["gen_seqs"].float().to(self.config["device"])
+            samp_inp = samp_batch
 
-            B = samp_inputs.size(0)
+            B = samp_inp.size(0)
 
-            empty_text_list = torch.zeros([B, 0], dtype=torch.long, device=self.config['device'])
-
-
-            prompt, _ = SeqLatentPredictionDataset.get_rawhist_batch(
-                            samp_batch_info, self.config, self.config['EST_HIST_LEN'])
-            
             with torch.no_grad():
-                samp_res = self.model(empty_text_list, prompt, max_steps=self.config["EST_GEN_LEN"] * gen_coef, 
-                                      rvqvae_decoder=self.rec_info['rvq_ema'])
+                samp_res = self.model(
+                    samp_inp, 
+                    max_steps=self.config["EST_GEN_LEN"], # Это будет в батче?
+                    rvqvae_decoder=self.rec_info['rvq_ema'] # We need to decode our data before generate next token from generated
+                    ) 
             
-            match self.config["DATA_MODE"]:
-                case "num2cat":
-                    stacked = [
-                        reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["RVQ_STAGES"])     
-                        for sample in samp_res
-                    ]
-                case "num2mnum":
-                    stacked = [
-                        reshape_sample(
-                            sample, 
-                            desired_rows=self.config["EST_GEN_LEN"], 
-                            group_size=self.config["RVQ_STAGES"] * self.config["VAE_HIDDEN_DIM"]
-                            ).reshape(
-                                self.config["EST_GEN_LEN"], self.config["RVQ_STAGES"], self.config["VAE_HIDDEN_DIM"]
-                            )
-                        for sample in samp_res
-                    ]
-                case "num2num":
-                    stacked = [
-                        reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["VAE_HIDDEN_DIM"])     
-                        for sample in samp_res
-                    ]
-                case _:
-                    raise NotImplementedError
+            # TODO: удалить, но учесть в батче
+            # match self.config["DATA_MODE"]:
+            #     case "num2cat":
+            #         stacked = [
+            #             reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["RVQ_STAGES"])     
+            #             for sample in samp_res
+            #         ]
+            #     case "num2mnum":
+            #         stacked = [
+            #             reshape_sample(
+            #                 sample, 
+            #                 desired_rows=self.config["EST_GEN_LEN"], 
+            #                 group_size=self.config["RVQ_STAGES"] * self.config["VAE_HIDDEN_DIM"]
+            #                 ).reshape(
+            #                     self.config["EST_GEN_LEN"], self.config["RVQ_STAGES"], self.config["VAE_HIDDEN_DIM"]
+            #                 )
+            #             for sample in samp_res
+            #         ]
+            #     case "num2num":
+            #         stacked = [
+            #             reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["VAE_HIDDEN_DIM"])     
+            #             for sample in samp_res
+            #         ]
+            #     case _:
+            #         raise NotImplementedError
 
-            if len(stacked) == 0:
-                samp_batch_info
-                continue
-
-            stacked = torch.stack(stacked)
+ 
+            # stacked = torch.stack(samp_res)
             
-            match self.config["DATA_MODE"]:
-                case "num2cat":
-                    samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_codes"]
-                    samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_codes"]
-                case "num2mnum":
-                    samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_residual_codes"]
-                    samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_residual_codes"]
-                case "num2num":
-                    samp_batch_info["hist_seqs"] = samp_batch_info["hist_seqs"]
-                    samp_batch_info["gen_seqs"] = samp_batch_info["gen_seqs"]
-                case _:
-                    raise NotImplementedError
+            # TODO: удалить, но учесть в батче            
+            # match self.config["DATA_MODE"]:
+            #     case "num2cat":
+            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_codes"]
+            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_codes"]
+            #     case "num2mnum":
+            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_residual_codes"]
+            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_residual_codes"]
+            #     case "num2num":
+            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seqs"]
+            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seqs"]
+            #     case _:
+            #         raise NotImplementedError
                 
-            (
-                gt_batch_z,
-                gt_batch_ids,
-            ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch_info)
-            gt_samples.append(gt_batch_z.cpu())
-            gt_client_ids.append(gt_batch_ids.cpu())
+            # TODO: Функция в батче для возврата hist + gt и hist + gen
+            # (
+            #     gt_batch_z,
+            #     gt_batch_ids,
+            # ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch)
+
+            # gt_samples.append(gt_batch_z.cpu())
+            # gt_client_ids.append(gt_batch_ids.cpu())
 
             # samp_batch_info["gen_seqs"] = stacked.cpu()
-            samp_batch_info["gen_seqs"] = stacked
+            # samp_batch_info["gen_seqs"] = stacked
 
-            (
-                gen_batch_z,
-                _,
-            ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch_info)
-            gen_samples.append(gen_batch_z.cpu())
+            # (
+            #     gen_batch_z,
+            #     _,
+            # ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch_info)
+            # gen_samples.append(gen_batch_z.cpu())
 
-            del samp_batch_info
+            del samp_batch
 
         delu.cuda.free_memory()
-        return gen_samples, gt_samples, gt_client_ids, len(gt_samples) > 0
+        return gen_samples, gt_samples, gt_client_ids
     
 
     def __recover_and_save_samples(self, gen_samples, gt_samples, gt_client_ids):
-        
-
+    
         gt_client_ids = torch.cat(gt_client_ids)
 
         _dfs = dict(
@@ -154,8 +149,10 @@ class SampleEvaluator:
             [gen_samples, gt_samples],
             [gen_df_save_path, gt_df_save_path],
         ):
+
+            # TODO: Make class Reconstructor - будет делать Latent to Data в зависимости от encoder/decoder.
+            # TODO: Функция просто получает выход модели, а возвращает реальные данные
             
-            # samples = torch.cat(samples).long().cpu().numpy()
             samples = torch.cat(samples).detach().cpu().numpy()
 
             syn_num, syn_cat, syn_target = split_num_cat_target(
@@ -184,9 +181,10 @@ class SampleEvaluator:
         return gt_df_save_path, gen_df_save_path
 
     def __evaluate_and_save(self, gt_df_save_path, gen_df_save_path):
+        # TODO: функция принимает путь до gt и gen. 
+
         self.logger.info(f"Epoch: {self.train_state['epoch']}; metric eval started")
 
-        self.train_state["curr_discri"] = None
         metric_estimator = MetricEstimator(gt_df_save_path, gen_df_save_path, self.config, self.logger, self.train_state)
         metric_estimator.set_name_fixes(name_prefix=self.name_prefix)
         metric_estimator.estimate()

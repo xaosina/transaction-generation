@@ -12,7 +12,7 @@ class PipelineConfig:
     data_conf: DataConfig = field(default_factory=DataConfig)
     train_config: TrainConfig = field(default_factory=TrainConfig)
     model_conf: Mapping[str, Any]
-    optimizer: 
+    # optimizer: 
 
 @pyrallis.wrap()
 def main(cfg: PipelineConfig):
@@ -24,18 +24,18 @@ def main(cfg: PipelineConfig):
     loss = get_loss(cfg.loss)
 
     trainer = Trainer(
-    model=net,
-    loss=loss,
-    optimizer=opt,
-    lr_scheduler=lr_scheduler,
-    metrics=metrics,
-    train_loader=loaders["train"],
-    val_loader=loaders["train_val"],
-    run_name=config["run_name"],
-    ckpt_dir=Path(config["log_dir"]) / config["run_name"] / "ckpt",
-    device=config["device"],
-    **config["trainer"],
-    )
+        model=net,
+        loss=loss,
+        optimizer=opt,
+        lr_scheduler=lr_scheduler,
+        metrics=metrics,
+        train_loader=loaders["train"],
+        val_loader=loaders["train_val"],
+        run_name=config["run_name"],
+        ckpt_dir=Path(config["log_dir"]) / config["run_name"] / "ckpt",
+        device=config["device"],
+        **config["trainer"],
+        )
 
     trainer.run()
     trainer.load_best_model()
