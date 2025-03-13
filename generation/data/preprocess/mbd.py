@@ -409,6 +409,7 @@ def main():
 
 
 if __name__ == '__main__':
-    # TODO: Make args for path to dataset (in/out)
-    # TODO: Delete temp files after script
+    # TODO: Make args for path to dataset (in/out).
+    # TODO: Delete temp files after script.
+    # TODO: Refactor paths and strs and consts.
     main()
