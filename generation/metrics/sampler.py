@@ -17,7 +17,7 @@ from tabsyn.utils.latent_utils import (
 from .metric_utils import MetricEstimator
 
 import delu
-
+import pandas as pd
 
 class SampleEvaluator:
 

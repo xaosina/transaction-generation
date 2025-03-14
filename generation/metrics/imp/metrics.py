@@ -13,12 +13,14 @@ import pandas as pd
 
 from Levenshtein import distance as lev_score
 from sklearn.metrics import accuracy_score
-
+from ..types import BinaryData, CoverageData, OnlyPredData
 
 UserStatistic = NewType('UserStatistic', Dict[int, Dict[str, Union[int, float]]])
 
 
 class BaseMetric(ABC):
+
+    required_data_type = None
 
     def __init__(self, name: str):
         self.name = name
@@ -38,10 +40,12 @@ class BaseMetric(ABC):
 
 class LevensteinMetric(BaseMetric):
 
-    def compute(self, dfs, seq_key, target_key):
+    required_data_type = BinaryData
 
-        preds = dfs["gen"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
-        gts = dfs["gt"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+    def compute(self, data: BinaryData, seq_key, target_key):
+
+        preds = data.y_pred.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+        gts = data.y_true.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
         df = pd.concat((gts, preds), keys=["gt", "pred"], axis=1)
         
         def get_scores(row):
@@ -54,10 +58,12 @@ class LevensteinMetric(BaseMetric):
 
 class Accuracy(BaseMetric):
 
-    def compute(self, dfs, seq_key, target_key):
+    required_data_type = BinaryData
 
-        preds = dfs["gen"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
-        gts = dfs["gt"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+    def compute(self, data: BinaryData, seq_key, target_key):
+
+        preds = data.y_pred.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+        gts = data.y_true.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
         df = pd.concat((gts, preds), keys=["gt", "pred"], axis=1)
         
         def get_scores(row):
@@ -70,6 +76,9 @@ class Accuracy(BaseMetric):
 
 
 class F1Metric(BaseMetric):
+
+    required_data_type = BinaryData
+
     def __init__(self, name, average='macro'):
         super().__init__(name)
         self.__average = average
@@ -113,10 +122,10 @@ class F1Metric(BaseMetric):
         return cls_metric
     
 
-    def compute(self, dfs, seq_key, target_key):
+    def compute(self, data: BinaryData, seq_key, target_key):
      
-        preds = dfs["gen"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
-        gts = dfs["gt"]["pred"].groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+        preds = data.y_pred.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
+        gts = data.y_true.groupby(seq_key)[target_key].apply(lambda s: s.tolist())
         df = pd.concat((gts, preds), keys=["gt", "pred"], axis=1)
         
         def get_scores(row):
@@ -131,9 +140,11 @@ class F1Metric(BaseMetric):
 
 class Gini(BaseMetric):
 
-    def compute(self, dfs, seq_key, target_key):
+    required_data_type = OnlyPredData
+
+    def compute(self, data:OnlyPredData, seq_key, target_key):
         
-        vals = np.array(list(dfs["gen"]["pred"][target_key].value_counts()), dtype=float)
+        vals = np.array(list(data.y_pred[target_key].value_counts()), dtype=float)
         total = vals.sum()
         p = vals / total
 
@@ -150,8 +161,10 @@ class Gini(BaseMetric):
 
 class ShannonEntropy(BaseMetric):
 
-    def compute(self, dfs, seq_key, target_key):
-        vals = np.array(list(dfs["gen"]["pred"][target_key].value_counts()), dtype=float)
+    required_data_type = OnlyPredData
+
+    def compute(self, data:OnlyPredData, seq_key, target_key):
+        vals = np.array(list(data.y_pred[target_key].value_counts()), dtype=float)
         total = vals.sum()
         p = vals / total
         
@@ -163,6 +176,8 @@ class ShannonEntropy(BaseMetric):
 # TODO: There should be rework. We want the same args to get in compute foo
 class Coverage(BaseMetric):
 
+    required_data_type = CoverageData
+
     def __init__(self, name, userwise=False):
         super().__init__(name)
         self.__userwise = userwise
@@ -173,15 +188,15 @@ class Coverage(BaseMetric):
         else:
             self.__compute_userwise(*args, **kwargs)
 
-    def __compute_whole(self, dfs, _, target_key):
-        unique_hist = dfs["gen"]["hist"][target_key].nunique() 
-        unique_pred = dfs["gen"]["pred"][target_key].nunique()
+    def __compute_whole(self, data: CoverageData, _, target_key):
+        unique_hist = data.y_hist[target_key].nunique() 
+        unique_pred = data.y_pred[target_key].nunique()
         return unique_pred / unique_hist
 
-    def __compute_userwise(self, dfs, seq_key, target_key):
+    def __compute_userwise(self, data:CoverageData, seq_key, target_key):
         
-        hists = dfs["gen"]["hist"].groupby(seq_key)[target_key].apply(lambda s: set(s))
-        preds = dfs["gen"]["pred"].groupby(seq_key)[target_key].apply(lambda s: set(s))
+        hists = data.y_hist.groupby(seq_key)[target_key].apply(lambda s: set(s))
+        preds = data.y_pred.groupby(seq_key)[target_key].apply(lambda s: set(s))
         df = pd.concat((hists, preds), keys=["hists", "preds"], axis=1)
         
         def get_scores(row):
