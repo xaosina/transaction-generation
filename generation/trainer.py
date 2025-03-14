@@ -56,7 +56,6 @@ class Trainer:
         ckpt_track_metric: str = "epoch",
         ckpt_resume: str | os.PathLike | None = None,
         device: str = "cpu",
-        metrics_on_train: bool = False,
         profiling: bool = False,
     ):
         """Initialize trainer.
@@ -86,7 +85,6 @@ class Trainer:
                 to be better if the value is higher.
             ckpt_resume: path to the checkpoint to resume training from.
             device: device to train and validate on.
-            metrics_on_train: wether to compute metrics on train set.
             profiling: if profiling is `True`, the training trace will be saved to trace.json.  
                 Use this option with caution, it may incur additional computational overhead.
         """
@@ -114,7 +112,6 @@ class Trainer:
         self._ckpt_track_metric = ckpt_track_metric
         self._ckpt_resume = ckpt_resume
         self._device = device
-        self._metrics_on_train = metrics_on_train
 
         self._model = None
         if model is not None:

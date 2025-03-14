@@ -14,7 +14,7 @@ from tmetrics.eval_detection import run_eval_detection
 
 from .imp import METRICS
 
-from .types import BinaryData, CoverageData, OnlyPredData
+from .imp.types import BinaryData, CoverageData, OnlyPredData
 
 
 class MetricEstimator:

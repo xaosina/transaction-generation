@@ -9,6 +9,9 @@ import numpy as np
 import time
 from torch.profiler import profile, ProfilerActivity, schedule, record_function
 
+from collections.abc import Iterable, Mapping
+from typing import Any
+
 def dictprettyprint(data: Dict):
     return yaml.dump(data, default_flow_style=False)
 
@@ -43,7 +46,7 @@ def get_profiler(activate: bool = False, save_path=None):
             )
     profiler_record = record_function
 
-    return ((profiler, profiler_record) if activate else (dummy_profiler(), None)
+    return ((profiler, record_function) if activate else (dummy_profiler(), None)
     )
 
 def find_ar_paths(
@@ -179,3 +182,26 @@ class LoadTime:
             self.iterator = None
             self.full_time = 0
             raise
+
+
+def get_optimizer(
+    net_params: Iterable[torch.nn.Parameter],
+    name: str = "Adam",
+    params: Mapping[str, Any] | None = None,
+):
+    params = params or {}
+    try:
+        return getattr(torch.optim, name)(net_params, **params)
+    except AttributeError:
+        raise ValueError(f"Unknkown optimizer: {name}")
+    
+def get_scheduler(
+    optimizer: torch.optim.Optimizer, 
+    name: str, 
+    params: Mapping[str, Any] | None = None
+):
+    params = params or {}
+    try:
+        return getattr(torch.optim.lr_scheduler, name)(optimizer, **params)
+    except AttributeError:
+        raise ValueError(f"Unknkown LR scheduler: {name}")
