@@ -12,14 +12,35 @@ from tabsyn.utils.other_utils import (
 from tmetrics.eval_density import run_eval_density
 from tmetrics.eval_detection import run_eval_detection
 
-from .imp import METRICS
+import metrics
 
-from .imp.types import BinaryData, CoverageData, OnlyPredData
+from .types import BinaryData, CoverageData, OnlyPredData
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+@dataclass
+class MetricsConfig:
+    exp_name: str = field(default='default_exp')
+    gen_len: int = field(default=16)
+    hist_len: int = field(default=16)
+    device: int = field(default=0)
+
+# TODO: Init. Sampler dependent.
+def get_metrics(cfg: MetricsConfig = None):
+    ...
 
 
 class MetricEstimator:
 
-    def __init__(self, gt_save_path, gen_save_path, config, logger, train_state):
+    def __init__(self, 
+                 gt_save_path: str | Path = None, 
+                 gen_save_path: str | Path = None, 
+                 metric_names: list = None, 
+                 config: MetricsConfig = None, 
+                 logger = None, 
+                 train_state: list = None):
+        
         self.gt_save_path = gt_save_path
         self.gen_save_path = gen_save_path
         self.name_postfix = ""
@@ -27,15 +48,17 @@ class MetricEstimator:
         self.config = config
         self.logger = logger
         self.train_state = train_state
-
-        self.bmetrics = [metric(metric.__name__) for metric in METRICS]
+        if metric_names is None:
+            raise ValueError("List of metrics is empty")
+        else:
+            self.metrics = [metrics.__getattr__(mname)(mname) for mname in metric_names]
 
     def set_name_fixes(self, name_postfix="", name_prefix=""):
         self.name_postfix = name_postfix
         self.name_prefix = name_prefix
 
     def __get_data(self, orig_path, generated_path, subject_key, target_key):
-        total_len = self.config["EST_GEN_LEN"] + self.config["EST_HIST_LEN"]
+        total_len = self.config.gen_len + self.config.hist_len
 
         def process(path):
             df = pd.read_csv(path)[[subject_key, target_key]]
@@ -43,8 +66,8 @@ class MetricEstimator:
             groups = df.groupby(subject_key)
             assert (groups.size() >= total_len).all(), "Не хватает записей для некоторых групп"
             return {
-                "hist": groups.head(self.config["EST_HIST_LEN"]).reset_index(drop=True),
-                "preds": groups.tail(self.config["EST_GEN_LEN"]).reset_index(drop=True)
+                "hist": groups.head(self.config.hist_len).reset_index(drop=True),
+                "preds": groups.tail(self.config.hist_len).reset_index(drop=True)
             }
 
         dfs = {
@@ -58,8 +81,8 @@ class MetricEstimator:
         return dfs
 
     
-    def __prepare_data_to_metrics(self, dfs):
-        seq_len = min(self.config["EST_GEN_LEN"], self.config["EST_HIST_LEN"])
+    def __prepare_data_to_metrics(self, dfs: pd.DataFrame):
+        seq_len = min(self.config.gen_len, self.config.hist_len)
         
         return {
             BinaryData: {
@@ -81,13 +104,12 @@ class MetricEstimator:
         }
 
 
-    def __estimate_metrics(self, orig_path, generated_path, metrics=None, shuffle_clients=False, seed=0):
-        if metrics is None:
-            return None
-
+    def __estimate_metrics(self, orig_path, generated_path, metrics=None):
+        
         subject_key = 'client_id'
         target_key = 'event_type'
-
+        orig_path, generated_path = self.gt_save_path, self.gen_save_path
+        
         dfs = self.__get_data(orig_path, generated_path, subject_key, target_key)
         
         prepared_data = self.__prepare_data_to_metrics(dfs, )
@@ -128,7 +150,7 @@ class MetricEstimator:
                     0,
                     dataset="mbd_short",
                     match_users=False,
-                    gpu_ids=self.config["device"],
+                    gpu_ids=self.config.device,
                     verbose=False,
                 )
 

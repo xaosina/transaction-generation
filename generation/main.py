@@ -5,12 +5,14 @@ import pyrallis
 from data.utils import DataConfig, get_dataloader
 from ebes import build_model
 from trainer import TrainConfig
+from .metrics.metric_utils import MetricsConfig, get_metrics
 
 
 @dataclass
 class PipelineConfig:
     data_conf: DataConfig = field(default_factory=DataConfig)
-    train_config: TrainConfig = field(default_factory=TrainConfig)
+    train_conf: TrainConfig = field(default_factory=TrainConfig)
+    metrics_conf: MetricsConfig = field(default_factory=MetricsConfig)
     model_conf: Mapping[str, Any]
     # optimizer: 
 

@@ -59,10 +59,10 @@ class SampleEvaluator:
             B = samp_inp.size(0)
 
             with torch.no_grad():
-                samp_res = self.model(
+                samp_res = self.model.generate(
                     samp_inp, 
-                    max_steps=self.config["EST_GEN_LEN"], # Это будет в батче?
-                    rvqvae_decoder=self.rec_info['rvq_ema'] # We need to decode our data before generate next token from generated
+                    max_steps=self.config["EST_GEN_LEN"], # Это будет в батче? Sampler config
+                    rvqvae_decoder=self.rec_info['rvq_ema'] # TO model?
                     ) 
             
             # TODO: удалить, но учесть в батче

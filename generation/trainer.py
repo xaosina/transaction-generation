@@ -24,7 +24,7 @@ logger = Logger(__name__, log_to_file='log.log', )
 class TrainConfig:
     """ Training config for Machine Learning """
     # The number of workers for training
-    workers: int = field(default=8) # The number of aaaaworkers for training
+    workers: int = field(default=8) # The number of workers for training
     # The number of aaaaworkers for training
     # The experiment name
     exp_name: str = field(default='default_exp')
@@ -200,30 +200,6 @@ class Trainer:
             if not ckpt_path.is_dir():
                 torch.save(ckpt, ckpt_path)
 
-            assert self._metric_values
-
-            metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
-
-            fname = f"epoch__{self._last_epoch:04d}"
-            metrics_str = "_-_".join(
-                f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
-            )
-
-            if len(metrics_str) > 0:
-                fname = "_-_".join((fname, metrics_str))
-            fname += ".ckpt"
-
-            torch.save(ckpt, ckpt_path / Path(fname))
-
-            if not self._ckpt_replace:
-                return
-            
-            # TODO: Maybe we don't need it
-            all_ckpt = list(ckpt_path.glob("*.ckpt"))
-            best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
-            for p in all_ckpt:
-                if p != best_ckpt:
-                    p.unlink()
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
             """Load model, optimizer and scheduler states.
@@ -265,9 +241,6 @@ class Trainer:
 
         logger.info("Epoch %04d: train started", self._last_epoch + 1)
         self._model.train()
-
-        for metric in self._metrics.values():
-            metric.reset()
 
         # loss_ema = 0.0
         losses: list[float] = []
@@ -317,7 +290,6 @@ class Trainer:
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
 
-            return self.compute_metrics("train")
     
     @torch.inference_mode()
     def validate(self, loader: Iterable[Batch] | None = None) -> dict[str, Any]:
@@ -330,44 +302,19 @@ class Trainer:
         logger.info("Epoch %04d: validation started", self._last_epoch + 1)
 
         self._model.eval()
-
+        
         evaluator = SampleEvaluator(self._model, None, logger)
-        evaluator.evaluate(loader)
+        self._metric_values = evaluator.evaluate(loader)
+        logger.info(
+            f"Epoch %04d: metrics: %s",
+            self._last_epoch + 1,
+            str(self._metric_values),
+        )
 
         logger.info("Validation finished")
 
         return None
     
-    def compute_metrics(self, phase: Literal["train", "val"]) -> dict[str, Any]:
-        """Compute and log metrics.
-
-        The metrics are computed based on the whole epoch data, so the granularity of
-        metrics is epoch, so when the metrics are not None, the epoch is not None to.
-
-        Args:
-            phase: wether the metrics were collected during train or validatoin.
-        """
-
-        self._metric_values = {}
-        for name, metric in self._metrics.items():
-            try:
-                val = metric.compute().squeeze()
-            except (RuntimeError, ValueError):
-                logger.warning(f"{name} metric had RuntimeError")
-                val = torch.zeros(1)
-            try:
-                val = val.item()
-            except RuntimeError:
-                val = val.numpy()
-            self._metric_values.update({name: val})
-
-        logger.info(
-            f"Epoch %04d: {phase} metrics: %s",
-            self._last_epoch + 1,
-            str(self._metric_values),
-        )
-
-        return self._metric_values
     
     def run(self) -> None:
         """Train and validate model."""
@@ -404,17 +351,12 @@ class Trainer:
             assert self._total_epochs is not None, "Set `total_iters` or `total_epochs`"
             self._total_iters = self._total_epochs * self._iters_per_epoch
 
-        # TODO more epochs than set when dataset too small
-        best_metric = float("-inf")
-        patience = self._patience
-
         while self._last_iter < self._total_iters:
             train_iters = min(
                 self._total_iters - self._last_iter,
                 self._iters_per_epoch,
             )
 
-            self._metric_values = None
             self.train(train_iters)
             if self._sched:
                 self._sched.step()
@@ -425,43 +367,12 @@ class Trainer:
             self._last_epoch += 1
             self.save_ckpt()
 
-            assert (
-                self._metric_values is not None
-                and self._ckpt_track_metric in self._metric_values
-            )
-            target_metric = self._metric_values[self._ckpt_track_metric]
-            if self._ckpt_track_metric == "loss":
-                target_metric = -1 * target_metric
-
-            if target_metric > best_metric:
-                best_metric = target_metric
-                patience = self._patience
-            else:
-                patience -= 1
-            if patience == 0:
-                logger.info(
-                    f"Patience has run out. Early stopping at {self._last_epoch} epoch"
-                )
-                break
-
         logger.info("run '%s' finished successfully", self._run_name)
 
-    def best_checkpoint(self) -> Path:
-        """
-        Return the path to the best checkpoint
-        """
-        assert self._ckpt_dir is not None
-        ckpt_path = Path(self._ckpt_dir)
-
-        all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
-
-        return best_ckpt
 
     def load_best_model(self) -> None:
         """
         Loads the best model to self._model according to the track metric.
         """
 
-        best_ckpt = self.best_checkpoint()
-        self.load_ckpt(best_ckpt)
+        self.load_ckpt(self._ckpt_dir)

@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 
 from typing import List, Set, Dict, Union, NewType
 
-
-
 import collections
 
 import numpy as np
@@ -13,7 +11,7 @@ import pandas as pd
 
 from Levenshtein import distance as lev_score
 from sklearn.metrics import accuracy_score
-from ..types import BinaryData, CoverageData, OnlyPredData
+from .types import BinaryData, CoverageData, OnlyPredData
 
 UserStatistic = NewType('UserStatistic', Dict[int, Dict[str, Union[int, float]]])
 
