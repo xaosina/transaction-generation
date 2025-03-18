@@ -13,14 +13,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import Tensor, einsum, nn
 from torch.utils.checkpoint import checkpoint
-from tabsyn.transformer.adapter import CatOutputAdapter, Num16x48OutputAdapter, Num48OutputAdapter, NoSepInputAdapter
-
-def list_to_tensor(x_input, pattern="t b c -> b t c"):
-    x = x_input
-
-    B, t, _ = x.shape
-    m = torch.ones(B, t, 1, device=x.device, dtype=x.dtype)
-    return x, m
+from .adapter import CatOutputAdapter, Num16x48OutputAdapter, Num48OutputAdapter, NoSepInputAdapter
 
 
 class SinusodialEmbedding(nn.Module):
@@ -163,6 +156,7 @@ class PrenormResidual(nn.Module):
         if norm_type == "ln":
             self.norm = nn.LayerNorm(d_model)
         elif norm_type == "adaln":
+            raise NotImplementedError('Check implementation')
             assert n_levels is not None
             self.norm = AdaLN(d_model, n_levels)
         else:
@@ -267,18 +261,6 @@ class MultiEmbedding(nn.Module):
         return x_list
 
 
-def _join(x: tuple[Tensor], sep: Tensor):
-    """
-    Args:
-        x: (k t d)
-        sep: (d)
-    """
-    ret = x[0]
-    for i in range(1, len(x)):
-        ret = torch.cat((ret, sep[None], x[i]), dim=0)
-    return ret
-
-
 class DirectLinearEmbedding(nn.Module):
 
     def __init__(self, d_latent, d_model):
@@ -342,63 +324,7 @@ class Masker(nn.Module):
         return x * mask
 
 class Base(nn.Module):
-    @property
-    def hidden_dim(self) -> bool:
-        return NotImplementedError
 
-    @hidden_dim.setter
-    def hidden_dim(self):
-        return NotImplementedError
-    
-    @property
-    def masked_training(self) -> bool:
-        return NotImplementedError
-
-    @masked_training.setter
-    def masked_training(self):
-        return NotImplementedError
-    
-    @property
-    def codes_dim(self) -> int:
-        return NotImplementedError
-
-    @codes_dim.setter
-    def codes_dim(self):
-        return NotImplementedError
-    
-    @property
-    def codes_number(self) -> int:
-        return NotImplementedError
-
-    @codes_number.setter
-    def codes_number(self):
-        return NotImplementedError
-    
-    @property
-    def output_mode(self) -> str:
-        return NotImplementedError
-    
-    @output_mode.setter
-    def output_mode(self):
-        return NotImplementedError
-    
-    @property
-    def input_mode(self) -> str:
-        return NotImplementedError
-
-
-    @input_mode.setter
-    def input_mode(self):
-        return NotImplementedError
-
-    @property
-    def cat_loss(self) -> bool:
-        raise NotImplementedError
-        
-    @property
-    def on_codes(self) -> bool:
-        raise NotImplementedError
-    
     @property
     def casual(self) -> bool:
         raise NotImplementedError
@@ -414,11 +340,7 @@ class Base(nn.Module):
     @property
     def norm_type(self):
         raise NotImplementedError
-
-    @property
-    def n_prom_levels(self) -> int:
-        return 16
-
+    
     @property
     def resp_loss_only(self):
         raise NotImplementedError
@@ -442,8 +364,6 @@ class Base(nn.Module):
         casual = self.casual
         self.d_model = d_model
 
-        self.sep = nn.Parameter(torch.randn(d_model))
-
         blocks = [
             Block(
                 d_model=d_model,
@@ -459,31 +379,31 @@ class Base(nn.Module):
         self.blocks = nn.ModuleList(blocks)
 
 
-    def init(self, loss_type, mask_params=None):
-        assert self._hidden_dim != -1
-        match self.input_mode:
-            case "48":
-                self.linear_proj = DirectLinearEmbedding(self.hidden_dim, self.d_model)
-                self.last_linear = nn.Linear(self.d_model, self.hidden_dim)
-                self.input_adapter = NoSepInputAdapter()
+    # def init(self, loss_type, mask_params=None):
+    #     assert self._hidden_dim != -1
+    #     match self.input_mode:
+    #         case "48":
+    #             self.linear_proj = DirectLinearEmbedding(self.hidden_dim, self.d_model)
+    #             self.last_linear = nn.Linear(self.d_model, self.hidden_dim)
+    #             self.input_adapter = NoSepInputAdapter()
                 
-        match self.output_mode:
-            case "16x":
-                self.output_adapter = CatOutputAdapter(self.codes_dim, self.codes_number, loss_type=loss_type)
-                self.last_linear = nn.Linear(self.d_model, self.d_model)
-                self.classifier = nn.Linear(self.d_model, self.codes_dim * self.codes_number)
-                # self.classifier = nn.ModuleList([nn.Linear(48, self.codes_dim) for _ in range(self.codes_number)])
-            case "48":
-                self.output_adapter = Num48OutputAdapter(loss_type=loss_type)
-                self.last_linear = nn.Linear(self.d_model, self.d_model)
-                self.classifier = nn.Linear(self.d_model, self.hidden_dim)
-            case "16x48":
-                self.output_adapter = Num16x48OutputAdapter(loss_type=loss_type)
-                self.last_linear = nn.Linear(self.d_model, self.hidden_dim)
-                self.classifier = nn.ModuleList([nn.Linear(self.hidden_dim, self.hidden_dim) for _ in range(self.codes_number)])
+    #     match self.output_mode:
+    #         case "16x":
+    #             self.output_adapter = CatOutputAdapter(self.codes_dim, self.codes_number, loss_type=loss_type)
+    #             self.last_linear = nn.Linear(self.d_model, self.d_model)
+    #             self.classifier = nn.Linear(self.d_model, self.codes_dim * self.codes_number)
+    #             # self.classifier = nn.ModuleList([nn.Linear(48, self.codes_dim) for _ in range(self.codes_number)])
+    #         case "48":
+    #             self.output_adapter = Num48OutputAdapter(loss_type=loss_type)
+    #             self.last_linear = nn.Linear(self.d_model, self.d_model)
+    #             self.classifier = nn.Linear(self.d_model, self.hidden_dim)
+    #         case "16x48":
+    #             self.output_adapter = Num16x48OutputAdapter(loss_type=loss_type)
+    #             self.last_linear = nn.Linear(self.d_model, self.hidden_dim)
+    #             self.classifier = nn.ModuleList([nn.Linear(self.hidden_dim, self.hidden_dim) for _ in range(self.codes_number)])
 
-        if self.masked_training:
-            self.masker = Masker(*mask_params)
+    #     if self.masked_training:
+    #         self.masker = Masker(*mask_params)
 
 
     @property
@@ -514,59 +434,26 @@ class Base(nn.Module):
                     pieces.append(sep_token)
             return torch.cat(pieces, dim=1)
 
-    @overload
-    def forward(
-        self,
-        text_list: list[Tensor],
-        proms_list: list[Tensor],
-        resps_list: list[Tensor],
-        targ_list: list[Tensor] | None = None,
-        quant_levels: Tensor | None = None,
-        shift_targ_list: bool = False,
-        return_all_resp: Literal[False] = False,
-        sampling_temperature: float = 1.0,
-    ) -> Tensor:
-        ...
-
-    @overload
-    def forward(
-        self,
-        text_list: list[Tensor],
-        proms_list: list[Tensor],
-        resps_list: list[Tensor],
-        targ_list: list[Tensor] | None = None,
-        quant_levels: Tensor | None = None,
-        shift_targ_list: bool = False,
-        return_all_resp: Literal[True] = True,
-        sampling_temperature: float = 1.0,
-    ) -> list[Tensor]:
-        ...
-
     def forward(
             self,
-            text_list: torch.Tensor,
-            train_seq: torch.Tensor,
-            target: torch.Tensor | None = None,
-            # cat_train_seq: list[torch.Tensor] | None = None,
-            quant_levels: torch.Tensor | None = None,
-            shift_targ_list: bool = False,
-            return_all_resp: bool = False,
-            sampling_temperature: float = 1.0,
+            x: torch.Tensor,
+            m: torch.Tensor,
         ):
-            if self.masked_training and target is not None:
-                train_seq = self.masker(train_seq)
+            # if self.masked_training and target is not None:
+            #     train_seq = self.masker(train_seq)
 
-            with record_function("Go"):
-                x_list = self.input_adapter.prepare(self, text_list, train_seq)
-            x, m = list_to_tensor(x_list)
+            # with record_function("Go"):
+            #     x_list = self.input_adapter.prepare(self, text_list, train_seq)
 
             for block in self.blocks:
-                x = block(x, m, quant_levels)
+                x = block(x, m)
+            
+            return x
 
             x = self.output_adapter.after_attention(self, x, m)
 
             with record_function("compute logits"):
-                h_list = self.output_adapter.compute_logits(self, x, m) 
+                h_list = self.output_adapter.compute_logits(self, x, m)
 
             with record_function("compute loss"):
                 if target is not None:

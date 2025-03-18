@@ -74,7 +74,6 @@ class NoSepInputAdapter(BaseInputAdapter):
         return model.linear_proj(train_seq)
 
 
-
 # ======= Адаптеры для выходов =======
 class BaseOutputAdapter:
     def __init__(self, loss_type="full"):
@@ -118,66 +117,6 @@ class BaseOutputAdapter:
         tensor = tensor.roll(-1, dims=1)
         tensor[:, -1] = ignore_index
         return tensor
-
-
-class CodesOutputAdapter(BaseOutputAdapter):
-    def compute_logits(self, model, x, m, x_list):
-        if model.n_resp_levels > 1:
-            h = [model.classifier[i](x) * m for i in range(model.n_resp_levels)]
-        else:
-            h = [model.classifier(x) * m]
-        # Если on_codes или cat_loss – применяем обрезание с перестановкой размерностей
-        if model.on_codes or model.cat_loss:
-            h_list = [
-                torch.stack([hi[:li] for hi, li in zip(hk, map(len, x_list))], dim=0)
-                .permute(1, 0, 2)
-                for hk in h
-            ]
-        else:
-            h_list = [hi[:li] for hi, li in zip(h, map(len, x_list))]
-        return h_list
-
-    def compute_loss(self, model, h_list, text_list, proms_list, targ_list,
-                     cat_targ_list, cat_proms_list, shift_targ_list):
-        # В режиме codes используем targ_list (и игнорируем cat_*)
-        if targ_list is None:
-            return None
-        if any(len(t) == 0 for t in targ_list):
-            raise ValueError("Cannot compute loss given empty targ_list.")
-        device = h_list[0].device
-        ignore_sep = torch.full((proms_list[0].shape[1],), model.ignore_index, device=device)
-        prom_list = [torch.full_like(t, model.ignore_index) for t in proms_list]
-        assert text_list[0].shape == torch.Size([0]), 'Are you passed the text here???'
-        text_prom_list = model._samplewise_merge_tensors(
-            [t.reshape(0, proms_list[0].shape[1]) for t in text_list],
-            prom_list, sep=ignore_sep
-        )
-        for i in range(len(text_prom_list)):
-            if model.resp_loss_only:
-                text_prom_list[i][:] = model.ignore_index
-            else:
-                text_prom_list[i] = text_prom_list[i].roll(-1, dims=0)
-                text_prom_list[i][-1] = model.ignore_index
-        if shift_targ_list:
-            targ_list = [t.clone() for t in targ_list]
-            for i in range(len(targ_list)):
-                targ_list[i] = targ_list[i].roll(-1, dims=0)
-                targ_list[i][-1] = model.ignore_index
-        y_list = model._samplewise_merge_tensors(text_prom_list, targ_list, sep=ignore_sep)
-        # Пример: можно легко переключаться между compute_celoss и compute_mseloss
-        return {'nll': compute_celoss(h_list, y_list, model.ignore_index)}
-
-    def sample(self, model, h_list, resps_list, return_all_resp, sampling_temperature):
-        if return_all_resp:
-            logits = [hi[-li:] for hi, li in zip(h_list, map(len, resps_list))]
-            ret = [Categorical(logits=logits_i / sampling_temperature).sample() for logits_i in logits]
-        else:
-            if model.on_codes:
-                logits = torch.stack([hi[-1] for hi in h_list])
-                ret = Categorical(logits=logits / sampling_temperature).sample()
-            else:
-                ret = torch.stack([hi[-1] for hi in h_list])
-        return ret
 
 class CatOutputAdapter(BaseOutputAdapter):
     def __init__(self, c_dim, c_number, loss_type="full"):

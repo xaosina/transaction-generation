@@ -368,11 +368,3 @@ class Trainer:
             self.save_ckpt()
 
         logger.info("run '%s' finished successfully", self._run_name)
-
-
-    def load_best_model(self) -> None:
-        """
-        Loads the best model to self._model according to the track metric.
-        """
-
-        self.load_ckpt(self._ckpt_dir)

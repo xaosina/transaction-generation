@@ -73,25 +73,7 @@ class Tokenizer(nn.Module):
             x = x + bias[None]
 
         return x
-
-class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.5):
-        super(MLP, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.dropout = dropout
-
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
-        return x
-
+    
 class MultiheadAttention(nn.Module):
     def __init__(self, d, n_heads, dropout, initialization = 'kaiming'):
 
@@ -253,28 +235,6 @@ class Transformer(nn.Module):
         return x
 
 
-class AE(nn.Module):
-    def __init__(self, hid_dim, n_head):
-        super(AE, self).__init__()
- 
-        self.hid_dim = hid_dim
-        self.n_head = n_head
-
-
-        self.encoder = MultiheadAttention(hid_dim, n_head)
-        self.decoder = MultiheadAttention(hid_dim, n_head)
-
-    def get_embedding(self, x):
-        return self.encoder(x, x).detach() 
-
-    def forward(self, x):
-
-        z = self.encoder(x, x)
-        h = self.decoder(z, z)
-        
-        return h
-
-
 class VectorQuantizerEMA(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay, epsilon=1e-5):
         super(VectorQuantizerEMA, self).__init__()
@@ -404,54 +364,6 @@ class MultiStageRVQ(nn.Module):
 
 
 
-class VQ_VAE(nn.Module):
-    def __init__(self, d_numerical, categories, num_layers, hid_dim, 
-                 num_embeddings, n_head = 1, factor = 4, bias = True, 
-                 decay = 0.99, commitment_cost = 0.25, rvq_stages=0):
-        super(VQ_VAE, self).__init__()
- 
-        self.d_numerical = d_numerical
-        self.categories = categories
-        self.hid_dim = hid_dim
-        d_token = hid_dim
-        self.n_head = n_head
- 
-        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias = bias)
-
-        self.encoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-        self.decoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-        self.rvq_ema = MultiStageRVQ(
-            rvq_stages, num_embeddings, hid_dim*(d_numerical + len(categories)), 
-            commitment_cost, decay
-        )
-        
-
-    def forward(self, x_num, x_cat, save_zq=False):
-        x = self.Tokenizer(x_num, x_cat)
-        z = self.encoder(x)
-
-        if save_zq:
-        
-            quantized, codes, tcl, zqs = self.rvq_ema(z[:,1:], save_zq)
-        else:
-            quantized, codes, tcl = self.rvq_ema(z[:,1:])
-
-        # batch_size = x_num.size(0)
-        h = self.decoder(quantized)
-        
-        return (
-            h, 
-            {
-                "latent_loss": tcl,
-                "codes": codes, 
-                "zqs": zqs if save_zq else None
-                # "perplexity": perplexity
-            }
-        )
-
-
 class Reconstructor(nn.Module):
     def __init__(self, d_numerical, categories, d_token):
         super(Reconstructor, self).__init__()
@@ -483,39 +395,6 @@ class Reconstructor(nn.Module):
         return recon_x_num, recon_x_cat
 
 
-class Model_VAE(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head = 1, factor = 4,  bias = True, 
-                 num_embeddings=None,
-                 decay=0.0,
-                 commitment_cost=0.0,
-                 rvq_stages=0
-                 ):
-        super(Model_VAE, self).__init__()
-
-        self.RVQ_VAE = VQ_VAE(d_numerical, categories, num_layers, 
-                            d_token, n_head = n_head, factor = factor, 
-                            bias = bias, num_embeddings=num_embeddings, 
-                            commitment_cost=commitment_cost, decay=decay,
-                            rvq_stages=rvq_stages)
-            
-        self.Reconstructor = Reconstructor(d_numerical, categories, d_token)
-
-    def get_embedding(self, x_num, x_cat):
-        x = self.Tokenizer(x_num, x_cat)
-        return self.VAE.get_embedding(x)
-
-    def forward(self, x_num, x_cat):
-
-        h, params = self.RVQ_VAE(x_num, x_cat)
-
-        # recon_x_num, recon_x_cat = self.Reconstructor(h[:, 1:])
-        recon_x_num, recon_x_cat = self.Reconstructor(h)
-
-        return recon_x_num, recon_x_cat, params
-    
-
-
-
 class Encoder_model(nn.Module):
     def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
         super(Encoder_model, self).__init__()
@@ -533,30 +412,6 @@ class Encoder_model(nn.Module):
         return z
     
 
-class VectorQuantizer(nn.Module):
-    def __init__(self, rvq_stages, num_embeddings, hid_dim, d_numerical, 
-                 categories, commitment_cost, decay):
-        super(VectorQuantizer, self).__init__()
-
-        self.rvq_ema = MultiStageRVQ(
-            rvq_stages, num_embeddings, hid_dim*(d_numerical + len(categories)), 
-            commitment_cost, decay
-        )
-
-    def load_weights(self, Pretrained_VAE):
-        self.rvq_ema.load_state_dict(Pretrained_VAE.RVQ_VAE.rvq_ema.state_dict())
-        
-    def forward(self, z, save_z=False):
-        if save_z:
-            quantized, codes, _, zqs = self.rvq_ema(z[:,1:], save_z)
-            zqs = torch.stack(zqs).permute(1, 0, 2, 3)
-            return quantized.view(quantized.shape[0], -1), torch.stack(codes).squeeze(-1).T, zqs.view(zqs.shape[0], zqs.shape[1], -1)
-        else:
-            quantized, codes, _ = self.rvq_ema(z[:,1:])
-            return quantized.view(quantized.shape[0], -1), torch.stack(codes).squeeze(-1).T
-        
-
-
 class Decoder_model(nn.Module):
     def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
         super(Decoder_model, self).__init__()
@@ -573,3 +428,44 @@ class Decoder_model(nn.Module):
         x_hat_num, x_hat_cat = self.Detokenizer(h)
 
         return x_hat_num, x_hat_cat
+
+
+class VAE(nn.Module):
+    def __init__(self, num_layers, d_numerical, categories, d_token, n_head = 1, factor = 4,  bias = True, 
+                 num_embeddings=None,
+                 decay=0.0,
+                 commitment_cost=0.0,
+                 rvq_stages=0
+                 ):
+        super(VAE, self).__init__()
+
+        self.d_numerical = d_numerical
+        self.categories = categories
+        self.hid_dim = d_token
+        d_token = d_token
+        self.n_head = n_head
+
+        self.encoder = Encoder_model(num_layers, d_numerical, categories, d_token, n_head, factor, bias)
+        self.rvq_ema = MultiStageRVQ(
+            rvq_stages, num_embeddings, d_token*(d_numerical + len(categories)), 
+            commitment_cost, decay
+        )
+        self.decoder = Decoder_model(num_layers, d_numerical, categories, d_token, n_head, factor)
+
+    def forward(self, x_num, x_cat, save_zq=False):
+        z = self.encoder(x_num, x_cat)
+
+        if save_zq:
+            quantized, codes, tcl, zqs = self.rvq_ema(z[:,1:], save_zq)
+        else:
+            quantized, codes, tcl = self.rvq_ema(z[:,1:])
+
+        recon_x_num, recon_x_cat = self.decoder(quantized)
+
+        return recon_x_num, recon_x_cat, {
+                "latent_loss": tcl,
+                "codes": codes, 
+                "zqs": zqs if save_zq else None
+                # "perplexity": perplexity
+            }
+    
