@@ -6,13 +6,13 @@ from ebes.model import BaseModel
 from ..data.types import Seq
 
 
-# TODO: Think
-@dataclass
-class Generator:
-    preprocess: PreprocessConfig = field(default=None)
-    encoder: PreprocessConfig = field(default=None)
-    projector: ProjectorConfig = field(default=None)
-    reconstructor: PreprocessConfig = field(default=None)
+# # TODO: Think
+# @dataclass
+# class Generator:
+#     preprocess: PreprocessConfig = field(default=None)
+#     encoder: PreprocessConfig = field(default=None)
+#     projector: ProjectorConfig = field(default=None)
+#     reconstructor: PreprocessConfig = field(default=None)
 
 class Generator(BaseModel):
     def __init__(self,):
@@ -20,7 +20,7 @@ class Generator(BaseModel):
         self.preprocess = ...
 
         self.encoder = ARTransformer()
-        
+
         self.projector = ProjectMSE()
 
         self.reconstructor = ReconstructorMSE()

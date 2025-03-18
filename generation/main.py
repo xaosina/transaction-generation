@@ -6,6 +6,9 @@ from data.utils import DataConfig, get_dataloader
 from ebes import build_model
 from trainer import TrainConfig
 from .metrics.metric_utils import MetricsConfig, get_metrics
+from .losses import get_loss
+from .utils import get_optimizer, get_scheduler
+from .trainer import Trainer
 
 
 @dataclass
@@ -22,13 +25,14 @@ def main(cfg: PipelineConfig):
     test_loader = get_dataloader(cfg.data_conf)
     model = build_model(cfg.model_conf)
     optimizer = get_optimizer(model.parameters, cfg.optimizer)
+    lr_scheduler = get_scheduler(optimizer, )
     metrics = get_metrics(cfg.metrics)
     loss = get_loss(cfg.loss)
 
     trainer = Trainer(
         model=net,
         loss=loss,
-        optimizer=opt,
+        optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         metrics=metrics,
         train_loader=loaders["train"],

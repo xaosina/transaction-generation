@@ -2,6 +2,33 @@ import torch
 import torch.nn.functional as F
 
 
+def get_loss(config):
+    """
+    Expected config:
+    config = {
+        "loss_type": "full" / "last",
+        "target_type": "cat" / "mse",
+        "c_dim": 8,               # для категориальных
+        "c_number": 5,           # для категориальных
+        ...
+    }
+    """
+
+    loss_type = config.get("loss_type", "full")
+    target_type = config.get("target_type", "cat")
+
+    if target_type == "cat":
+        c_dim = config["c_dim"]
+        c_number = config["c_number"]
+        return CatLoss(c_dim, c_number, loss_type=loss_type)
+
+    elif target_type == "mse":
+        return MSELoss(loss_type=loss_type)
+
+    else:
+        raise ValueError(f"Unknown type of target (target_type): {target_type}")
+
+
 class BaseLoss:
 
     def __init__(self, loss_type="full"):
