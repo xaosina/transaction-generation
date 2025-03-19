@@ -1,11 +1,10 @@
 import logging
-from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
-from . import batch_tfs
+import batch_tfs
 import numpy as np
-import pandas as pd
 from collator import SequenceCollator
+from data_types import DataConfig
 from dataset import ParquetShardDataset
 from torch.utils.data import DataLoader
 
@@ -20,24 +19,6 @@ def save_partitioned_parquet(df, save_path, num_shards=20):
     df["shard"] = np.arange(len(df)) % num_shards
     # Save the DataFrame as a partitioned Parquet file
     df.to_parquet(save_path, partition_cols=["shard"], engine="pyarrow")
-
-
-@dataclass
-class DataConfig:
-    train_path: str
-    test_path: str
-    batch_size: int
-    shuffle: bool = False
-    num_workers: int = 4
-    max_seq_len: int = 0
-
-    time_name: str
-    cat_cardinalities: Mapping[str, int] | None = None
-    num_names: list[str] | None = None
-    index_name: str | None = None
-    batch_transforms: list[Mapping[str, Any] | str] | None = None
-    padding_side: str = "start"
-    padding_value: float = 0
 
 
 def get_collator(data_conf: DataConfig) -> SequenceCollator:
@@ -73,9 +54,7 @@ def get_collator(data_conf: DataConfig) -> SequenceCollator:
 
 
 def get_dataloader(data_conf: DataConfig):
-    dataset = ParquetShardDataset(
-        data_conf.train_path, data_conf.batch_size, data_conf.shuffle
-    )
+    dataset = ParquetShardDataset(data_conf)
     collator = get_collator(data_conf)
     dataloader = DataLoader(
         dataset, batch_size=None, collate_fn=collator, num_workers=data_conf.num_workers

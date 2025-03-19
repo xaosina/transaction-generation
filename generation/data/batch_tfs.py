@@ -10,7 +10,7 @@ import logging
 import torch
 import numpy as np
 
-from ..types import Batch
+from data_types import Batch
 
 
 logger = logging.getLogger(__name__)
@@ -29,59 +29,25 @@ class BatchTransform(ABC):
         """Apply transform to the batch."""
         ...
 
+
 @dataclass
-class RandomEventsPermutation(BatchTransform):
-    """Permute events in sequence randomly.
+class CutTargetSequence(BatchTransform):
+    """Creates generation targets for each batch."""
 
-    Time, target and masks are left unchanged.
-    """
-
-    keep_last: bool = False
-    """If ``True`` the last event remains on its place, other are permuted."""
+    n_gen: int
+    """Len of target sequence."""
 
     def __call__(self, batch: Batch):
+        assert batch.lengths.min() >= self.n_gen
+        batch.lengths = batch.lengths - self.n_gen
 
-        max_len = batch.time.shape[0]
-        bs = len(batch)
-        i_len = torch.arange(max_len)[:, None]
-        i_batch = torch.arange(bs)
+        batch.target_time = batch.time[-self.n_gen:]
+        batch.target_num_features = batch.num_features[-self.n_gen:]
+        batch.target_cat_features = batch.cat_features[-self.n_gen:]
 
-        if self.keep_last:
-            perm_len = torch.maximum(batch.lengths - 1, torch.tensor(1))
-        else:
-            perm_len = batch.lengths
-
-        valid = (i_len < perm_len).float()
-        permutation_within_len = torch.multinomial(valid.T, max_len).T
-
-        if self.keep_last:
-            permutation_within_len[batch.lengths - 1, i_batch] = batch.lengths - 1
-
-        permutation_valid_padding = torch.where(
-            i_len < batch.lengths,
-            permutation_within_len,
-            permutation_within_len[batch.lengths - 1, i_batch],
-        )
-
-        if batch.cat_features is not None:
-            batch.cat_features = batch.cat_features[permutation_valid_padding, i_batch]
-
-        if batch.num_features is not None:
-            batch.num_features = batch.num_features[permutation_valid_padding, i_batch]
-
-        if batch.cat_mask is not None:
-            batch.cat_mask = batch.cat_mask[permutation_valid_padding, i_batch]
-
-        if batch.num_mask is not None:
-            batch.num_mask = batch.num_mask[permutation_valid_padding, i_batch]
-
-
-class RandomTime(BatchTransform):
-    """Replace time with uniformly disributed values."""
-
-    def __call__(self, batch: Batch):
-        assert isinstance(batch.time, torch.Tensor)
-        batch.time = torch.rand_like(batch.time).sort(0).values
+        batch.time = batch.time[: -self.n_gen]
+        batch.num_features = batch.num_features[: -self.n_gen]
+        batch.cat_features = batch.cat_features[: -self.n_gen]
 
 
 @dataclass

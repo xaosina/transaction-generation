@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .types import Batch
+from data_types import Batch
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -21,6 +21,7 @@ class SequenceCollator:
     padding_value: float = 0
 
     def __call__(self, seqs: Sequence[pd.Series]) -> Batch:
+        assert self.padding_side == "start", "Don't support yet. CutTargetSequence will fail"
         ml = min(max(s["_seq_len"] for s in seqs), self.max_seq_len)  # type: ignore
         bs = len(seqs)
 
