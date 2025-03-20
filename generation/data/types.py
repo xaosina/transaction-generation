@@ -11,11 +11,12 @@ class Batch:
     index: torch.Tensor | np.ndarray  # (batch,)
     num_features: torch.Tensor | None = None  # (len, batch, features)
     cat_features: torch.Tensor | None = None  # (len, batch, features)
-    target: torch.Tensor | None = None  # (batch,), (len, batch) or (batch, n_targets)
     cat_features_names: list[str] | None = None
     num_features_names: list[str] | None = None
-    cat_mask: torch.Tensor | None = None  # (len, batch, features)
-    num_mask: torch.Tensor | None = None  # (len, batch, features)
+
+    target_cat_features: torch.Tensor | None = None  # (target_len, batch, features)
+    target_num_features: torch.Tensor | None = None  # (target_len, batch, features)
+    target_time: np.ndarray | torch.Tensor  # (target_len, batch)
 
     def to(self, device: str):
         for field in fields(self):

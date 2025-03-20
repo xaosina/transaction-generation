@@ -7,9 +7,9 @@ from .transformer.ar import AR
 
 
 class ARTransformer(BaseSeq2Seq):
+    """Autoregressive transformer"""
 
-    def __init__(self, 
-                 cfg):
+    def __init__(self, cfg):
         super().__init__()
         params = cfg.params
 
@@ -22,35 +22,35 @@ class ARTransformer(BaseSeq2Seq):
             n_layers=params.n_layers,
         )
 
-    def forward(self, x: Seq):
-        x = Seq.tokens.permute(1, 0, 2)
-        m = Seq.masks.permute(1, 0, 2)
-        
+    def forward(self, seq: Seq):
+        x = seq.tokens  # B, L, D
+        padding_mask = torch.arange(x.shape[0], device=x.device) >= x.lengths[:, None]
+
         x = self.projector(x)
-        x = self.transformer(x, m)
-        
+        x = self.transformer(x, padding_mask)
+
         return x
 
-    def generate(self, x: torch.Tensor, max_step: int) -> Seq:
-        x = Seq.tokens.permute(1, 0, 2)
-        m = Seq.tokens.permute(1, 0, 2)
-        
+    def generate(self, seq: Seq, max_step: int) -> Seq:
+        x = seq.tokens  # B, L, D
+        padding_mask = torch.arange(x.shape[0], device=x.device) >= x.lengths[:, None]
+
         x = self.projector(x)
-        
+
         mask_row = torch.ones(
-            (m.size(0), 1),
-            dtype=m.dtype,
-            device=m.device
+            (padding_mask.size(0), 1),
+            dtype=padding_mask.dtype,
+            device=padding_mask.device,
         )
 
         generated = []
         for _ in range(max_step):
-            ret = self.transformer(x, m)
+            ret = self.transformer(x, padding_mask)  # B, L, D
 
-            x = torch.cat(x, ret, dim=1)
-            m = torch.cat(m, mask_row, dim=1)
-            
+            x = torch.cat([x, ret[:, :-1, :]], dim=1)
+            padding_mask = torch.cat([padding_mask, mask_row], dim=1)
+
             generated.append(ret)
+        generated = torch.cat(generated, dim=1)
         
-        return torch.cat(generated)
-
+        return generated

@@ -1,142 +1,87 @@
-import time
-import wandb
-
 import pandas as pd
-import numpy as np
-
-from tabsyn.utils.other_utils import (
-    dictprettyprint,
-)
-
-# metrics
-from tmetrics.eval_density import run_eval_density
-from tmetrics.eval_detection import run_eval_detection
-
-import metrics
 
 from .types import BinaryData, CoverageData, OnlyPredData
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# metrics
+from tmetrics.eval_density import run_eval_density
+from tmetrics.eval_detection import run_eval_detection
+import metrics
+
 
 @dataclass
 class MetricsConfig:
-    exp_name: str = field(default='default_exp')
-    gen_len: int = field(default=16)
-    hist_len: int = field(default=16)
-    device: int = field(default=0)
+    gen_len: int = 16
+    hist_len: int = 16
+    device: int = 0
+    metric_names: list[str]
+    gt_save_path: str = ""
+    gen_save_path: str = ""
+    name_prefix: str = ""
 
-# TODO: Init. Sampler dependent.
+
 def get_metrics(cfg: MetricsConfig = None):
-    ...
+    return MetricEstimator(
+        cfg.gt_save_path,
+        cfg.gen_save_path,
+        cfg.metric_names,
+        cfg.gen_len,
+        cfg.hist_len,
+        cfg.device,
+        cfg.name_prefix,
+    )
 
 
 class MetricEstimator:
 
-    def __init__(self, 
-                 gt_save_path: str | Path = None, 
-                 gen_save_path: str | Path = None, 
-                 metric_names: list = None, 
-                 config: MetricsConfig = None, 
-                 logger = None, 
-                 train_state: list = None):
-        
+    def __init__(
+        self,
+        gt_save_path: str | Path = None,
+        gen_save_path: str | Path = None,
+        metric_names: list = None,
+        gen_len: int = 16,
+        hist_len: int = 16,
+        device: int = 0,
+        name_prefix: str = "",
+    ):
+
         self.gt_save_path = gt_save_path
         self.gen_save_path = gen_save_path
-        self.name_postfix = ""
-        self.name_prefix = ""
-        self.config = config
-        self.logger = logger
-        self.train_state = train_state
+        self.name_prefix = name_prefix
+        self.gen_len = gen_len
+        self.hist_len = hist_len
+        self.device = device
+        self.name_prefix = name_prefix
+
         if metric_names is None:
             raise ValueError("List of metrics is empty")
         else:
-            self.metrics = [metrics.__getattr__(mname)(mname) for mname in metric_names]
+            self.metrics = [getattr(metrics, name) for name in metric_names]
 
-    def set_name_fixes(self, name_postfix="", name_prefix=""):
-        self.name_postfix = name_postfix
-        self.name_prefix = name_prefix
-
-    def __get_data(self, orig_path, generated_path, subject_key, target_key):
-        total_len = self.config.gen_len + self.config.hist_len
-
-        def process(path):
-            df = pd.read_csv(path)[[subject_key, target_key]]
-            df = df.groupby(subject_key).tail(total_len).reset_index(drop=True)
-            groups = df.groupby(subject_key)
-            assert (groups.size() >= total_len).all(), "Не хватает записей для некоторых групп"
-            return {
-                "hist": groups.head(self.config.hist_len).reset_index(drop=True),
-                "preds": groups.tail(self.config.hist_len).reset_index(drop=True)
-            }
-
-        dfs = {
-            "gt": process(orig_path),
-            "gen": process(generated_path)
-        }
-
-        assert set(dfs['gt']['preds'][subject_key]) == set(dfs['gen']['preds'][subject_key]), (
-            "Warning, subject ids in dataframes does not match"
-        )
-        return dfs
-
-    
-    def __prepare_data_to_metrics(self, dfs: pd.DataFrame):
-        seq_len = min(self.config.gen_len, self.config.hist_len)
-        
-        return {
-            BinaryData: {
-                "gt": BinaryData(
-                    dfs["gt"]["preds"].groupby("client_id").head(seq_len).reset_index(drop=True),
-                    dfs["gt"]["hist"].groupby("client_id").tail(seq_len).reset_index(drop=True),
-                ),
-                "gen": BinaryData(dfs['gt']['pred'], dfs['gen']['pred']),
-
-            },
-            CoverageData: {
-                "gt": CoverageData(dfs['gt']['hist'], dfs['gt']['pred']),
-                "gen": CoverageData(dfs['gen']['hist'], dfs['gen']['pred']),
-            },
-            OnlyPredData: {
-                "gt": OnlyPredData(dfs['gt']['pred']),
-                "gen": OnlyPredData(dfs['gen']['pred']),
-            }
-        }
-
+    def estimate(self):
+        return self.__estimate_metrics() | self.__estimate_tmetrics()
 
     def __estimate_metrics(self, orig_path, generated_path, metrics=None):
-        
-        subject_key = 'client_id'
-        target_key = 'event_type'
+
+        subject_key = "client_id"
+        target_key = "event_type"
         orig_path, generated_path = self.gt_save_path, self.gen_save_path
-        
+
         dfs = self.__get_data(orig_path, generated_path, subject_key, target_key)
-        
-        prepared_data = self.__prepare_data_to_metrics(dfs, )
-        
+
+        prepared_data = self.__prepare_data_to_metrics(dfs)
+
         # TODO: Сделать перемешивание клиентов если надо.
-        # if shuffle_clients:
-        #     rng = np.random.default_rng(seed=seed)
-        #     dfs["gen"]["pred"].client_id = rng.permutation(dfs["gen"]["pred"][subject_key].values)
 
         results = {}
 
         for metric in self.metrics:
             data = prepared_data.get(metric.required_data_type)
-            results[self.__ret_name('gtvsgt' + metric.name)] = metric(data['gt'])
-            results[self.__ret_name('gtvsgen' + metric.name)] = metric(data['gen'])
+            results[self.__ret_name("gtvsgt" + metric.name)] = metric(data["gt"])
+            results[self.__ret_name("gtvsgen" + metric.name)] = metric(data["gen"])
 
-    def estimate(self):
-        start_time = time.perf_counter()
-        metrics = self.__estimate_metrics() | self.__estimate_tmetrics()
-        self.logger.info(f"Epoch: {self.train_state['epoch']}, some metrics eval:\n")
-        self.logger.info(dictprettyprint(metrics))
-        self.logger.info(f"---\ntime estimation: {time.perf_counter() - start_time} s")
-
-    def __estimate_tmetrics(
-        self,
-        metric_type: str,
-    ):
+    def __estimate_tmetrics(self):
 
         orig_path, generated_path = self.gt_save_path, self.gen_save_path
 
@@ -167,5 +112,54 @@ class MetricEstimator:
             else:
                 raise Exception(f"Unknown metric type '{metric_type}'!")
 
+    def __get_data(self, orig_path, generated_path, subject_key, target_key):
+
+        dfs = {
+            "gt": pd.read_csv(orig_path)[[subject_key, target_key]],
+            "gen": pd.read_csv(generated_path)[[subject_key, target_key]],
+        }
+
+        return dfs
+
+    def __prepare_data_to_metrics(
+        self, dfs: pd.DataFrame, subject_key: str = "client_id"
+    ):
+        def slice_df(
+            df: pd.DataFrame, start: int, end: int | None = None
+        ) -> pd.DataFrame:
+
+            return (
+                df.groupby(subject_key)
+                .apply(lambda x: x[start:end])
+                .reset_index(drop=True)
+            )
+
+        return {
+            BinaryData: {
+                "gt": BinaryData(
+                    slice_df(dfs["gt"], -2 * self.gen_len, -self.gen_len),
+                    slice_df(dfs["gt"], -self.gen_len, None),
+                ),
+                "gen": BinaryData(
+                    slice_df(dfs["gt"], -self.gen_len, None),
+                    slice_df(dfs["gen"], -2 * self.gen_len, -self.gen_len),
+                ),
+            },
+            CoverageData: {
+                "gt": CoverageData(
+                    slice_df(dfs["gt"], -self.hist_len - self.gen_len, -self.gen_len),
+                    slice_df(dfs["gt"], -self.gen_len, None),
+                ),
+                "gen": CoverageData(
+                    slice_df(dfs["gen"], -self.hist_len - self.gen_len, -self.gen_len),
+                    slice_df(dfs["gen"], -self.gen_len, None),
+                ),
+            },
+            OnlyPredData: {
+                "gt": OnlyPredData(slice_df(dfs["gt"], -self.gen_len, None)),
+                "gen": OnlyPredData(slice_df(dfs["gen"], -self.gen_len, None)),
+            },
+        }
+
     def __ret_name(self, name):
-        return self.name_prefix + name + self.name_postfix
+        return self.name_prefix + name

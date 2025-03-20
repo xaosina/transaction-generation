@@ -303,8 +303,14 @@ class Trainer:
 
         self._model.eval()
         
-        evaluator = SampleEvaluator(self._model, None, logger)
+        #TODO: use get_sampler()
+        from metrics.metric_utils import MetricsConfig
+        metrics_cfg = MetricsConfig()
+        evaluator = SampleEvaluator(self._model, None, logger, ckpt, metrics_cfg)
+
+
         self._metric_values = evaluator.evaluate(loader)
+
         logger.info(
             f"Epoch %04d: metrics: %s",
             self._last_epoch + 1,

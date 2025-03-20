@@ -1,139 +1,79 @@
 from tqdm import tqdm
-
 import torch
-
-from tabsyn.utils.latent_utils import SeqLatentPredictionDataset
-
-from tabsyn.utils.training_utils import (
-    reshape_sample
-)
-
-from tabsyn.utils.latent_utils import (
-    get_generate_info,
-    split_num_cat_target,
-    recover_data,
-)
-
 from .metric_utils import MetricEstimator
-
 import delu
-import pandas as pd
+from ..data.types import Batch
+from dataclasses import dataclass
+from pathlib import Path
+import time
+
+from ..utils import dictprettyprint
+from ..logger import Logger
+from ..models.generator import Generator
+from .metric_utils import get_metrics, MetricsConfig
+
+@dataclass
+class SamplerConfig:
+    ckpt: Path
+    model: Generator
+    logger: Logger
+    collator: ...
+
+
+def get_sampler(cfg: SamplerConfig): 
+    return SampleEvaluator(
+        cfg.model,
+        cfg.collator,
+        cfg.logger,
+        cfg.ckpt,
+    )
 
 class SampleEvaluator:
 
-    def __init__(self, model, config, logger, train_state):
+    def __init__(self, model, collator, logger, ckpt):
         self.model = model
-        self.config = config
+        self.collator = collator
         self.logger = logger
-        self.train_state = train_state
-        self.name_prefix : str = "",
-        self.blim = None
-        self.rec_info, self.num_inverse, self.cat_inverse = get_generate_info(self.config)
+        self.ckpt = ckpt
 
-    def evaluate(self, loader, blim=None, discr=""):
-        self.name_prefix = discr
-        self.blim = blim
-        gen_samples, gt_samples, gt_client_ids, has_samples = self.__generate_samples(loader)
-        if has_samples:
-            gt_df_save_path, gen_df_save_path  = self.__recover_and_save_samples(gen_samples, gt_samples, gt_client_ids)
-            self.__evaluate_and_save(gt_df_save_path, gen_df_save_path)
-        else:
-            self.logger.info("Нет сэмплов для оценки.")
+    def evaluate(self, loader, blim=None, prefix=""):
 
+        gen_samples, gt_samples, gt_client_ids = self.generate_samples(loader, blim)
+        gt_df_save_path, gen_df_save_path = self.recover_and_save_samples(
+            gen_samples, gt_samples, gt_client_ids
+        )
+        metrics = self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
+        start_time = time.perf_counter()
+        self.logger.info(f"Metric eval:\n")
+        self.logger.info(dictprettyprint(metrics))
+        self.logger.info(f"---\ntime estimation: {time.perf_counter() - start_time} s")
+        return metrics
 
-
-    def __generate_samples(self, data_loader):
+    def generate_samples(self, data_loader, blim=None):
         self.model.eval()
-        
+
         pbar = tqdm(data_loader, total=len(data_loader))
 
         gen_samples = []
         gt_samples = []
-        gt_client_ids = []
+        gt_client_ids = (
+            []
+        )  # TODO. Нужно ли нам это теперь? Подумать как заменить ее в этом коде.
 
-        for batch_idx, samp_batch in enumerate(pbar):
-            if self.blim is not None and batch_idx > self.blim:
+        for batch_idx, samp_inp in enumerate(pbar):
+            if blim is not None and batch_idx > blim:
                 break
-            samp_inp = samp_batch
-
-            B = samp_inp.size(0)
 
             with torch.no_grad():
-                samp_res = self.model.generate(
-                    samp_inp, 
-                    max_steps=self.config["EST_GEN_LEN"], # Это будет в батче? Sampler config
-                    rvqvae_decoder=self.rec_info['rvq_ema'] # TO model?
-                    ) 
-            
-            # TODO: удалить, но учесть в батче
-            # match self.config["DATA_MODE"]:
-            #     case "num2cat":
-            #         stacked = [
-            #             reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["RVQ_STAGES"])     
-            #             for sample in samp_res
-            #         ]
-            #     case "num2mnum":
-            #         stacked = [
-            #             reshape_sample(
-            #                 sample, 
-            #                 desired_rows=self.config["EST_GEN_LEN"], 
-            #                 group_size=self.config["RVQ_STAGES"] * self.config["VAE_HIDDEN_DIM"]
-            #                 ).reshape(
-            #                     self.config["EST_GEN_LEN"], self.config["RVQ_STAGES"], self.config["VAE_HIDDEN_DIM"]
-            #                 )
-            #             for sample in samp_res
-            #         ]
-            #     case "num2num":
-            #         stacked = [
-            #             reshape_sample(sample, desired_rows=self.config["EST_GEN_LEN"], group_size=self.config["VAE_HIDDEN_DIM"])     
-            #             for sample in samp_res
-            #         ]
-            #     case _:
-            #         raise NotImplementedError
+                samp_res = self.model.generate(samp_inp)
+            gt, gen = concat_samples(samp_inp, samp_res)
 
- 
-            # stacked = torch.stack(samp_res)
-            
-            # TODO: удалить, но учесть в батче            
-            # match self.config["DATA_MODE"]:
-            #     case "num2cat":
-            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_codes"]
-            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_codes"]
-            #     case "num2mnum":
-            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seq_residual_codes"]
-            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seq_residual_codes"]
-            #     case "num2num":
-            #         samp_batch_info["hist_seqs"] = samp_batch_info["hist_seqs"]
-            #         samp_batch_info["gen_seqs"] = samp_batch_info["gen_seqs"]
-            #     case _:
-            #         raise NotImplementedError
-                
-            # TODO: Функция в батче для возврата hist + gt и hist + gen
-            # (
-            #     gt_batch_z,
-            #     gt_batch_ids,
-            # ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch)
+            gt_samples.append(gt)
+            gen_samples.append(gen)
+        return gt_samples, gen_samples
 
-            # gt_samples.append(gt_batch_z.cpu())
-            # gt_client_ids.append(gt_batch_ids.cpu())
+    def recover_and_save_samples(self, gen_samples, gt_samples, gt_client_ids):
 
-            # samp_batch_info["gen_seqs"] = stacked.cpu()
-            # samp_batch_info["gen_seqs"] = stacked
-
-            # (
-            #     gen_batch_z,
-            #     _,
-            # ) = SeqLatentPredictionDataset.batch2raw_data(samp_batch_info)
-            # gen_samples.append(gen_batch_z.cpu())
-
-            del samp_batch
-
-        delu.cuda.free_memory()
-        return gen_samples, gt_samples, gt_client_ids
-    
-
-    def __recover_and_save_samples(self, gen_samples, gt_samples, gt_client_ids):
-    
         gt_client_ids = torch.cat(gt_client_ids)
 
         _dfs = dict(
@@ -141,8 +81,8 @@ class SampleEvaluator:
             gt=None,
         )
 
-        gen_df_save_path = self.config["artr_ckpt"] / "validation_gen.csv"
-        gt_df_save_path = self.config["artr_ckpt"] / "validation_gt.csv"
+        gen_df_save_path = self.ckpt / "validation_gen.csv"
+        gt_df_save_path = self.ckpt / "validation_gt.csv"
 
         for parti, samples, df_save_path in zip(
             ["gen", "gt"],
@@ -150,29 +90,11 @@ class SampleEvaluator:
             [gen_df_save_path, gt_df_save_path],
         ):
 
-            # TODO: Make class Reconstructor - будет делать Latent to Data в зависимости от encoder/decoder.
-            # TODO: Функция просто получает выход модели, а возвращает реальные данные
-            
             samples = torch.cat(samples).detach().cpu().numpy()
 
-            syn_num, syn_cat, syn_target = split_num_cat_target(
-                samples,
-                self.rec_info,
-                self.num_inverse,
-                self.cat_inverse,
-                client_ids=gt_client_ids.numpy(),
-                config=self.config
-            )
-            syn_df = recover_data(syn_num, syn_cat, syn_target, self.rec_info)
-
-            idx_name_mapping = self.rec_info["idx_name_mapping"]
-            idx_name_mapping = {
-                int(key): value for key, value in idx_name_mapping.items()
-            }
-
-            syn_df.rename(columns=idx_name_mapping, inplace=True)
-            syn_df["event_time"] = syn_df.groupby("client_id")["time_diff_days"].cumsum()
-            # syn_df = recover_client_ids(syn_df, gt_client_ids.numpy(), "client_id")
+            syn_df["event_time"] = syn_df.groupby("client_id")[
+                "time_diff_days"
+            ].cumsum()
 
             syn_df.to_csv(df_save_path, index=False)
             _dfs[parti] = syn_df
@@ -180,11 +102,33 @@ class SampleEvaluator:
 
         return gt_df_save_path, gen_df_save_path
 
-    def __evaluate_and_save(self, gt_df_save_path, gen_df_save_path):
-        # TODO: функция принимает путь до gt и gen. 
+    def evaluate_and_save(self, name_prefix, gt_df_save_path, gen_df_save_path, metrics_cfg):
 
-        self.logger.info(f"Epoch: {self.train_state['epoch']}; metric eval started")
+        metric_estimator = MetricEstimator(
+            gt_df_save_path,
+            gen_df_save_path,
+            self.config,
+            self.logger,
+            name_prefix=name_prefix,
+        )
 
-        metric_estimator = MetricEstimator(gt_df_save_path, gen_df_save_path, self.config, self.logger, self.train_state)
-        metric_estimator.set_name_fixes(name_prefix=self.name_prefix)
-        metric_estimator.estimate()
+        return metric_estimator.estimate()
+
+
+def concat_samples(hist: Batch, pred: Batch) -> tuple[Batch, Batch]:
+    assert (
+        hist.lengths == pred.lengths
+    ), "Mismatch in sequence lengths between hist and pred"
+
+    hist.lengths = hist.lengths + hist.lengths
+
+    hist.time = torch.cat([hist.time, hist.target_time])
+    hist.num_features = torch.cat([hist.num_features, hist.target_num_features])
+    hist.cat_features = torch.cat([hist.cat_features, hist.target_cat_features])
+
+    pred.lengths = pred.lengths + pred.lengths
+    pred.time = torch.cat([pred.time, pred.target_time])
+    pred.cat_features = torch.cat([pred.cat_features, pred.target_cat_features])
+    pred.num_features = torch.cat([pred.num_features, pred.target_num_features])
+
+    return hist, pred

@@ -25,9 +25,14 @@ class Generator(BaseModel):
 
         self.reconstructor = ReconstructorMSE()
         
-    def forward(self, x: Seq):
+    def forward(self, x: Seq): 
+        """
+        Forward pass of the Auto-regressive Transformer
+        Args:
+            x (Seq): Input sequence [L, B, D]
 
-        x = self.preprocess(x)
+        """
+        x = self.preprocess(x) # B, L, D
 
         x = self.encoder(x)
         
@@ -38,13 +43,19 @@ class Generator(BaseModel):
         return x
 
     def generate(self, x: Seq):
-
+        """
+        Auto-regressive generation using the transformer
+        
+        Args:
+            x (Seq): Input sequence [L, B, D]
+            
+        """
         x = self.preprocess(x)
         
-        ret = self.encoder(x)
+        ret = self.encoder.generate(x)
         
-        ret = self.projector(ret)
+        ret = self.projector.generate(ret)
         
-        ret = self.reconstructor(ret)
+        ret = self.reconstructor.generate(ret)
 
         return ret
