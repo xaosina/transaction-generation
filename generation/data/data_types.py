@@ -50,7 +50,7 @@ class Batch:
 
     target_cat_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_num_features: torch.Tensor | None = None  # (target_len, batch, features)
-    target_time: np.ndarray | torch.Tensor  # (target_len, batch)
+    target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
 
     def to(self, device: str):
         for field in fields(self):

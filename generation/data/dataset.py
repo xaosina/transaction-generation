@@ -7,9 +7,40 @@ import pandas as pd
 import pyarrow.parquet as pq
 import torch
 from torch.utils.data import IterableDataset
+from tqdm import tqdm
 from data_types import DataConfig
 
 logger = logging.getLogger(__name__)  # noqa: F821
+
+
+def slice_rows(data, end_indices):
+    seq_lens = data["_seq_len"].values
+    n_rows = len(data)
+    cumulative_lengths = np.concatenate([[0], np.cumsum(seq_lens)])
+    row_indices = np.repeat(np.arange(n_rows), seq_lens)
+    pos_in_row = np.arange(len(row_indices)) - cumulative_lengths[row_indices]
+    keep_mask = pos_in_row < end_indices[row_indices]
+    split_indices = np.cumsum(end_indices[:-1])
+
+    for col in data_conf.seq_cols:
+        concatenated = np.concatenate(data[col].values)
+        truncated = concatenated[keep_mask]
+        data[col] = np.split(truncated, split_indices)
+    data["_seq_len"] = end_indices
+    return data
+
+
+def searchsorted_vectorized(seqs, values):
+    positions = np.zeros_like(values, dtype=np.int64)
+    for idx, value in enumerate(values):
+        positions[idx] = np.searchsorted(seqs[idx], value, side="left")
+    return positions
+
+
+def df_to_seqs(df: pd.DataFrame) -> list[pd.Series]:
+    """Return list of DataFrame rows as a series."""
+    return [df.iloc[i] for i in range(len(df))]
+
 
 class ShardDataset(IterableDataset):
     # TODO different collators
@@ -103,7 +134,7 @@ class ShardDataset(IterableDataset):
         for shard_path in worker_shards:
             data = pd.read_parquet(
                 shard_path,
-                columns=[data_conf.index_name, data_conf.time_name]
+                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
                 + data_conf.num_names
                 + list(data_conf.cat_cardinalities.keys()),
             )
@@ -119,12 +150,12 @@ class ShardDataset(IterableDataset):
             for start in range(0, len(data), data_conf.batch_size):
                 batch = data.iloc[start : start + data_conf.batch_size]
                 if len(batch) == data_conf.batch_size:
-                    yield batch
+                    yield df_to_seqs(batch)
                 else:
                     remaining_data = batch
 
         if remaining_data is not None:
-            yield remaining_data
+            yield df_to_seqs(remaining_data)
 
     def _preprocess(self, data):
         data_conf = self.data_conf
@@ -134,7 +165,6 @@ class ShardDataset(IterableDataset):
         times = data[data_conf.time_name]
         max_time = times.map(max).max()
         min_time = times.map(min).min()
-
         # Filter sequences that meet minimum length requirement
         data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
 
@@ -144,22 +174,20 @@ class ShardDataset(IterableDataset):
 
             # Determine slicing strategy
             if self.random_end == "index":
-                end_values = rng.integers(min_seq_len, data._seq_len, endpoint=True)
-                slice_func = slice_row_by_index
+                end_indices = rng.integers(min_seq_len, data._seq_len, endpoint=True)
             elif self.random_end == "time":
                 # Generate random end times in 48 discrete steps
-                end_values = (
+                end_times = (
                     min_time
                     + (max_time - min_time)
                     * rng.integers(1, 48, data.shape[0], endpoint=True)
                     / 48
                 )
-                slice_func = slice_row_by_time
+                end_indices = searchsorted_vectorized(
+                    data[data_conf.time_name], end_times
+                )
 
-            # Apply slicing to all rows
-            data = data.apply(
-                lambda row: slice_func(row, end_values, data_conf), axis=1
-            )
+            data = slice_rows(data, end_indices)
 
             # Post-process for time-based slicing
             data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
@@ -167,44 +195,22 @@ class ShardDataset(IterableDataset):
         return data
 
 
-def slice_row_by_index(row, end_indices, data_conf):
-    end_id = end_indices[row.name]
-    return _update_row_slice(row, end_id, data_conf)
-
-
-def slice_row_by_time(row, end_times, data_conf):
-    end_time = end_times[row.name]
-    end_id = np.searchsorted(row[data_conf.time_name], end_time, side="right")
-    return _update_row_slice(row, end_id, data_conf)
-
-
-def _update_row_slice(row, end_id, data_conf):
-    """Common helper to truncate sequence columns and update length"""
-    seq_cols = data_conf.seq_cols
-    # Stack sequence columns vertically and slice
-    row[seq_cols] = list(
-        np.vstack(row.values[row.index.get_indexer(seq_cols)])[:, :end_id]
-    )
-    row._seq_len = end_id
-    return row
-
-
 if __name__ == "__main__":
     logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler())    
+    logger.addHandler(logging.StreamHandler())
     data_conf = DataConfig(
         train_path="/home/dev/24/test_20",
         test_path="/home/dev/24/test_20",
-        batch_size=16,
+        batch_size=512,
         num_workers=4,
         val_ratio=0.15,
         #
-        train_resamples=1,
+        train_resamples=10,
         max_seq_len=1000,
         min_history_len=16,
-        generation_len=16,
-        train_random_end="none",
-        val_random_end="none",
+        generation_len=32,
+        train_random_end="time",
+        val_random_end="time",
         #
         time_name="Time",
         cat_cardinalities={"MechVent": 3, "Gender": 5, "ICUType": 6},
@@ -251,14 +257,12 @@ if __name__ == "__main__":
         index_name="RecordID",
         train_transforms=[
             {"RescaleTime": {"loc": 0.0, "scale": 48.0}},
-            {"TimeToFeatures": {"process_type": "cat"}},
-            {"FillNans": {"fill_value": -1.0}},
+            {"TimeToFeatures": {"process_type": "diff"}},
         ],
         val_transforms=[
             {"RescaleTime": {"loc": 0.0, "scale": 48.0}},
-            {"TimeToFeatures": {"process_type": "cat"}},
-            {"FillNans": {"fill_value": -1.0}},
-            {"CutTargetSequence": {"n_gen": 32}},
+            {"TimeToFeatures": {"process_type": "diff"}},
+            {"CutTargetSequence": {"target_len": 32}},
         ],
     )
     train_dataset, val_dataset = ShardDataset.train_val_split(
@@ -267,44 +271,44 @@ if __name__ == "__main__":
     test_dataset = ShardDataset(
         data_conf.test_path, data_conf, seed=0, random_end=data_conf.val_random_end
     )
-    print("\nPartitions:")
-    print([path.split("/")[-2] for path in train_dataset.partitions])
-    print([path.split("/")[-2] for path in val_dataset.partitions])
-    print([path.split("/")[-2] for path in test_dataset.partitions])
-    assert (set(train_dataset.partitions) | set(val_dataset.partitions)) == set(
-        test_dataset.partitions
+
+    from utils import get_collator
+    from torch.utils.data import DataLoader
+
+    collator = get_collator(data_conf, data_conf.train_transforms)
+    dataloader = DataLoader(
+        train_dataset,
+        batch_size=None,
+        collate_fn=collator,
+        num_workers=data_conf.num_workers,
     )
-    print("\nSeeds:")
-    print(f"{train_dataset.seed=}")
-    print(f"{val_dataset.seed=}")
-    print(f"{test_dataset.seed=}")
-    print("\nN_resamples:")
-    print(f"{train_dataset.n_resamples=}")
-    print(f"{val_dataset.n_resamples=}")
-    print(f"{test_dataset.n_resamples=}")
-    print("\nRandom_end:")
-    print(f"{train_dataset.random_end=}")
-    print(f"{val_dataset.random_end=}")
-    print(f"{test_dataset.random_end=}")
-    print("\nShuffle:")
-    print(f"{train_dataset.shuffle=}")
-    print(f"{val_dataset.shuffle=}")
-    print(f"{test_dataset.shuffle=}")
+    from time import time
+    # from copy import deepcopy
+    start = time()
+    # for seqs in tqdm(dataloader):
+    #     collated = collator(deepcopy(seqs))
+    #     seqs_r = collator.reverse(collated)
+    #     for s in range(len(seqs)):
+    #         so = seqs[s]
+    #         sr = seqs_r[s]
+    #         assert set(so.index) == set(sr.index)
+    #         res = {i for i in so.index if not np.array_equal(so[i], sr[i], equal_nan=True)}
+    #         if (res != {"Time"}) and (res != set()):
+    #             breakpoint()
 
-    for batch in train_dataset:
-        print(batch)
-    # TODO check speed, everything right, test returns all and same, train random, resamples work
-    # TODO for time slice, index slice, none slice
+    for batch in tqdm(dataloader):
+        pass
+    print(time() - start)
 
-    # TODO n_resamples train - shuffle/cut each time differently, but test/val same. returns full dataset multiple times
-    # TODO n_workers - 1 then works good, more return all data reliably
-    # TODO gen_len, hist_len - data filter check how much wasted
-    # TODO seed - for train each call independed. For val and test - allways same no matter what
-    # TODO random_end - time check correct np sortarray insert. index check mean len. check test val stable. check train different (and with resamples)
-    # TODO big batch_size - check cutting. that resamples help.
-    # TODO DataLoader check that workers work independetly. Return full dataset. For train - correctly distribute dataset. 
-    # TODO train assert every shard is shuffled differently each time
-    # TODO random_end - check speed drop. and correct lens after cut
-    # TODO CutTargetSequence - check correct
-    # TODO collator - checck padding and batch transforms
-    breakpoint()
+    # random_end - with last modifications - almost none. Very good optimization.
+    # train val split is ok. Train val test shuffles are ok. Resamples work fine.
+    # n_resamples work for train and test, for shuffles and for cuts.
+    # n_workers = 1 then works good, more - return all data reliably
+    # gen_len, hist_len - data filter check how much wasted. ok, 30%. depends on data
+    # seed - for train each call independed. For val and test - allways same no matter what
+    # DataLoader check that workers work independetly. Return full dataset. For train - correctly distribute dataset.
+    # train assert every shard is shuffled differently each time
+    # big batch_size - check cutting. that resamples help.
+    # random_end - time check correct np sortarray insert. index check mean len. check test val stable. check train different (and with resamples)
+    # CutTargetSequence - check correct
+    # collator - check padding and batch transforms
