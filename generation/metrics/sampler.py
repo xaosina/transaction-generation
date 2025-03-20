@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import torch
-from .metric_utils import MetricEstimator
-import delu
+from .estimator import MetricEstimator
+import pandas as pd
 from ..data.types import Batch
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +10,8 @@ import time
 from ..utils import dictprettyprint
 from ..logger import Logger
 from ..models.generator import Generator
-from .metric_utils import get_metrics, MetricsConfig
+from .estimator import get_metrics, MetricsConfig
+
 
 @dataclass
 class SamplerConfig:
@@ -20,13 +21,14 @@ class SamplerConfig:
     collator: ...
 
 
-def get_sampler(cfg: SamplerConfig): 
+def get_sampler(cfg: SamplerConfig):
     return SampleEvaluator(
         cfg.model,
         cfg.collator,
         cfg.logger,
         cfg.ckpt,
     )
+
 
 class SampleEvaluator:
 
@@ -38,10 +40,7 @@ class SampleEvaluator:
 
     def evaluate(self, loader, blim=None, prefix=""):
 
-        gen_samples, gt_samples, gt_client_ids = self.generate_samples(loader, blim)
-        gt_df_save_path, gen_df_save_path = self.recover_and_save_samples(
-            gen_samples, gt_samples, gt_client_ids
-        )
+        gt_df_save_path, gen_df_save_path = self.generate_samples(loader, blim)
         metrics = self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
         start_time = time.perf_counter()
         self.logger.info(f"Metric eval:\n")
@@ -52,13 +51,10 @@ class SampleEvaluator:
     def generate_samples(self, data_loader, blim=None):
         self.model.eval()
 
-        pbar = tqdm(data_loader, total=len(data_loader))
+        gen_df_save_path = self.ckpt / "validation_gen.csv"
+        gt_df_save_path = self.ckpt / "validation_gt.csv"
 
-        gen_samples = []
-        gt_samples = []
-        gt_client_ids = (
-            []
-        )  # TODO. Нужно ли нам это теперь? Подумать как заменить ее в этом коде.
+        pbar = tqdm(data_loader, total=len(data_loader))
 
         for batch_idx, samp_inp in enumerate(pbar):
             if blim is not None and batch_idx > blim:
@@ -68,41 +64,21 @@ class SampleEvaluator:
                 samp_res = self.model.generate(samp_inp)
             gt, gen = concat_samples(samp_inp, samp_res)
 
-            gt_samples.append(gt)
-            gen_samples.append(gen)
-        return gt_samples, gen_samples
+            # syn_df["event_time"] = syn_df.groupby("client_id")[
+            #     "time_diff_days"
+            # ].cumsum()
 
-    def recover_and_save_samples(self, gen_samples, gt_samples, gt_client_ids):
+            gt: pd.DataFrame = self.collator.reverse(gt)
+            gen: pd.DataFrame = self.collator.reverse(gen)
 
-        gt_client_ids = torch.cat(gt_client_ids)
-
-        _dfs = dict(
-            gen=None,
-            gt=None,
-        )
-
-        gen_df_save_path = self.ckpt / "validation_gen.csv"
-        gt_df_save_path = self.ckpt / "validation_gt.csv"
-
-        for parti, samples, df_save_path in zip(
-            ["gen", "gt"],
-            [gen_samples, gt_samples],
-            [gen_df_save_path, gt_df_save_path],
-        ):
-
-            samples = torch.cat(samples).detach().cpu().numpy()
-
-            syn_df["event_time"] = syn_df.groupby("client_id")[
-                "time_diff_days"
-            ].cumsum()
-
-            syn_df.to_csv(df_save_path, index=False)
-            _dfs[parti] = syn_df
-            self.logger.info(f"Saving validation {parti} data to {df_save_path}")
+            gt.to_csv(gt_df_save_path, mode="a", index=False)
+            gen.to_csv(gen_df_save_path, mode="a", index=False)
 
         return gt_df_save_path, gen_df_save_path
 
-    def evaluate_and_save(self, name_prefix, gt_df_save_path, gen_df_save_path, metrics_cfg):
+    def evaluate_and_save(
+        self, name_prefix, gt_df_save_path, gen_df_save_path, metrics_cfg
+    ):
 
         metric_estimator = MetricEstimator(
             gt_df_save_path,
