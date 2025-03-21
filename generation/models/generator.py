@@ -14,9 +14,17 @@ from ..data.types import Seq
 #     projector: ProjectorConfig = field(default=None)
 #     reconstructor: PreprocessConfig = field(default=None)
 
-class Generator(BaseModel):
-    def __init__(self,):
+@dataclass
+class GeneratorConfig:
 
+    forward_reconstructed: bool = False
+
+class Generator(BaseModel):
+    def __init__(
+        self,
+        return_reconstructed=False
+    ):
+        self.return_reconstructed = return_reconstructed
         self.preprocess = ...
 
         self.encoder = ARTransformer()
@@ -24,38 +32,38 @@ class Generator(BaseModel):
         self.projector = ProjectMSE()
 
         self.reconstructor = ReconstructorMSE()
-        
-    def forward(self, x: Seq): 
+
+    def forward(self, x: Seq):
         """
         Forward pass of the Auto-regressive Transformer
         Args:
             x (Seq): Input sequence [L, B, D]
 
         """
-        x = self.preprocess(x) # B, L, D
+        x = self.preprocess(x)  # B, L, D
 
         x = self.encoder(x)
-        
+
         x = self.projector(x)
-        
-        x = self.reconstructor(x)
+        if self.return_reconstructed:
+            x = self.reconstructor(x)
 
         return x
 
     def generate(self, x: Seq):
         """
         Auto-regressive generation using the transformer
-        
+
         Args:
             x (Seq): Input sequence [L, B, D]
-            
+
         """
         x = self.preprocess(x)
-        
+
         ret = self.encoder.generate(x)
-        
+
         ret = self.projector.generate(ret)
-        
+
         ret = self.reconstructor.generate(ret)
 
         return ret

@@ -1,5 +1,6 @@
 from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
-
+from ebes.model.preprocess import Batch2Seq
+from data.types import Batch
 
 class ReconstructorMSE:
     def __init__(self):
@@ -15,3 +16,13 @@ class ReconstructorMSE:
         # TODO: Other reconstruction.
         return x
 
+
+class ReconstructorBaseline: 
+    def __init__(self):
+        pass
+
+    def forward(self, x):
+        ...
+
+    def generate(self, x):
+        ...

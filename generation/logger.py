@@ -1,57 +1,36 @@
 import logging
 import sys
-from typing import Optional
+from contextlib import contextmanager
+from pathlib import Path
 
-class Logger:
 
-    def __init__(
-        self,
-        name: str,
-        level: int = logging.INFO,
-        log_to_file: Optional[str] = None,
-        log_to_stdout: bool = True
-    ):
-        self._logger = logging.getLogger(name)
-        self._logger.setLevel(level)
+@contextmanager
+def log_to_file(filename: Path, file_lvl="info", cons_lvl="warning"):
+    if isinstance(file_lvl, str):
+        file_lvl = getattr(logging, file_lvl.upper())
+    if isinstance(cons_lvl, str):
+        cons_lvl = getattr(logging, cons_lvl.upper())
 
-        if self._logger.hasHandlers():
-            self._logger.handlers.clear()
+    ch = logging.StreamHandler(stream=sys.stdout)
+    ch.setLevel(cons_lvl)
+    cfmt = logging.Formatter("{levelname:8} - {asctime} - {message}", style="{")
+    ch.setFormatter(cfmt)
 
-        self.formatter = logging.Formatter(
-            fmt='[%(asctime)s]:%(message)s',
-            datefmt='%H:%M:%S'
-        )
+    fh = logging.FileHandler(filename)
+    fh.setLevel(file_lvl)
+    ffmt = logging.Formatter(
+        "{name: ^16} - {asctime} - {message}",
+        style="{",
+    )
+    fh.setFormatter(ffmt)
+    logger = logging.getLogger()
+    logger.setLevel(min(file_lvl, cons_lvl))
+    logger.addHandler(fh)
+    logger.addHandler(ch)
 
-        if log_to_stdout:
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(level)
-            console_handler.setFormatter(self.formatter)
-            self._logger.addHandler(console_handler)
-
-        if log_to_file is not None:
-            self.set_file(log_to_file)
-
-    def debug(self, msg: str) -> None:
-        self._logger.debug(msg)
-
-    def info(self, *args, **kwargs) -> None:
-        msg = self._format_message(*args)
-        self._logger.info(msg)
-
-    def warning(self, msg: str) -> None:
-        self._logger.warning(msg)
-
-    def error(self, msg: str) -> None:
-        self._logger.error(msg)
-
-    def critical(self, msg: str) -> None:
-        self._logger.critical(msg)
-
-    def set_file(self, log_to_file) -> None:
-        file_handler = logging.FileHandler(log_to_file, encoding='utf-8')
-        file_handler.setLevel(self._logger.level)
-        file_handler.setFormatter(self.formatter)
-        self._logger.addHandler(file_handler)
-
-    def _format_message(self, *args) -> str:
-        return '\n' + ' '.join(str(arg) for arg in args)
+    try:
+        yield
+    finally:
+        fh.close()
+        logger.removeHandler(fh)
+        logger.removeHandler(ch)
