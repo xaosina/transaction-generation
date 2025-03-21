@@ -10,7 +10,7 @@ import logging
 import torch
 import numpy as np
 
-from ..types import Batch
+from data_types import Batch
 
 
 logger = logging.getLogger(__name__)
@@ -29,59 +29,45 @@ class BatchTransform(ABC):
         """Apply transform to the batch."""
         ...
 
+    @abstractmethod
+    def reverse(self, batch: Batch): ...
+
+
 @dataclass
-class RandomEventsPermutation(BatchTransform):
-    """Permute events in sequence randomly.
+class CutTargetSequence(BatchTransform):
+    """Creates generation targets for each batch."""
 
-    Time, target and masks are left unchanged.
-    """
-
-    keep_last: bool = False
-    """If ``True`` the last event remains on its place, other are permuted."""
+    target_len: int
+    """Len of target sequence."""
 
     def __call__(self, batch: Batch):
+        assert (
+            batch.lengths.min() >= self.target_len
+        ), "target_len is too big for this batch"
+        batch.lengths = batch.lengths - self.target_len
 
-        max_len = batch.time.shape[0]
-        bs = len(batch)
-        i_len = torch.arange(max_len)[:, None]
-        i_batch = torch.arange(bs)
+        batch.target_time = batch.time[-self.target_len :]
+        batch.target_num_features = batch.num_features[-self.target_len :]
+        batch.target_cat_features = batch.cat_features[-self.target_len :]
 
-        if self.keep_last:
-            perm_len = torch.maximum(batch.lengths - 1, torch.tensor(1))
-        else:
-            perm_len = batch.lengths
+        batch.time = batch.time[: -self.target_len]
+        batch.num_features = batch.num_features[: -self.target_len]
+        batch.cat_features = batch.cat_features[: -self.target_len]
 
-        valid = (i_len < perm_len).float()
-        permutation_within_len = torch.multinomial(valid.T, max_len).T
+    def reverse(self, batch: Batch):
+        batch.lengths = batch.lengths + self.target_len
 
-        if self.keep_last:
-            permutation_within_len[batch.lengths - 1, i_batch] = batch.lengths - 1
-
-        permutation_valid_padding = torch.where(
-            i_len < batch.lengths,
-            permutation_within_len,
-            permutation_within_len[batch.lengths - 1, i_batch],
+        batch.time = (
+            np.concatenate((batch.time, batch.target_time))
+            if isinstance(batch.time, np.ndarray)
+            else torch.cat((batch.time, batch.target_time))
         )
+        batch.num_features = torch.cat((batch.num_features, batch.target_num_features))
+        batch.cat_features = torch.cat((batch.cat_features, batch.target_cat_features))
 
-        if batch.cat_features is not None:
-            batch.cat_features = batch.cat_features[permutation_valid_padding, i_batch]
-
-        if batch.num_features is not None:
-            batch.num_features = batch.num_features[permutation_valid_padding, i_batch]
-
-        if batch.cat_mask is not None:
-            batch.cat_mask = batch.cat_mask[permutation_valid_padding, i_batch]
-
-        if batch.num_mask is not None:
-            batch.num_mask = batch.num_mask[permutation_valid_padding, i_batch]
-
-
-class RandomTime(BatchTransform):
-    """Replace time with uniformly disributed values."""
-
-    def __call__(self, batch: Batch):
-        assert isinstance(batch.time, torch.Tensor)
-        batch.time = torch.rand_like(batch.time).sort(0).values
+        batch.target_time = None
+        batch.target_num_features = None
+        batch.target_cat_features = None
 
 
 @dataclass
@@ -97,6 +83,9 @@ class RescaleTime(BatchTransform):
         assert isinstance(batch.time, torch.Tensor)
         batch.time = batch.time.float()
         batch.time.sub_(self.loc).div_(self.scale)
+
+    def reverse(self, batch: Batch):
+        return batch.time.mul_(self.scale).add_(self.loc)
 
 
 @dataclass
@@ -142,6 +131,25 @@ class TimeToFeatures(BatchTransform):
         assert batch.num_features is not None
         batch.num_features_names.append(self.time_name)
         batch.num_features = torch.cat((batch.num_features, t), dim=2)
+
+    def reverse(self, batch: Batch):
+        assert isinstance(batch.time, torch.Tensor)
+        # Don't do anything if no numerical features or if no time feature.
+        if (not batch.num_features_names) or (
+            self.time_name not in batch.num_features_names
+        ):
+            return
+        # If only time feature present, set None.
+        if len(batch.num_features_names) == 1:
+            batch.num_features = None
+            batch.num_features_names = None
+            return
+        # If other feature also present, remove time feature.
+        time_index = batch.num_features_names.index(self.time_name)
+        batch.num_features = batch.num_features[
+            :, :, torch.arange(batch.num_features.size(2)) != time_index
+        ]
+        batch.num_features_names.pop(time_index)
 
 
 @dataclass

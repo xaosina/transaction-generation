@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .types import Batch
+from data_types import Batch
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -21,6 +21,9 @@ class SequenceCollator:
     padding_value: float = 0
 
     def __call__(self, seqs: Sequence[pd.Series]) -> Batch:
+        assert (
+            self.padding_side == "start"
+        ), "Don't support yet. CutTargetSequence will fail"
         ml = min(max(s["_seq_len"] for s in seqs), self.max_seq_len)  # type: ignore
         bs = len(seqs)
 
@@ -98,3 +101,44 @@ class SequenceCollator:
                 tf(batch)
 
         return batch
+
+    def reverse(self, batch: Batch) -> Sequence[pd.Series]:
+        batch = deepcopy(batch)
+        def numpy_if_possible(arr):
+            if isinstance(arr, torch.Tensor):
+                return arr.numpy(force=True)
+            return arr
+
+        if self.batch_transforms is not None:
+            for tf in self.batch_transforms[::-1]:
+                tf.reverse(batch)
+
+        num_features = numpy_if_possible(batch.num_features)
+        cat_features = numpy_if_possible(batch.cat_features)
+        index = batch.index
+        times = numpy_if_possible(batch.time)
+        seq_lens = batch.lengths.numpy(force=True)
+        cat_names = batch.cat_features_names
+        num_names = batch.num_features_names
+
+        seqs = []
+        for b in range(len(batch)):
+            s = pd.Series()
+            sl = seq_lens[b]
+            s["_seq_len"] = sl
+            # If pad start, then data are filled at the end
+            slice_idx = (
+                slice(-sl, None) if self.padding_side == "start" else slice(0, sl)
+            )
+            if num_names is not None:
+                for i, name in enumerate(num_names):
+                    assert num_features is not None
+                    s[name] = num_features[slice_idx, b, i]
+            for i, name in enumerate(cat_names):
+                assert cat_features is not None
+                s[name] = cat_features[slice_idx, b, i]
+            s[self.time_name] = times[slice_idx, b]
+            s[self.index_name] = index[b]
+            seqs.append(s)
+
+        return seqs
