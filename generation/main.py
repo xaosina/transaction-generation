@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 import pyrallis
-from data.utils import DataConfig, get_dataloader
+from data.utils import get_dataloaders
+from data.data_types import DataConfig
 from ebes import build_model
 from trainer import TrainConfig
 from .metrics.metric_utils import MetricsConfig, get_metrics
@@ -21,8 +22,7 @@ class PipelineConfig:
 
 @pyrallis.wrap()
 def main(cfg: PipelineConfig):
-    train_loader, val_loader = get_dataloader(cfg.data_conf)
-    test_loader = get_dataloader(cfg.data_conf)
+    train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
     model = build_model(cfg.model_conf)
     optimizer = get_optimizer(model.parameters, cfg.optimizer)
     lr_scheduler = get_scheduler(optimizer, )

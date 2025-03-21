@@ -15,3 +15,6 @@ __pycache__/
 build/*
 
 transaction_me*/*
+generation/data/preprocess/data/
+
+*temp.ipynb

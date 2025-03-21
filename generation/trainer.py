@@ -13,7 +13,7 @@ from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
 
 from .utils import LoadTime, get_profiler, record_function
-from .data.types import Batch
+from .data.data_types import Batch
 from .logger import Logger
 from .metrics.sampler import SampleEvaluator
 
@@ -242,7 +242,7 @@ class Trainer:
         logger.info("Epoch %04d: train started", self._last_epoch + 1)
         self._model.train()
 
-        # loss_ema = 0.0
+        loss_ema = 0.0
         losses: list[float] = []
 
         total_iters = iters
@@ -259,10 +259,10 @@ class Trainer:
         with self._profiler as prof:
             for batch, i in LoadTime(pbar, disable=pbar.disable):
                 batch.to(self._device)
-                inp = batch
+                batch
 
                 with self.record_function("forward"):
-                    pred = self._model(inp)
+                    pred = self._model(batch)
                 
                 loss = self._loss(batch, pred)
 
@@ -271,12 +271,9 @@ class Trainer:
                 
                 with record_function("backward"):
                     loss.backward()
-
-                loss_np = loss.item()
-
-                losses.append(loss_np)
-                # loss_ema = loss_np if i == 0 else 0.9 * loss_ema + 0.1 * loss_np
-                # pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
+                losses.append(loss.item())
+                loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
+                pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
                 self._opt.step()
 
@@ -303,8 +300,14 @@ class Trainer:
 
         self._model.eval()
         
-        evaluator = SampleEvaluator(self._model, None, logger)
+        #TODO: use get_sampler()
+        from metrics.metric_utils import MetricsConfig
+        metrics_cfg = MetricsConfig()
+        evaluator = SampleEvaluator(self._model, None, logger, ckpt, metrics_cfg)
+
+
         self._metric_values = evaluator.evaluate(loader)
+
         logger.info(
             f"Epoch %04d: metrics: %s",
             self._last_epoch + 1,

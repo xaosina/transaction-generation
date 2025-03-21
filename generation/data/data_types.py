@@ -42,7 +42,7 @@ class DataConfig:
 class Batch:
     lengths: torch.Tensor  # (batch,)
     time: np.ndarray | torch.Tensor  # (len, batch)
-    index: torch.Tensor | np.ndarray  # (batch,)
+    index: torch.Tensor | np.ndarray | None = None # (batch,)
     num_features: torch.Tensor | None = None  # (len, batch, features)
     cat_features: torch.Tensor | None = None  # (len, batch, features)
     cat_features_names: list[str] | None = None
@@ -65,20 +65,40 @@ class Batch:
 
         return len(self.lengths)
 
-
 @dataclass(kw_only=True)
-class Seq:
-    tokens: torch.Tensor  # of shape (len, batch, features)
-    lengths: torch.Tensor  # of shape (batch,)
-    time: torch.Tensor  # of shape (len, batch)
-    masks: torch.Tensor | None = None  # of shape (len, batch, features)
+class PredBatch:
+    lengths: torch.Tensor  # (batch,)
+    time: np.ndarray | torch.Tensor  # (len, batch)
+    num_features: torch.Tensor | None = None  # (len, batch, features)
+    num_features_names: list[str] | None = None
+    cat_features: dict[str, torch.Tensor] | None = None  # {"name": (len, batch, C)}
 
-    def to(self, device):
-        self.tokens = self.tokens.to(device)
-        self.lengths = self.lengths.to(device)
-        self.time = self.time.to(device)
-        self.masks = self.masks.to(device) if self.masks else None
+    def to(self, device: str):
+        for field in fields(self):
+            f = getattr(self, field.name)
+            if isinstance(f, torch.Tensor):
+                setattr(self, field.name, f.to(device))
+
         return self
 
-    def __len__(self):
-        return len(self.lengths)
+    def get_numerical(self):
+        return torch.cat((self.time.unsqueeze(-1), self.num_features), dim=2)
+    
+    def to_batch(self):
+        cat_features = None
+        cat_feature_names = None if self.cat_features is None else list(self.cat_features.keys())
+        if self.cat_features:
+            cat_features = []
+            for cat_name, cat_tensor in self.cat_features.items():
+                cat_features.append(cat_tensor.argmax(dim=2))
+            cat_features = torch.stack(cat_features, dim=2)
+
+        Batch(
+            lengths=self.lengths,
+            time=self.time,
+            index=None,
+            num_features=self.num_features,
+            cat_features=cat_features,
+            cat_features_names=cat_feature_names,
+            num_features_names=self.num_features_names
+        )
