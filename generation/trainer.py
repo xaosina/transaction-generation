@@ -13,7 +13,7 @@ from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
 
 from .utils import LoadTime, get_profiler, record_function
-from .data.types import Batch
+from .data.data_types import Batch
 from .logger import Logger
 from .metrics.sampler import SampleEvaluator
 
