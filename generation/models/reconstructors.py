@@ -3,7 +3,8 @@ from ebes.model.seq2seq import Projection
 from ebes.types import Seq
 
 from ..data.data_types import Batch, DataConfig, PredBatch
-from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
+
+# from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
 
 
 class ReconstructorMSE:
@@ -36,7 +37,7 @@ class ReconstructorBase(BaseModel):
         self.head = Projection(in_features, out_dim)
 
     def forward(self, x: Seq) -> dict:
-        out = self.head(x)
+        out = self.head(x).tokens
         time = out[:, :, 0]
         start_id = 1
 
@@ -52,7 +53,7 @@ class ReconstructorBase(BaseModel):
                 start_id += cat_dim
         assert start_id == out.shape[2]
         return PredBatch(
-            length = x.lengths,
+            lengths=x.lengths,
             time=time,
             num_features=num_features,
             num_features_names=self.num_names,

@@ -1,0 +1,59 @@
+data_conf:
+  cat_cardinalities:
+    src_type32: 87
+    src_type11: 45
+    event_subtype: 60
+    dst_type11: 55
+    event_type: 54
+    currency: 2 # Initially 12
+    dst_type12: 253
+    src_type22: 84
+    src_type12: 184
+    # src_type31: 1455
+    # src_type21: 8000
+  num_names:
+    - amount
+  index_name: client_id
+  time_name: days_since_first_tx
+
+  test_path: 'data/mbd-50k/test'
+  train_path: 'data/mbd-50k/train'
+  val_ratio: 0.15
+  num_workers: 0
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: 16
+  generation_len: 16
+  max_seq_len: 1045
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: none
+  
+  train_transforms:
+    - RescaleTime:
+        loc: 0.0
+        scale: 365.0
+    - TimeToFeatures:
+        process_type: "diff"
+
+  val_transforms:
+    - RescaleTime:
+        loc: 0.0
+        scale: 365.0
+    - TimeToFeatures:
+        process_type: "diff"
+    - CutTargetSequence:
+        target_len: 32
+
+optimizer:
+  name: Adam
+  params:
+    lr: 3.e-4
+    weight_decay: 1.e-4
+
+scheduler:
+  name: StepLR
+  params:
+    step_size: 30

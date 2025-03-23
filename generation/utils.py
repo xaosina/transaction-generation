@@ -1,10 +1,11 @@
+from dataclasses import dataclass
 import logging
 import sys
 import time
 from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import torch
 import yaml
@@ -97,26 +98,34 @@ class LoadTime:
             raise
 
 
+@dataclass
+class OptimizerConfig:
+    name: str = "Adam"
+    params: Optional[dict[str, Any]] = None
+
+
 def get_optimizer(
-    net_params: Iterable[torch.nn.Parameter],
-    name: str = "Adam",
-    params: Mapping[str, Any] | None = None,
+    net_params: Iterable[torch.nn.Parameter], optim_conf: OptimizerConfig
 ):
-    params = params or {}
+    params = optim_conf.params or {}
     try:
-        return getattr(torch.optim, name)(net_params, **params)
+        return getattr(torch.optim, optim_conf.name)(net_params, **params)
     except AttributeError:
-        raise ValueError(f"Unknkown optimizer: {name}")
+        raise ValueError(f"Unknkown optimizer: {optim_conf.name}")
 
 
-def get_scheduler(
-    optimizer: torch.optim.Optimizer, name: str, params: Mapping[str, Any] | None = None
-):
-    params = params or {}
+@dataclass
+class SchedulerConfig:
+    name: Optional[str] = "StepLR"
+    params: Optional[dict[str, Any]] = None
+
+
+def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
+    params = sch_conf.params or {}
     try:
-        return getattr(torch.optim.lr_scheduler, name)(optimizer, **params)
+        return getattr(torch.optim.lr_scheduler, sch_conf.name)(optimizer, **params)
     except AttributeError:
-        raise ValueError(f"Unknkown LR scheduler: {name}")
+        raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
 
 
 @contextmanager

@@ -1,0 +1,83 @@
+from dataclasses import asdict, dataclass, field
+import os
+from pathlib import Path
+from typing import Any, Mapping, Optional
+
+import pyrallis
+from generation.data.utils import get_dataloaders
+from generation.data.data_types import DataConfig
+from generation.models.generator import Generator
+
+# from generation.trainer import TrainConfig
+
+# from generation.metrics.metric_utils import MetricsConfig, get_metrics
+from generation.losses import get_loss
+from generation.utils import get_optimizer, get_scheduler
+from generation.trainer import Trainer
+from generation.utils import OptimizerConfig, SchedulerConfig
+
+
+@dataclass
+class TrainConfig:
+    total_iters: Optional[int] = 100_000
+    total_epochs: Optional[int] = None
+    patience: int = -1
+    iters_per_epoch: Optional[int] = 10_000
+    ckpt_replace: bool = True
+    ckpt_track_metric: str = "epoch"
+    ckpt_resume: Optional[str | os.PathLike] = None
+    profiling: bool = False
+
+
+@dataclass
+class PipelineConfig:
+    run_name: str = "debug"
+    log_dir: str = "log/generation"
+    device: str = "cuda:0"
+    data_conf: DataConfig = field(default_factory=DataConfig)
+    trainer: TrainConfig = field(default_factory=TrainConfig)
+    # metrics_conf: MetricsConfig = field(default_factory=MetricsConfig)
+    # model_conf: Mapping[str, Any] = field(default_factory=lambda: {})
+    optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
+    scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
+
+
+@pyrallis.wrap()
+def main(cfg: PipelineConfig):
+    pyrallis.dump(cfg, open("run_config.yaml", "w"))
+    print(cfg)
+    train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
+    model = Generator(cfg.data_conf)
+    optimizer = get_optimizer(model.parameters(), cfg.optimizer)
+    lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
+    # metrics = get_metrics(cfg.metrics)
+    # loss = get_loss(cfg.loss)
+    batch = next(iter(train_loader))
+    out = model(batch)
+    breakpoint()
+    metrics, loss = None, None
+    trainer = Trainer(
+        model=model,
+        loss=loss,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        metrics=metrics,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        run_name=cfg.run_name,
+        ckpt_dir=Path(cfg.log_dir) / cfg.run_name / "ckpt",
+        device=cfg.device,
+        **asdict(cfg.trainer),
+    )
+
+    trainer.run()
+    trainer.load_best_model()
+
+    train_metrics = trainer.validate(loaders["full_train"])
+    train_val_metrics = trainer.validate(loaders["train_val"])
+    hpo_metrics = trainer.validate(loaders["hpo_val"])
+    test_metrics = trainer.validate(test_loaders["test"])
+
+
+if __name__ == "__main__":
+    main()

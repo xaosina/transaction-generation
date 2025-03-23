@@ -8,7 +8,8 @@ import pyarrow.parquet as pq
 import torch
 from torch.utils.data import IterableDataset
 from tqdm import tqdm
-from data_types import DataConfig
+
+from .data_types import DataConfig
 
 logger = logging.getLogger(__name__)  # noqa: F821
 
@@ -134,9 +135,7 @@ class ShardDataset(IterableDataset):
         for shard_path in worker_shards:
             data = pd.read_parquet(
                 shard_path,
-                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
-                + data_conf.num_names
-                + list(data_conf.cat_cardinalities.keys()),
+                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]+ data_conf.num_names+ list(data_conf.cat_cardinalities.keys()),
             )
             data = self._preprocess(data)
 
@@ -272,8 +271,8 @@ if __name__ == "__main__":
         data_conf.test_path, data_conf, seed=0, random_end=data_conf.val_random_end
     )
 
-    from utils import get_collator
     from torch.utils.data import DataLoader
+    from utils import get_collator
 
     collator = get_collator(data_conf, data_conf.train_transforms)
     dataloader = DataLoader(

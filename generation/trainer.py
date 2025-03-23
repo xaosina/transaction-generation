@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 
+import logging
 import os
 from collections.abc import Iterable, Sized
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import torch
@@ -14,11 +15,10 @@ from tqdm.autonotebook import tqdm
 
 from .utils import LoadTime, get_profiler, record_function
 from .data.data_types import Batch
-from .logger import Logger
-from .metrics.sampler import SampleEvaluator
+# from .metrics.sampler import SampleEvaluator
 
 
-logger = Logger(__name__, log_to_file='log.log', )
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TrainConfig:

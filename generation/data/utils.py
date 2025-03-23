@@ -1,12 +1,13 @@
 import logging
 from typing import Any, Mapping, Sequence
 
-import batch_tfs
 import numpy as np
-from collator import SequenceCollator
-from data_types import DataConfig
-from dataset import ShardDataset
 from torch.utils.data import DataLoader
+
+from . import batch_tfs
+from .collator import SequenceCollator
+from .data_types import DataConfig
+from .dataset import ShardDataset
 
 logger = logging.getLogger()
 

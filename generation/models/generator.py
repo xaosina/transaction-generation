@@ -3,10 +3,10 @@ from dataclasses import dataclass
 from ebes.model import BaseModel
 from ebes.model.seq2seq import GRU, Projection
 from ebes.types import Seq
-from preprocessor import create_preprocessor
-from reconstructors import ReconstructorBase
 
 from ..data.data_types import Batch, DataConfig
+from .preprocessor import create_preprocessor
+from .reconstructors import ReconstructorBase
 
 # # TODO: Think
 # @dataclass
