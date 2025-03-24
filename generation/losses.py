@@ -7,19 +7,19 @@ from generation.data.data_types import Batch, PredBatch
 
 @dataclass
 class LossConfig:
-    model: Optional[str] = "baseline"
+    name: Optional[str] = "baseline"
     c_dim: Optional[int] = None
     c_number: Optional[int] = None
 
 
 def get_loss(config: LossConfig):
 
-    model = config.model
+    name = config.name
 
-    if model == "baseline":
+    if name == "baseline":
         return BaselineLoss()
     else:
-        raise ValueError(f"Unknown type of target (target_type): {model}")
+        raise ValueError(f"Unknown type of target (target_type): {name}")
 
 
 class BaselineLoss:
@@ -30,42 +30,52 @@ class BaselineLoss:
         self.ignore_index = -100
 
     def _compute_loss(self, y_true: Batch, y_pred: PredBatch) -> torch.Tensor:
-        padding_mask = (
-            torch.arange(y_true.time.shape[0], device=y_true.time.device)
-            >= y_pred.lengths[:, None]
-        )
+        valid_mask = torch.arange(y_true.lengths.max())[:, None] < (
+            y_true.lengths
+        )  # [L, B]
+
         mse = 0.0
-        mse_total = 0
+        mse_count = 0
+
         if y_pred.time is not None:
-            pred_time = y_pred.time.permute(1, 0) * padding_mask
-            true_time = y_true.time.permute(1, 0) * padding_mask
-            mse += F.mse_loss(
-                pred_time[:, :-1],
-                true_time[:, 1:],
-            )
-            mse_total += 1
+            pred_time = y_pred.time
+            true_time = y_true.time
+            mse_time = F.mse_loss(pred_time[:-1], true_time[1:], reduction="none")[
+                valid_mask[1:]
+            ]
+
+            mse += mse_time.sum()
+            mse_count += valid_mask[1:].sum()
 
         if y_pred.num_features is not None:
-            pred_num = y_pred.num_features.permute(1, 0, 2) * padding_mask.unsqueeze(-1)
-            true_num = y_true.num_features.permute(1, 0, 2) * padding_mask.unsqueeze(-1)
-            mse += F.mse_loss(
-                pred_num[:, :-1, :],
-                true_num[:, 1:, 1:],  # second slice - time doesn't count
-            )
-            mse_total += 1
+            num_feature_ids = [
+                y_true.num_features_names.index(name)
+                for name in y_pred.num_features_names
+            ]
 
-        mse = mse / mse_total
+            pred_num = y_pred.num_features
+            true_num = y_true.num_features
+
+            mse_num = F.mse_loss(
+                pred_num[:-1],
+                true_num[1:, :, num_feature_ids],
+            ) * valid_mask[1:].unsqueeze(-1)
+
+            mse += mse_num.sum()
+            mse_count += valid_mask[1:].unsqueeze(-1).sum()
+
+        mse = mse / mse_count
 
         ce = 0.0
         ce_total = 0
-        breakpoint()
+
         if y_pred.cat_features is not None:
             for key in y_pred.cat_features:
                 true_cat = y_true[key].permute(1, 0)
-                true_cat[~padding_mask] = self.ignore_index
-                
+                true_cat[~valid_mask] = self.ignore_index
+
                 true_num = y_pred.cat_features[key].permute(1, 2, 0)
-                
+
                 ce += F.cross_entropy(
                     true_num[:, :, :-1],
                     true_cat[:, 1:],
@@ -75,7 +85,7 @@ class BaselineLoss:
             assert ce_total != 0.0
             ce = ce / ce_total
 
-        return mse + ce
+        return mse + ce # TODO: Weights
 
     def __call__(self, *args, **kwds):
         return self._compute_loss(*args, **kwds)

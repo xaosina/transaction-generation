@@ -1,110 +1,79 @@
-from tqdm import tqdm
-import torch
-from .estimator import MetricEstimator
+from copy import deepcopy
+
 import pandas as pd
-from ..data.types import Batch
-from dataclasses import dataclass
-from pathlib import Path
-import time
+import torch
+from tqdm import tqdm
+from typing import Optional
+from generation.data.data_types import Batch
 
-from ..utils import dictprettyprint
-from ..logger import Logger
-from ..models.generator import Generator
-from .estimator import get_metrics, MetricsConfig
-
-
-@dataclass
-class SamplerConfig:
-    ckpt: Path
-    model: Generator
-    logger: Logger
-    collator: ...
-
-
-def get_sampler(cfg: SamplerConfig):
-    return SampleEvaluator(
-        cfg.model,
-        cfg.collator,
-        cfg.logger,
-        cfg.ckpt,
-    )
+from .estimator import MetricEstimator
 
 
 class SampleEvaluator:
 
-    def __init__(self, model, collator, logger, ckpt):
-        self.model = model
-        self.collator = collator
-        self.logger = logger
+    def __init__(
+        self,
+        ckpt: str,
+        metrics: Optional[list[str]] = None,
+        gen_len: int = 16,
+        hist_len: int = 16,
+        device: int = 0,
+    ):
         self.ckpt = ckpt
+        self.metrics = metrics or []
+        self.device = device
+        self.gen_len = gen_len
+        self.hist_len = hist_len
 
-    def evaluate(self, loader, blim=None, prefix=""):
+    def evaluate(self, model, loader, blim=None, prefix=""):
+        gt_df_save_path, gen_df_save_path = self.generate_samples(
+            model, loader, blim, prefix
+        )
+        return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
 
-        gt_df_save_path, gen_df_save_path = self.generate_samples(loader, blim)
-        metrics = self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
-        start_time = time.perf_counter()
-        self.logger.info(f"Metric eval:\n")
-        self.logger.info(dictprettyprint(metrics))
-        self.logger.info(f"---\ntime estimation: {time.perf_counter() - start_time} s")
-        return metrics
+    def generate_samples(self, model, data_loader, blim=None, prefix=""):
+        model.eval()
 
-    def generate_samples(self, data_loader, blim=None):
-        self.model.eval()
-
-        gen_df_save_path = self.ckpt / "validation_gen.csv"
-        gt_df_save_path = self.ckpt / "validation_gt.csv"
+        gen_df_save_path = self.ckpt / f"validation_gen{prefix}.csv"
+        gt_df_save_path = self.ckpt / f"validation_gt{prefix}.csv"
 
         pbar = tqdm(data_loader, total=len(data_loader))
 
-        for batch_idx, samp_inp in enumerate(pbar):
+        for batch_idx, batch_input in enumerate(pbar):
             if blim is not None and batch_idx > blim:
                 break
 
             with torch.no_grad():
-                samp_res = self.model.generate(samp_inp)
-            gt, gen = concat_samples(samp_inp, samp_res)
+                batch_pred = model.generate(batch_input)
+            gt, gen = concat_samples(batch_input, batch_pred)
 
-            # syn_df["event_time"] = syn_df.groupby("client_id")[
-            #     "time_diff_days"
-            # ].cumsum()
-
-            gt: pd.DataFrame = self.collator.reverse(gt)
-            gen: pd.DataFrame = self.collator.reverse(gen)
+            gt = pd.DataFrame(data_loader.collate_fn.reverse(gt))
+            gen = pd.DataFrame(data_loader.collate_fn.reverse(gen))
 
             gt.to_csv(gt_df_save_path, mode="a", index=False)
             gen.to_csv(gen_df_save_path, mode="a", index=False)
 
-        return gt_df_save_path, gen_df_save_path
-
-    def evaluate_and_save(
-        self, name_prefix, gt_df_save_path, gen_df_save_path, metrics_cfg
-    ):
-
-        metric_estimator = MetricEstimator(
+        return (
             gt_df_save_path,
             gen_df_save_path,
-            self.config,
-            self.logger,
-            name_prefix=name_prefix,
         )
 
-        return metric_estimator.estimate()
+    def evaluate_and_save(self, name_prefix, gt_save_path, gen_save_path):
+        return MetricEstimator(
+            gt_save_path,
+            gen_save_path,
+            name_prefix,
+            self.metrics,
+            self.gen_len,
+            self.hist_len,
+            device=self.device,
+        ).estimate()
 
 
-def concat_samples(hist: Batch, pred: Batch) -> tuple[Batch, Batch]:
-    assert (
-        hist.lengths == pred.lengths
-    ), "Mismatch in sequence lengths between hist and pred"
+def concat_samples(input: Batch, pred: Batch) -> tuple[Batch, Batch]:
+    res = deepcopy(input)
 
-    hist.lengths = hist.lengths + hist.lengths
-
-    hist.time = torch.cat([hist.time, hist.target_time])
-    hist.num_features = torch.cat([hist.num_features, hist.target_num_features])
-    hist.cat_features = torch.cat([hist.cat_features, hist.target_cat_features])
-
-    pred.lengths = pred.lengths + pred.lengths
-    pred.time = torch.cat([pred.time, pred.target_time])
-    pred.cat_features = torch.cat([pred.cat_features, pred.target_cat_features])
-    pred.num_features = torch.cat([pred.num_features, pred.target_num_features])
-
-    return hist, pred
+    res.target_time = pred.target_time
+    res.target_num_features = pred.target_num_features
+    res.target_cat_features = pred.target_cat_features
+    return input, res

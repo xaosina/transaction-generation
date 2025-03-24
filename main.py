@@ -8,14 +8,11 @@ from generation.data.utils import get_dataloaders
 from generation.data.data_types import DataConfig
 from generation.models.generator import Generator
 
-# from generation.trainer import TrainConfig
-
-# from generation.metrics.metric_utils import MetricsConfig, get_metrics
+from generation.metrics.sampler import SampleEvaluator
 from generation.losses import get_loss, LossConfig
 from generation.utils import get_optimizer, get_scheduler
 from generation.trainer import Trainer
 from generation.utils import OptimizerConfig, SchedulerConfig
-
 
 
 @dataclass
@@ -35,13 +32,14 @@ class PipelineConfig:
     run_name: str = "debug"
     log_dir: str = "log/generation"
     device: str = "cuda:0"
+    metrics: list[str] = []
     data_conf: DataConfig = field(default_factory=DataConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
-    # metrics_conf: MetricsConfig = field(default_factory=MetricsConfig)
     # model_conf: Mapping[str, Any] = field(default_factory=lambda: {})
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
+
 
 @pyrallis.wrap()
 def main(cfg: PipelineConfig):
@@ -51,19 +49,27 @@ def main(cfg: PipelineConfig):
     model = Generator(cfg.data_conf)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
     lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
-    # metrics = get_metrics(cfg.metrics)
     # loss = get_loss(cfg.loss)
     batch = next(iter(train_loader))
     loss = get_loss(config=cfg.loss)
     out = model(batch)
     loss_out = loss(batch, out)
     metrics, loss = None, None
+
+    sample_evaluator = SampleEvaluator(
+        Path(cfg.log_dir) / cfg.run_name / "ckpt",
+        cfg.metrics,
+        cfg.device,
+        cfg.data_conf.generation_len,
+        cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
+    )
+
     trainer = Trainer(
         model=model,
         loss=loss,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        metrics=metrics,
+        sample_evaluator=sample_evaluator,
         train_loader=train_loader,
         val_loader=val_loader,
         run_name=cfg.run_name,

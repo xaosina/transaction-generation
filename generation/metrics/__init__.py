@@ -17,7 +17,7 @@ F1Micro = partial(F1Metric, average="micro")
 
 
 __all__ = [
-    "LevensteinMetric",
+    "Levenstein",
     "Accuracy",
     "F1Macro",
     "F1Micro",

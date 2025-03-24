@@ -59,4 +59,6 @@ scheduler:
     step_size: 30
 
 loss:
-  model: baseline
+  name: baseline
+
+metrics: ["Accuracy", "Coverage", "Levenstein"]
