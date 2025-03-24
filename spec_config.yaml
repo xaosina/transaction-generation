@@ -57,3 +57,6 @@ scheduler:
   name: StepLR
   params:
     step_size: 30
+
+loss:
+  model: baseline

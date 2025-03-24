@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field
-from .reconstructors import ReconstructorMSE
-from .projectors import ProjectMSE
-from .encoders import ARTransformer
-from ebes.model import BaseModel
-from ..data.types import Seq
+from dataclasses import dataclass
 
+from ebes.model import BaseModel
+from ebes.model.seq2seq import GRU, Projection
+from ebes.types import Seq
+
+from ..data.data_types import Batch, DataConfig
+from .preprocessor import create_preprocessor
+from .reconstructors import ReconstructorBase
 
 # # TODO: Think
 # @dataclass
@@ -13,6 +15,7 @@ from ..data.types import Seq
 #     encoder: PreprocessConfig = field(default=None)
 #     projector: ProjectorConfig = field(default=None)
 #     reconstructor: PreprocessConfig = field(default=None)
+
 
 @dataclass
 class GeneratorConfig:

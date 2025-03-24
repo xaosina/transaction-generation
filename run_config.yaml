@@ -41,6 +41,10 @@ data_conf:
       target_len: 32
 device: cuda:0
 log_dir: log/generation
+loss:
+  c_dim: null
+  c_number: null
+  model: baseline
 optimizer:
   name: Adam
   params:

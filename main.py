@@ -11,10 +11,11 @@ from generation.models.generator import Generator
 # from generation.trainer import TrainConfig
 
 # from generation.metrics.metric_utils import MetricsConfig, get_metrics
-from generation.losses import get_loss
+from generation.losses import get_loss, LossConfig
 from generation.utils import get_optimizer, get_scheduler
 from generation.trainer import Trainer
 from generation.utils import OptimizerConfig, SchedulerConfig
+
 
 
 @dataclass
@@ -40,7 +41,7 @@ class PipelineConfig:
     # model_conf: Mapping[str, Any] = field(default_factory=lambda: {})
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
-
+    loss: LossConfig = field(default_factory=LossConfig)
 
 @pyrallis.wrap()
 def main(cfg: PipelineConfig):
@@ -53,8 +54,9 @@ def main(cfg: PipelineConfig):
     # metrics = get_metrics(cfg.metrics)
     # loss = get_loss(cfg.loss)
     batch = next(iter(train_loader))
+    loss = get_loss(config=cfg.loss)
     out = model(batch)
-    breakpoint()
+    loss_out = loss(batch, out)
     metrics, loss = None, None
     trainer = Trainer(
         model=model,

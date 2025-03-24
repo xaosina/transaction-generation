@@ -1,109 +1,57 @@
+from typing import Optional
 import torch
 import torch.nn.functional as F
+from dataclasses import dataclass
+from generation.data.data_types import Batch, PredBatch
 
+@dataclass
+class LossConfig:
+    model: Optional[str] = "baseline"
+    c_dim: Optional[int] = None
+    c_number: Optional[int] = None
 
-def get_loss(config):
-    """
-    Expected config:
-    config = {
-        "loss_type": "full" / "last",
-        "target_type": "cat" / "mse",
-        "c_dim": 8,               # для категориальных
-        "c_number": 5,           # для категориальных
-        ...
-    }
-    """
+def get_loss(config: LossConfig):
 
-    loss_type = config.get("loss_type", "full")
-    target_type = config.get("target_type", "cat")
+    model = config.model
 
-    if target_type == "cat":
-        c_dim = config["c_dim"]
-        c_number = config["c_number"]
-        return CatLoss(c_dim, c_number, loss_type=loss_type)
-
-    elif target_type == "mse":
-        return MSELoss(loss_type=loss_type)
-
+    if model == "baseline":
+        return BaselineLoss()
     else:
-        raise ValueError(f"Unknown type of target (target_type): {target_type}")
+        raise ValueError(f"Unknown type of target (target_type): {model}")
 
 
-class BaseLoss:
+class BaselineLoss:
+    def __init__(self,):
+        super().__init__()
 
-    def __init__(self, loss_type="full"):
-        self.loss_type = loss_type
-        self._ignore_index = -100
+    def _compute_loss(self, y_true: Batch, y_pred: PredBatch):
+        mse = .0
+        mse_total = 0
+        if y_pred.time is not None:
+            mse += F.mse_loss(y_pred.time, y_true.time)
+            mse_total += 1
+        breakpoint()
 
-    def _shift_tensor(self, tensor: torch.Tensor):
-        tensor = tensor.roll(-1, dims=1)
-        tensor[:, -1] = self._ignore_index
-        return tensor
-
-    def validate_target_list(self, targets: torch.Tensor):
-        if not isinstance(targets, torch.Tensor):
-            raise ValueError("Targets should be torch.Tensor")
-
-    def _compute_loss(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        self.validate_target_list(y_true)
-
-        match self.loss_type:
-            case "full":
-                return self._autoregressive_loss(y_true, y_pred)
-            case "last":
-                return self._last_token_loss(y_true, y_pred)
-            case _:
-                raise ValueError(f"Неизвестный тип лосса: {self.loss_type}")
-
-    def _autoregressive_loss(self, *args, **kwargs):
-        raise NotImplementedError()
+        if y_pred.num_features is not None:
+            mse += F.mse_loss(y_pred.num_features, y_true.num_features[:, :, 1:]) # [:, :, 1:] - time doesn't count
+            mse_total += 1
+        
+        mse = mse / mse_total
+        
+        ce = .0
+        ce_total = 0
+        if y_pred.cat_features is not None:
+            for key in y_pred.cat_features:
+                breakpoint()
+                ce += F.cross_entropy(
+                    y_pred.cat_features[key].permute(1, 2, 0), 
+                    y_true[key].permute(1, 0)
+                    )
+                ce_total += 1
+            assert ce_total != .0
+            ce = ce / ce_total
+        
+        return mse + ce
     
-    def _last_token_loss(self, *args, **kwargs):
-        raise NotImplementedError()
-    
-    def __call__(self, *args, **kwargs):
-        return self._compute_loss(*args, **kwargs)
-
-
-class CatLoss(BaseLoss):
-
-    def __init__(self, c_dim, c_number, loss_type="full"):
-        super().__init__(loss_type)
-
-        self.c_dim = c_dim
-        self.c_number = c_number
-
-    def __call__(self, *args, **kwargs):
-        return self._compute_loss(*args, **kwargs)
-
-    def _autoregressive_loss(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        y_true = self._shift_tensor(y_true)
-        return F.cross_entropy(
-            y_pred[:, :-1, ...].reshape(-1, self.c_number, self.c_dim).permute(0, 2, 1), 
-            y_true[:, :-1, ...].reshape(-1, self.c_number).long()
-            )
-    
-    def _last_token_loss(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        return F.cross_entropy(
-            y_pred[:, -1, ...].reshape(-1, self.c_number, self.c_dim).permute(0, 2, 1), 
-            y_true[:, ...].reshape(-1, self.c_number).long()
-            )
-
-
-class MSELoss(BaseLoss):
-
-    def __init__(self, loss_type="full"):
-        super().__init__(loss_type)
-
-    def __call__(self, *args, **kwargs):
-        return self._compute_loss(*args, **kwargs)
-
-    def _autoregressive_loss(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        y_true = self._shift_tensor(y_true)
-        return F.mse_loss(
-            y_pred[:, :-1, :],
-            y_true[:, :-1, :]
-        )
-
-    def _last_token_loss(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        return F.mse_loss(y_pred[:, -1, :], y_true[:, -1, :])
+    def __call__(self, *args, **kwds):
+        return self._compute_loss(*args, **kwds)

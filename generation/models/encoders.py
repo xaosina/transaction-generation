@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from ebes.model.seq2seq import BaseSeq2Seq
-from ..data.types import Seq
+from ebes.types import Seq
 from .transformer.ar import AR
 
 
