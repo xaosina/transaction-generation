@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .data_types import Batch
+from .data_types import GenBatch
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -16,11 +16,11 @@ class SequenceCollator:
     num_names: list[str] | None = None
     index_name: str | None = None
     max_seq_len: int = 0
-    batch_transforms: list[Callable[[Batch], None]] | None = None
+    batch_transforms: list[Callable[[GenBatch], None]] | None = None
     padding_side: str = "start"
     padding_value: float = 0
 
-    def __call__(self, seqs: Sequence[pd.Series]) -> Batch:
+    def __call__(self, seqs: Sequence[pd.Series]) -> GenBatch:
         assert (
             self.padding_side == "start"
         ), "Don't support yet. CutTargetSequence will fail"
@@ -86,7 +86,7 @@ class SequenceCollator:
             # keep numpy
             pass
 
-        batch = Batch(
+        batch = GenBatch(
             num_features=num_features,
             cat_features=cat_features,
             index=index,
@@ -102,7 +102,7 @@ class SequenceCollator:
 
         return batch
 
-    def reverse(self, batch: Batch) -> Sequence[pd.Series]:
+    def reverse(self, batch: GenBatch) -> Sequence[pd.Series]:
         batch = deepcopy(batch)
         def numpy_if_possible(arr):
             if isinstance(arr, torch.Tensor):

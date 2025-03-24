@@ -2,7 +2,7 @@ from tqdm import tqdm
 import torch
 from .estimator import MetricEstimator
 import pandas as pd
-from ..data.types import Batch
+from ..data.types import GenBatch
 from dataclasses import dataclass
 from pathlib import Path
 import time
@@ -91,7 +91,7 @@ class SampleEvaluator:
         return metric_estimator.estimate()
 
 
-def concat_samples(hist: Batch, pred: Batch) -> tuple[Batch, Batch]:
+def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
     assert (
         hist.lengths == pred.lengths
     ), "Mismatch in sequence lengths between hist and pred"

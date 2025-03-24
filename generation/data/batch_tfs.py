@@ -1,4 +1,4 @@
-"""Batch transforms for data loading pipelines."""
+"""GenBatch transforms for data loading pipelines."""
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
@@ -10,7 +10,7 @@ import logging
 import torch
 import numpy as np
 
-from .data_types import Batch
+from .data_types import GenBatch
 
 
 logger = logging.getLogger(__name__)
@@ -21,16 +21,16 @@ MISSING_CAT_VAL = 0
 class BatchTransform(ABC):
     """Base class for all batch transforms.
 
-    The BatchTransform is a Callable object that modifies Batch in-place.
+    The BatchTransform is a Callable object that modifies GenBatch in-place.
     """
 
     @abstractmethod
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         """Apply transform to the batch."""
         ...
 
     @abstractmethod
-    def reverse(self, batch: Batch): ...
+    def reverse(self, batch: GenBatch): ...
 
 
 @dataclass
@@ -40,7 +40,7 @@ class CutTargetSequence(BatchTransform):
     target_len: int
     """Len of target sequence."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         assert (
             batch.lengths.min() >= self.target_len
         ), "target_len is too big for this batch"
@@ -54,7 +54,7 @@ class CutTargetSequence(BatchTransform):
         batch.num_features = batch.num_features[: -self.target_len]
         batch.cat_features = batch.cat_features[: -self.target_len]
 
-    def reverse(self, batch: Batch):
+    def reverse(self, batch: GenBatch):
         batch.lengths = batch.lengths + self.target_len
 
         batch.time = (
@@ -79,12 +79,12 @@ class RescaleTime(BatchTransform):
     scale: float
     """Scale to divide time by."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         assert isinstance(batch.time, torch.Tensor)
         batch.time = batch.time.float()
         batch.time.sub_(self.loc).div_(self.scale)
 
-    def reverse(self, batch: Batch):
+    def reverse(self, batch: GenBatch):
         return batch.time.mul_(self.scale).add_(self.loc)
 
 
@@ -109,7 +109,7 @@ class TimeToFeatures(BatchTransform):
     time_name: str = "time"
     """Name of new feature with time, default ``"time"``."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         assert self.process_type in [
             "diff",
             "cat",
@@ -132,7 +132,7 @@ class TimeToFeatures(BatchTransform):
         batch.num_features_names.append(self.time_name)
         batch.num_features = torch.cat((batch.num_features, t), dim=2)
 
-    def reverse(self, batch: Batch):
+    def reverse(self, batch: GenBatch):
         assert isinstance(batch.time, torch.Tensor)
         # Don't do anything if no numerical features or if no time feature.
         if (not batch.num_features_names) or (
@@ -175,7 +175,7 @@ class DatetimeToFloat(BatchTransform):
         if isinstance(self.scale, Sequence):
             self.scale = np.timedelta64(*self.scale)
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         assert isinstance(batch.time, np.ndarray)
         assert isinstance(self.loc, np.datetime64)
         assert isinstance(self.scale, np.timedelta64)
@@ -191,7 +191,7 @@ class Logarithm(BatchTransform):
     names: list[str]
     """Feature names to transform by taking the logarithm."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         for name in self.names:
             batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
 
@@ -207,7 +207,7 @@ class Rescale(BatchTransform):
     scale: Any
     """Value to divide by the feature values."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         batch[self.name].sub_(self.loc).div_(self.scale)
 
 
@@ -226,7 +226,7 @@ class ForwardFillNans(BatchTransform):
     backward: bool = False
     """Wether to do backward fill after the forwad fill (see the class description)."""
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         if batch.num_features is None:
             return
         if batch.num_features.shape[0] == 1:
@@ -260,7 +260,7 @@ class FillNans(BatchTransform):
     ``fill_value``. Mapping sets feature-specific replacement values.
     """
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         if batch.num_features is None:
             return
 
@@ -279,9 +279,9 @@ class ContrastiveTarget(BatchTransform):
     target labels.
     """
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         if batch.index is None:
-            raise ValueError("Batch must contain index")
+            raise ValueError("GenBatch must contain index")
 
         index = (
             batch.index
@@ -297,7 +297,7 @@ class TargetToLong(BatchTransform):
     Cast target to LongTensor
     """
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         if batch.target is not None:
             batch.target = batch.target.long()
 
@@ -330,7 +330,7 @@ class RandomSlices(BatchTransform):
     def __post_init__(self):
         self._gen = np.random.default_rng(self.seed)
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
 
         lens = []
         times = []
@@ -407,307 +407,6 @@ class RandomSlices(BatchTransform):
             batch.num_features = cat_pad(nums, batch.num_features.dtype)
 
 
-@dataclass
-class PrimeNetSampler(BatchTransform):
-    """
-    Contrastive sampling according to PrimeNet.
-
-    Input:
-        batch: Batch. Masks required.
-
-    batch.num_features (T, B, D) -> (T, 2B, D)
-    batch.cat_features (T, B, D) -> (T, 2B, D)
-
-    Masks have additional dim for constrastive and interpolation:
-    batch.num_mask (T, B, D) - > (T, 2B, D, 2)
-    batch.cat_mask (T, B, D) - > (T, 2B, D, 2)
-    """
-
-    # max_len: int
-    len_sampling_bound = [0.3, 0.7]
-    dense_sampling_bound = [0.4, 0.6]
-    mask_ratio_per_seg: float = 0.05
-    segment_num: int = 3
-    pretrain_tasks: str = "full2"
-
-    def __call__(self, batch: Batch):
-        lens = []
-        times = []
-        nums = []
-        cats = []
-        num_masks = []
-        cat_masks = []
-        inds = []
-        targets = []
-        max_len = 0
-
-        def add_slice(idx, selected):
-            assert isinstance(selected, set)
-            selected = list(selected)
-            lens.append(len(selected))
-            times.append(batch.time[selected, idx])
-            inds.append(batch.index[idx])
-            if batch.num_features is not None:
-                nums.append(batch.num_features[selected, idx])
-            if batch.cat_features is not None:
-                cats.append(batch.cat_features[selected, idx])
-            # if batch.target is not None:
-            #     targets.append(batch.target[idx])
-            if batch.num_mask is not None:
-                num_mask = batch.num_mask[selected, idx]
-                if self.pretrain_tasks == "full2":
-                    num_mask = self._seg_masking(mask=num_mask, timestamps=times[-1])
-                num_masks.append(num_mask)
-            if batch.cat_mask is not None:
-                cat_mask = batch.cat_mask[selected, idx]
-                if self.pretrain_tasks == "full2":
-                    cat_mask = self._seg_masking(mask=cat_mask, timestamps=times[-1])
-                cat_masks.append(cat_mask)
-
-        for idx in range(len(batch)):
-            selected_indices = self._time_sensitive_cl(
-                batch.time[:, idx], batch.lengths[idx]
-            )
-            add_slice(idx, selected_indices)
-            unselected_indices = set(range(batch.lengths[idx])) - selected_indices
-            add_slice(idx, unselected_indices)
-
-        max_len = max(max_len, *lens)
-
-        def cat_pad(tensors, dtype):
-            t0 = tensors[0]
-            res = torch.zeros(max_len, len(tensors), *t0.shape[1:], dtype=dtype)
-            for i, ten in enumerate(tensors):
-                res[: ten.shape[0], i] = ten
-            return res
-
-        batch.lengths = torch.tensor(lens)
-        batch.time = cat_pad(times, batch.time.dtype)
-        if isinstance(batch.index, torch.Tensor):
-            batch.index = torch.tensor(inds, dtype=batch.index.dtype)
-        else:  # np.ndarray
-            batch.index = np.array(inds, dtype=batch.index.dtype)
-        if batch.cat_features is not None:
-            batch.cat_features = cat_pad(cats, batch.cat_features.dtype)
-        if batch.num_features is not None:
-            batch.num_features = cat_pad(nums, batch.num_features.dtype)
-        if batch.target is not None:
-            # batch.target = torch.tensor(targets, dtype=batch.target.dtype)
-            batch.target = None
-        if batch.cat_mask is not None:
-            batch.cat_mask = cat_pad(cat_masks, batch.cat_mask.dtype)
-        if batch.num_mask is not None:
-            batch.num_mask = cat_pad(num_masks, batch.num_mask.dtype)
-
-    def _time_sensitive_cl(self, timestamps, lenghts):
-        """
-        timestamps: tensor of size (L, 1)
-        lenghts: tensor of size (1)
-
-        timestamps are padded with zeros at the end
-        lenghts store number of valid timestamps for each sequence
-        """
-        times = torch.clone(timestamps).reshape(-1)[:lenghts]
-
-        # Compute average interval times for each timestamp
-        avg_interval_times = [
-            (times[i + 1] - times[i - 1]) / 2 for i in range(1, len(times) - 1)
-        ]
-        avg_interval_times.insert(0, times[1] - times[0])  # First interval
-        avg_interval_times.append(times[-1] - times[-2])  # Last interval
-
-        # Create pairs of (index, time, avg_interval_time)
-        pairs = [
-            (idx, time, avg_interval.item())
-            for idx, (time, avg_interval) in enumerate(zip(times, avg_interval_times))
-        ]
-        pairs.sort(key=lambda x: x[2])  # Sort by avg_interval_time
-        indices = [idx for idx, time, avg_interval in pairs]
-
-        # Determine sample length
-        length = int(
-            np.random.uniform(self.len_sampling_bound[0], self.len_sampling_bound[1])
-            * len(times)
-        )
-        length = max(length, 1)
-
-        # Split indices into dense and sparse regions
-        midpoint = len(indices) // 2
-        dense_indices = indices[:midpoint]
-        sparse_indices = indices[midpoint:]
-
-        random.shuffle(dense_indices)
-        random.shuffle(sparse_indices)
-
-        # Determine the number of dense and sparse samples
-        dense_length = int(
-            np.random.uniform(
-                self.dense_sampling_bound[0], self.dense_sampling_bound[1]
-            )
-            * length
-        )
-        dense_length = max(dense_length, 1)
-        sparse_length = length - dense_length
-
-        # Select dense and sparse samples
-        selected_indices = set(
-            dense_indices[:dense_length] + sparse_indices[:sparse_length]
-        )
-
-        return selected_indices
-
-    def _seg_masking(self, mask, timestamps):
-        """
-        - mask is a (T, D) tensor
-        - timestamps is a (T) tensor
-        - return: (T, D, 2) tensor
-        """
-
-        D = mask.size(1)
-        interp_mask = torch.zeros_like(mask)
-        sampled_times = timestamps[:, None].expand(-1, D).clone()
-
-        sampled_times[~mask] = torch.inf
-        sampled_times_start = sampled_times.amin(dim=0)
-        sampled_times[~mask] = -torch.inf
-        sampled_times_end = sampled_times.amax(dim=0)
-
-        time_of_masked_segment = (
-            sampled_times_end - sampled_times_start
-        ) * self.mask_ratio_per_seg
-
-        available_samples_to_sample = mask & (
-            timestamps[:, None] < (sampled_times_end - time_of_masked_segment)
-        )
-        masking_times = False
-        for _ in range(self.segment_num):
-            start_time = torch.tensor(
-                [
-                    (
-                        random.choice(timestamps[available_samples_to_sample[:, i]])
-                        if available_samples_to_sample[:, i].any()
-                        else torch.inf
-                    )
-                    for i in range(D)
-                ],
-                device=mask.device,
-            )
-
-            pre_time = start_time - time_of_masked_segment
-            end_time = start_time + time_of_masked_segment
-
-            chosen_times = (start_time <= timestamps[:, None]) & (
-                timestamps[:, None] <= end_time
-            )
-
-            masking_times = masking_times | chosen_times
-
-            # Update available_samples_to_sample by removing chosen_times(and times before that)
-            available_samples_to_sample &= (timestamps[:, None] < pre_time) | (
-                timestamps[:, None] > end_time
-            )
-
-        masking_times = masking_times & mask
-        mask[masking_times] = 0.0
-        interp_mask[masking_times] = 1.0
-
-        return torch.stack([mask, interp_mask], dim=-1)
-
-    def _time_sensitive_sampling(self, mask, timestamps):
-        timestamps = timestamps.reshape(-1)  # Ensures timestamps is a 1D array
-
-        sampled_times = mask
-
-        if not sampled_times.any():
-            return torch.tensor([])
-
-        sampled_times_start, sampled_times_end = timestamps[sampled_times][[0, -1]]
-        time_of_masked_segment = (
-            sampled_times_end - sampled_times_start
-        ) * self.mask_ratio_per_seg
-
-        available_samples_to_sample = sampled_times & (
-            timestamps < (sampled_times_end - time_of_masked_segment)
-        )
-
-        if not available_samples_to_sample.any():
-            return torch.tensor([])
-
-        masking_times = 0
-        for _ in range(self.segment_num):
-            start_time = random.choice(timestamps[available_samples_to_sample])
-            pre_time = start_time - time_of_masked_segment
-            end_time = start_time + time_of_masked_segment
-
-            chosen_times = (start_time <= timestamps) & (timestamps <= end_time)
-
-            masking_times = masking_times | chosen_times
-
-            # Update available_samples_to_sample by removing chosen_times(and times before that)
-            available_samples_to_sample &= (timestamps < pre_time) | (
-                timestamps > end_time
-            )
-
-            if not available_samples_to_sample.any():
-                break
-        masking_times = masking_times & sampled_times
-        return torch.nonzero(masking_times)
-
-    def _constant_length_sampling(self, mask):
-        count_ones = mask.sum().long().item()
-        seg_seq_len = max(int(self.mask_ratio_per_seg * count_ones), 1)
-
-        ones_indices_in_mask = torch.where(mask == 1)[0].tolist()
-
-        seg_pos = []
-        for _ in range(self.segment_num):
-            if len(ones_indices_in_mask) < seg_seq_len:
-                break
-
-            start_idx = random.choice(ones_indices_in_mask[: -seg_seq_len + 1])
-            start = ones_indices_in_mask.index(start_idx)
-            end = start + seg_seq_len
-
-            sub_seg = ones_indices_in_mask[start:end]
-            seg_pos.extend(sub_seg)
-
-            # Update ones_indices_in_mask by removing selected indices
-            ones_indices_in_mask = sorted(set(ones_indices_in_mask) - set(sub_seg))
-
-        return list(set(seg_pos))
-
-
-class CatToNum(BatchTransform):
-    """Process categorical features as numerical.
-
-    Treat categorical features as numerical (just type cast). Category 0 is converted
-    to NaN value.
-    """
-
-    def __call__(self, batch: Batch):
-        if batch.cat_features_names is None or batch.cat_features is None:
-            logger.warning(
-                "Batch does not have categorical features, ignoring transform"
-            )
-            return
-
-        new_num = torch.where(
-            batch.cat_features == MISSING_CAT_VAL, torch.nan, batch.cat_features
-        )
-        batch.cat_features = None
-        new_num_names = batch.cat_features_names
-        batch.cat_features_names = None
-
-        if batch.num_features_names is None:
-            batch.num_features_names = new_num_names
-            batch.num_features = new_num
-            return
-
-        assert batch.num_features is not None
-        batch.num_features_names += new_num_names
-        batch.num_features = torch.cat((batch.num_features, new_num), dim=2)
-
-
 class MaskValid(BatchTransform):
     """Add mask indicating valid values to batch.
 
@@ -715,7 +414,7 @@ class MaskValid(BatchTransform):
     are non-NaN values (nonzero category) and where the data is not padded.
     """
 
-    def __call__(self, batch: Batch):
+    def __call__(self, batch: GenBatch):
         max_len = batch.lengths.amax().item()
         assert isinstance(max_len, int)
         len_mask = (torch.arange(max_len)[:, None] < batch.lengths)[..., None]
