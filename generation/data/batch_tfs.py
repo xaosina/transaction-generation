@@ -10,7 +10,7 @@ import logging
 import torch
 import numpy as np
 
-from data_types import Batch
+from .data_types import Batch
 
 
 logger = logging.getLogger(__name__)

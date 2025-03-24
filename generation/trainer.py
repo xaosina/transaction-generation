@@ -1,10 +1,11 @@
 from dataclasses import dataclass, field
 
+import logging
 import os
 from collections.abc import Iterable, Sized
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import torch
@@ -14,11 +15,10 @@ from tqdm.autonotebook import tqdm
 
 from .utils import LoadTime, get_profiler, record_function
 from .data.data_types import Batch
-from .logger import Logger
-from .metrics.sampler import SampleEvaluator
+# from .metrics.sampler import SampleEvaluator
 
 
-logger = Logger(__name__, log_to_file='log.log', )
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TrainConfig:
@@ -242,7 +242,7 @@ class Trainer:
         logger.info("Epoch %04d: train started", self._last_epoch + 1)
         self._model.train()
 
-        # loss_ema = 0.0
+        loss_ema = 0.0
         losses: list[float] = []
 
         total_iters = iters
@@ -259,10 +259,10 @@ class Trainer:
         with self._profiler as prof:
             for batch, i in LoadTime(pbar, disable=pbar.disable):
                 batch.to(self._device)
-                inp = batch
+                batch
 
                 with self.record_function("forward"):
-                    pred = self._model(inp)
+                    pred = self._model(batch)
                 
                 loss = self._loss(batch, pred)
 
@@ -271,12 +271,9 @@ class Trainer:
                 
                 with record_function("backward"):
                     loss.backward()
-
-                loss_np = loss.item()
-
-                losses.append(loss_np)
-                # loss_ema = loss_np if i == 0 else 0.9 * loss_ema + 0.1 * loss_np
-                # pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
+                losses.append(loss.item())
+                loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
+                pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
                 self._opt.step()
 

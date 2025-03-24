@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data_types import Batch
+from .data_types import Batch
 
 
 @dataclass(kw_only=True, frozen=True)

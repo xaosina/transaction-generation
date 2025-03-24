@@ -1,19 +1,14 @@
-import torch
-import numpy as np
 import pickle
-import pandas as pd
-
 from typing import Dict, List
-from sklearn.preprocessing import LabelEncoder
-from collections.abc import Iterable
-from pathlib import Path
-from typing import Any
 
-
+import numpy as np
+import torch
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
+from sklearn.preprocessing import LabelEncoder
 
 from .common import csv_to_parquet
+
 
 # TODO: Эту функцию в препроцесс паркетов
 def encode_client_ids(train_clients: Dict, test_clients: Dict, config) -> List[Dict]:
@@ -153,7 +148,7 @@ METADATA = {
 
 def prepocess_full_mbd():
     spark = spark_connection()
-    spark_df = spark.read.parquet(f"/home/dev/sb-proj/data/mbd-dataset/detail/trx")
+    spark_df = spark.read.parquet("/home/dev/sb-proj/data/mbd-dataset/detail/trx")
 
     spark_df = spark_df.dropna()
 
@@ -165,15 +160,15 @@ def prepocess_full_mbd():
 
     spark_df.write.csv("data/temp/.temp.csv", header=True)
 
-    spark_df = spark.read.csv(f"data/temp/.temp.csv", header=True, inferSchema=True)
+    spark_df = spark.read.csv("data/temp/.temp.csv", header=True, inferSchema=True)
 
     train_dataset, test_dataset = split_train_test(spark_df)
 
     train_dataset = set_time_features(train_dataset)
     test_dataset = set_time_features(test_dataset)
 
-    train_dataset.write.csv(f"data/temp/.train.csv", header=True, mode="overwrite")
-    test_dataset.write.csv(f"data/temp/.test.csv", header=True, mode="overwrite")
+    train_dataset.write.csv("data/temp/.train.csv", header=True, mode="overwrite")
+    test_dataset.write.csv("data/temp/.test.csv", header=True, mode="overwrite")
 
     spark.stop()
 

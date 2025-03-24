@@ -1,24 +1,17 @@
-import yaml
-from typing import Dict
-from pathlib import Path
-import yaml
-from typing import Dict
-import torch
-from torch.utils.data import Subset, Dataset
-import numpy as np
+from dataclasses import dataclass
+import logging
+import sys
 import time
-from torch.profiler import profile, ProfilerActivity, schedule, record_function
-
 from collections.abc import Iterable, Mapping
-from typing import Any
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-def dictprettyprint(data: Dict):
-    return yaml.dump(data, default_flow_style=False)
+import torch
+import yaml
+from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
 
-from contextlib import contextmanager, nullcontext
-
-# "пустой" профайлер, который ничего не делает
 class DummyProfiler:
     def step(self):
         pass
@@ -49,56 +42,11 @@ def get_profiler(activate: bool = False, save_path=None):
     )
     profiler_record = record_function
 
-    return (profiler, profiler_record) if activate else (dummy_profiler(), None)
+    return (profiler, record_function) if activate else (dummy_profiler(), None)
 
 
-def find_ar_paths(ar_id: str) -> Dict:
-    basic_path = Path("tabsyn/hist_ckpt")
-
-    def condition_ckp(path: Path):
-        if not path.is_file():
-            return False
-        if path.name.find(ar_id) == -1:
-            return False
-        if path.name.endswith(".yaml"):
-            return False
-        return True
-
-    def condition_cfg(path: Path):
-        if not path.is_file():
-            return False
-        if path.name.find(ar_id) == -1:
-            return False
-        if not path.name.endswith(".yaml"):
-            return False
-        return True
-
-    files = [x for x in basic_path.iterdir() if condition_ckp(x)]
-    configs = [x for x in basic_path.iterdir() if condition_cfg(x)]
-
-    if len(configs) == 0:
-        raise Exception("Wrong parameters, ar config not found")
-    if len(configs) > 1:
-        raise Exception(f"Ambiguous parameters, found configs: f{configs}")
-    config = configs[0]
-    print(f'Used logdir: "{str(config)}"')
-
-    if len(files) == 0:
-        raise Exception("Wrong parameters, model checkpoint not found")
-    if len(files) > 1:
-        raise Exception(f"Ambiguous parameters, found checkpoints: f{files}")
-    model_path = files[0]
-    print(f'Used checkpoint: "{str(model_path)}"')
-    return dict(ckpt=model_path, config=config)
-
-
-def load_config(save_path: Path) -> dict:
-    if not save_path.name.endswith(".yaml"):
-        assert save_path.is_dir()
-        save_path = save_path / "config.yaml"
-    with open(save_path, "r") as f:
-        config = yaml.safe_load(f)
-    return config
+def dictprettyprint(data: Dict):
+    return yaml.dump(data, default_flow_style=False)
 
 
 class DataParallelAttrAccess(torch.nn.DataParallel):
@@ -150,23 +98,63 @@ class LoadTime:
             raise
 
 
+@dataclass
+class OptimizerConfig:
+    name: str = "Adam"
+    params: Optional[dict[str, Any]] = None
+
+
 def get_optimizer(
-    net_params: Iterable[torch.nn.Parameter],
-    name: str = "Adam",
-    params: Mapping[str, Any] | None = None,
+    net_params: Iterable[torch.nn.Parameter], optim_conf: OptimizerConfig
 ):
-    params = params or {}
+    params = optim_conf.params or {}
     try:
-        return getattr(torch.optim, name)(net_params, **params)
+        return getattr(torch.optim, optim_conf.name)(net_params, **params)
     except AttributeError:
-        raise ValueError(f"Unknkown optimizer: {name}")
+        raise ValueError(f"Unknkown optimizer: {optim_conf.name}")
 
 
-def get_scheduler(
-    optimizer: torch.optim.Optimizer, name: str, params: Mapping[str, Any] | None = None
-):
-    params = params or {}
+@dataclass
+class SchedulerConfig:
+    name: Optional[str] = "StepLR"
+    params: Optional[dict[str, Any]] = None
+
+
+def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
+    params = sch_conf.params or {}
     try:
-        return getattr(torch.optim.lr_scheduler, name)(optimizer, **params)
+        return getattr(torch.optim.lr_scheduler, sch_conf.name)(optimizer, **params)
     except AttributeError:
-        raise ValueError(f"Unknkown LR scheduler: {name}")
+        raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
+
+
+@contextmanager
+def log_to_file(filename: Path, file_lvl="info", cons_lvl="warning"):
+    if isinstance(file_lvl, str):
+        file_lvl = getattr(logging, file_lvl.upper())
+    if isinstance(cons_lvl, str):
+        cons_lvl = getattr(logging, cons_lvl.upper())
+
+    ch = logging.StreamHandler(stream=sys.stdout)
+    ch.setLevel(cons_lvl)
+    cfmt = logging.Formatter("{levelname:8} - {asctime} - {message}", style="{")
+    ch.setFormatter(cfmt)
+
+    fh = logging.FileHandler(filename)
+    fh.setLevel(file_lvl)
+    ffmt = logging.Formatter(
+        "{name: ^16} - {asctime} - {message}",
+        style="{",
+    )
+    fh.setFormatter(ffmt)
+    logger = logging.getLogger()
+    logger.setLevel(min(file_lvl, cons_lvl))
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    try:
+        yield
+    finally:
+        fh.close()
+        logger.removeHandler(fh)
+        logger.removeHandler(ch)
