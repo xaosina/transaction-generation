@@ -2,8 +2,11 @@ import torch
 from torch import nn
 
 from ebes.model.seq2seq import BaseSeq2Seq
-from ..data.types import Seq
-from .transformer.ar import AR
+from ebes.types import Seq
+
+# from .transformer.ar import AR
+from ebes.model import GRU
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class ARTransformer(BaseSeq2Seq):
@@ -52,5 +55,12 @@ class ARTransformer(BaseSeq2Seq):
 
             generated.append(ret)
         generated = torch.cat(generated, dim=1)
-        
+
         return generated
+
+
+class GenGRU(GRU):
+    def generate(self, seq: Seq) -> Seq: # returns a sequence of shape [1, B, D]
+        seq = self.forward(seq)
+        last_valid = seq.tokens[seq.lengths - 1, torch.arange(seq.tokens.shape[1])].unsqueeze(0)
+        return Seq(tokens=last_valid, lengths=torch.ones(last_valid.shape[1]), time=None)

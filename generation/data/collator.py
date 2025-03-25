@@ -17,13 +17,13 @@ class SequenceCollator:
     index_name: str | None = None
     max_seq_len: int = 0
     batch_transforms: list[Callable[[GenBatch], None]] | None = None
-    padding_side: str = "start"
+    padding_side: str = "end"
     padding_value: float = 0
 
     def __call__(self, seqs: Sequence[pd.Series]) -> GenBatch:
         assert (
-            self.padding_side == "start"
-        ), "Don't support yet. CutTargetSequence will fail"
+            self.padding_side == "end" and self.padding_value == 0
+        ), "CutTargetSequence and some masking will fail"
         ml = min(max(s["_seq_len"] for s in seqs), self.max_seq_len)  # type: ignore
         bs = len(seqs)
 
@@ -128,7 +128,7 @@ class SequenceCollator:
             s["_seq_len"] = sl
             # If pad start, then data are filled at the end
             slice_idx = (
-                slice(-sl, None) if self.padding_side == "start" else slice(0, sl)
+                slice(0, sl) if self.padding_side == "end" else slice(-sl, None)
             )
             if num_names is not None:
                 for i, name in enumerate(num_names):

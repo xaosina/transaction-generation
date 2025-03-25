@@ -42,28 +42,23 @@ class CutTargetSequence(BatchTransform):
 
     def __call__(self, batch: GenBatch):
         assert (
-            batch.lengths.min() >= self.target_len
-        ), "target_len is too big for this batch"
+            batch.lengths.min() > self.target_len
+        ), "target_len is too big for this batch"        
+        target_batch = batch.tail(self.target_len)
+        batch.target_time = target_batch.time
+        batch.target_num_features = target_batch.num_features
+        batch.target_cat_features = target_batch.cat_features
+
         batch.lengths = batch.lengths - self.target_len
+        mask = torch.arange(batch.time.shape[1])[:, None] < batch.lengths # [L, B]
+        new_max_len = batch.lengths.max()
 
-        batch.target_time = batch.time[-self.target_len :]
-        batch.target_num_features = batch.num_features[-self.target_len :]
-        batch.target_cat_features = batch.cat_features[-self.target_len :]
-
-        batch.time = batch.time[: -self.target_len]
-        batch.num_features = batch.num_features[: -self.target_len]
-        batch.cat_features = batch.cat_features[: -self.target_len]
+        batch.time = (batch.time * mask)[:new_max_len]
+        batch.num_features = (batch.num_features * mask.unsqueeze(-1))[:new_max_len]
+        batch.cat_features = (batch.cat_features * mask.unsqueeze(-1))[:new_max_len]
 
     def reverse(self, batch: GenBatch):
-        batch.lengths = batch.lengths + self.target_len
-
-        batch.time = (
-            np.concatenate((batch.time, batch.target_time))
-            if isinstance(batch.time, np.ndarray)
-            else torch.cat((batch.time, batch.target_time))
-        )
-        batch.num_features = torch.cat((batch.num_features, batch.target_num_features))
-        batch.cat_features = torch.cat((batch.cat_features, batch.target_cat_features))
+        batch.append(batch.get_target_batch())
 
         batch.target_time = None
         batch.target_num_features = None
