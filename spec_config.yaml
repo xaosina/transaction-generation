@@ -64,3 +64,8 @@ scheduler:
   name: StepLR
   params:
     step_size: 30
+
+loss:
+  name: baseline
+
+metrics: ["Accuracy", "Coverage", "Levenstein"]

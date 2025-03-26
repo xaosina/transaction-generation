@@ -6,7 +6,7 @@ from ebes.types import Seq
 
 # from .transformer.ar import AR
 from ebes.model import GRU
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from .transformer.ar import AR
 
 
 class ARTransformer(BaseSeq2Seq):

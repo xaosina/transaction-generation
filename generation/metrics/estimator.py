@@ -1,76 +1,54 @@
-import pandas as pd
-
-from .types import BinaryData, CoverageData, OnlyPredData
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Optional, Union
+
+import metrics
+import pandas as pd
 
 # metrics
 from tmetrics.eval_density import run_eval_density
 from tmetrics.eval_detection import run_eval_detection
-import metrics
 
-
-@dataclass
-class MetricsConfig:
-    gen_len: int = 16
-    hist_len: int = 16
-    device: int = 0
-    metric_names: list[str]
-    gt_save_path: str = ""
-    gen_save_path: str = ""
-    name_prefix: str = ""
-
-
-def get_metrics(cfg: MetricsConfig = None):
-    return MetricEstimator(
-        cfg.gt_save_path,
-        cfg.gen_save_path,
-        cfg.metric_names,
-        cfg.gen_len,
-        cfg.hist_len,
-        cfg.device,
-        cfg.name_prefix,
-    )
+from .types import BinaryData, CoverageData, OnlyPredData
 
 
 class MetricEstimator:
 
     def __init__(
         self,
-        gt_save_path: str | Path = None,
-        gen_save_path: str | Path = None,
-        metric_names: list = None,
+        gt_save_path: Optional[Union[str, Path]] = None,
+        gen_save_path: Optional[Union[str, Path]] = None,
+        name_prefix: str = "",
+        metric_names: Optional[List[str]] = None,
         gen_len: int = 16,
         hist_len: int = 16,
         device: int = 0,
-        name_prefix: str = "",
     ):
 
-        self.gt_save_path = gt_save_path
-        self.gen_save_path = gen_save_path
+        self.gt_save_path = Path(gt_save_path) if gt_save_path else None
+        self.gen_save_path = Path(gen_save_path) if gen_save_path else None
         self.name_prefix = name_prefix
         self.gen_len = gen_len
         self.hist_len = hist_len
         self.device = device
         self.name_prefix = name_prefix
 
-        if metric_names is None:
-            raise ValueError("List of metrics is empty")
-        else:
-            self.metrics = [getattr(metrics, name) for name in metric_names]
+        self.metrics = [getattr(metrics, name) for name in metric_names]
 
-    def estimate(self):
-        return self.__estimate_metrics() | self.__estimate_tmetrics()
+    def estimate(self) -> Dict[str, float]:
+        return self.estimate_metrics() | self.estimate_tmetrics()
 
-    def __estimate_metrics(self, orig_path, generated_path, metrics=None):
+    def estimate_metrics(self) -> Dict[str, float]:
+        if not self.gt_save_path or not self.gen_save_path:
+            raise ValueError("Ground-truth or generated file path is not provided.")
 
         subject_key = "client_id"
         target_key = "event_type"
-        orig_path, generated_path = self.gt_save_path, self.gen_save_path
 
-        dfs = self.__get_data(orig_path, generated_path, subject_key, target_key)
+        dfs = self.get_data(
+            self.gt_save_path, self.gen_save_path, subject_key, target_key
+        )
 
-        prepared_data = self.__prepare_data_to_metrics(dfs)
+        prepared_data = self.prepare_data_to_metrics(dfs, subject_key)
 
         # TODO: Сделать перемешивание клиентов если надо.
 
@@ -81,7 +59,7 @@ class MetricEstimator:
             results[self.__ret_name("gtvsgt" + metric.name)] = metric(data["gt"])
             results[self.__ret_name("gtvsgen" + metric.name)] = metric(data["gen"])
 
-    def __estimate_tmetrics(self):
+    def estimate_tmetrics(self) -> Dict[str, float]:
 
         orig_path, generated_path = self.gt_save_path, self.gen_save_path
 
@@ -112,7 +90,9 @@ class MetricEstimator:
             else:
                 raise Exception(f"Unknown metric type '{metric_type}'!")
 
-    def __get_data(self, orig_path, generated_path, subject_key, target_key):
+    def get_data(
+        self, orig_path, generated_path, subject_key, target_key
+    ) -> Dict[str, pd.DataFrame]:
 
         dfs = {
             "gt": pd.read_csv(orig_path)[[subject_key, target_key]],
@@ -121,9 +101,9 @@ class MetricEstimator:
 
         return dfs
 
-    def __prepare_data_to_metrics(
+    def prepare_data_to_metrics(
         self, dfs: pd.DataFrame, subject_key: str = "client_id"
-    ):
+    ) -> Dict[type, Dict[str, Union[BinaryData, OnlyPredData, CoverageData]]]:
         def slice_df(
             df: pd.DataFrame, start: int, end: int | None = None
         ) -> pd.DataFrame:
@@ -161,5 +141,5 @@ class MetricEstimator:
             },
         }
 
-    def __ret_name(self, name):
+    def __ret_name(self, name: str) -> str:
         return self.name_prefix + name
