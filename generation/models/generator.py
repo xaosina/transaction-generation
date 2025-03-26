@@ -1,36 +1,27 @@
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from ebes.model import BaseModel
-from ebes.model.seq2seq import GRU, Projection
-from ebes.types import Seq
 import torch
+from ebes.model import BaseModel
+from ebes.model.seq2seq import Projection
 
-from ..data.data_types import GenBatch, DataConfig, PredBatch
-from .preprocessor import create_preprocessor
+from ..data.data_types import DataConfig, GenBatch, PredBatch
+from .encoders import GenGRU
+from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
-
-# # TODO: Think
-# @dataclass
-# class Generator:
-#     preprocess: PreprocessConfig = field(default=None)
-#     encoder: PreprocessConfig = field(default=None)
-#     projector: ProjectorConfig = field(default=None)
-#     reconstructor: PreprocessConfig = field(default=None)
 
 
 @dataclass
-class GeneratorConfig:
-
-    forward_reconstructed: bool = False
+class ModelConfig:
+    preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
 
 
 class Generator(BaseModel):  # TODO work
-    def __init__(self, data_conf: DataConfig):
+    def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
-        self.preprocess = create_preprocessor(data_conf, 4, 4, "diff", True)
+        self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
 
-        self.encoder = GRU(self.preprocess.output_dim, 128, 1)
+        self.encoder = GenGRU(self.preprocess.output_dim, 128, 1)
 
         self.projector = Projection(self.encoder.output_dim, self.encoder.output_dim)
 
@@ -66,7 +57,7 @@ class Generator(BaseModel):  # TODO work
                 x = self.encoder.generate(x) # Sequence of shape [1, B, D]
                 x = self.projector(x)
                 x = self.reconstructor.generate(x) # GenBatch with sizes [1, B, D] for cat, num
-                hist = hist.append(x) # Append GenBatch, result is [L+1, B, D]
+                hist.append(x) # Append GenBatch, result is [L+1, B, D]
         if with_hist:
             return hist # Return GenBatch of size [L + gen_len, B, D]
         else:

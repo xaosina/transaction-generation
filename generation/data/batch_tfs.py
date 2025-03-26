@@ -34,6 +34,19 @@ class BatchTransform(ABC):
 
 
 @dataclass
+class NewFeatureTransform(BatchTransform):
+    """Does not modify old features. Only adds new ones. Always adds on the right (torch.cat(tensor, new_feature, dim=-1))"""
+
+    @property
+    def num_names(self) -> list[str] | None:
+        return []
+
+    @property
+    def cat_cardinalities(self) -> list[str] | None:
+        return {}
+
+
+@dataclass
 class CutTargetSequence(BatchTransform):
     """Creates generation targets for each batch."""
 
@@ -43,14 +56,14 @@ class CutTargetSequence(BatchTransform):
     def __call__(self, batch: GenBatch):
         assert (
             batch.lengths.min() > self.target_len
-        ), "target_len is too big for this batch"        
+        ), "target_len is too big for this batch"
         target_batch = batch.tail(self.target_len)
         batch.target_time = target_batch.time
         batch.target_num_features = target_batch.num_features
         batch.target_cat_features = target_batch.cat_features
 
         batch.lengths = batch.lengths - self.target_len
-        mask = torch.arange(batch.time.shape[1])[:, None] < batch.lengths # [L, B]
+        mask = torch.arange(batch.time.shape[0])[:, None] < batch.lengths  # [L, B]
         new_max_len = batch.lengths.max()
 
         batch.time = (batch.time * mask)[:new_max_len]
@@ -84,7 +97,7 @@ class RescaleTime(BatchTransform):
 
 
 @dataclass
-class TimeToFeatures(BatchTransform):
+class TimeToFeatures(NewFeatureTransform):
     """Add time to numerical features.
 
     To apply this transform first cast time to Tensor.
@@ -103,6 +116,10 @@ class TimeToFeatures(BatchTransform):
     """
     time_name: str = "time"
     """Name of new feature with time, default ``"time"``."""
+
+    @property
+    def num_names(self):
+        return [self.time_name]
 
     def __call__(self, batch: GenBatch):
         assert self.process_type in [

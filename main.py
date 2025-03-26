@@ -15,7 +15,7 @@ from generation.losses import get_loss
 from generation.utils import get_optimizer, get_scheduler
 from generation.trainer import Trainer
 from generation.utils import OptimizerConfig, SchedulerConfig
-
+from generation.models.generator import ModelConfig
 
 @dataclass
 class TrainConfig:
@@ -35,6 +35,7 @@ class PipelineConfig:
     log_dir: str = "log/generation"
     device: str = "cuda:0"
     data_conf: DataConfig = field(default_factory=DataConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
     # metrics_conf: MetricsConfig = field(default_factory=MetricsConfig)
     # model_conf: Mapping[str, Any] = field(default_factory=lambda: {})
@@ -47,13 +48,14 @@ def main(cfg: PipelineConfig):
     pyrallis.dump(cfg, open("run_config.yaml", "w"))
     print(cfg)
     train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
-    model = Generator(cfg.data_conf)
+    model = Generator(cfg.data_conf, cfg.model)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
     lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
     # metrics = get_metrics(cfg.metrics)
     # loss = get_loss(cfg.loss)
-    batch = next(iter(train_loader))
+    batch = next(iter(test_loader))
     out = model(batch)
+    gen_out = model.generate(batch, 2, with_hist=False)
     breakpoint()
     metrics, loss = None, None
     trainer = Trainer(
