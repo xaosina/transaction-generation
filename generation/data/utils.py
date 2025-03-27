@@ -22,9 +22,7 @@ def save_partitioned_parquet(df, save_path, num_shards=20):
     df.to_parquet(save_path, partition_cols=["shard"], engine="pyarrow")
 
 
-def get_collator(
-    data_conf: DataConfig, batch_transforms: list[Mapping[str, Any] | str] | None = None
-) -> SequenceCollator:
+def get_batch_transforms(batch_transforms: list[Mapping[str, Any] | str] | None = None):
     tfs = None
     if batch_transforms is not None:
         tfs = []
@@ -42,7 +40,13 @@ def get_collator(
                 else:
                     tfs.append(klass(params))
                 break
+    return tfs
 
+
+def get_collator(
+    data_conf: DataConfig, batch_transforms: list[Mapping[str, Any] | str] | None = None
+) -> SequenceCollator:
+    tfs = get_batch_transforms(batch_transforms)
     return SequenceCollator(
         time_name=data_conf.time_name,
         cat_cardinalities=data_conf.cat_cardinalities,

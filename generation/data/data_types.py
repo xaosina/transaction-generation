@@ -1,8 +1,13 @@
-from dataclasses import dataclass, fields
-from typing import Any, Literal, Mapping, Optional
+import logging
+from copy import copy
+from dataclasses import dataclass, replace
+from typing import Any, Mapping, Optional
 
 import numpy as np
 import torch
+from ebes.types import Batch
+
+logger = logging.getLogger(__name__)  # noqa: F821
 
 
 @dataclass
@@ -39,78 +44,94 @@ class DataConfig:
 
 
 @dataclass(kw_only=True)
-class Batch:
-    lengths: torch.Tensor  # (batch,)
-    time: np.ndarray | torch.Tensor  # (len, batch)
-    index: torch.Tensor | np.ndarray | None = None  # (batch,)
-    num_features: torch.Tensor | None = None  # (len, batch, features)
-    cat_features: torch.Tensor | None = None  # (len, batch, features)
-    cat_features_names: list[str] | None = None
-    num_features_names: list[str] | None = None
-    cat_mask: torch.Tensor | None = None  # (len, batch, features)
-    num_mask: torch.Tensor | None = None  # (len, batch, features)
-
+class GenBatch(Batch):
     target_cat_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_num_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
 
-    def to(self, device: str):
-        for field in fields(self):
-            f = getattr(self, field.name)
-            if isinstance(f, torch.Tensor):
-                setattr(self, field.name, f.to(device))
-
-        return self
-
-    def __len__(self) -> int:
-        """Batch size."""
-
-        return len(self.lengths)
-
-    def _find_tensor_and_idx(self, feature_name):
-        if self.cat_features is not None and self.cat_features_names is not None:
-            try:
-                cat_idx = self.cat_features_names.index(feature_name)
-            except ValueError:
-                pass
-            else:
-                return self.cat_features, cat_idx
-
-        if self.num_features is not None and self.num_features_names is not None:
-            try:
-                num_idx = self.num_features_names.index(feature_name)
-            except ValueError:
-                pass
-            else:
-                return self.num_features, num_idx
-
-        raise ValueError(
-            f"Cannot access feature by name {feature_name}."
-            f" Known cat names are: {self.cat_features_names}."
-            f" Known num names are: {self.num_features_names}."
+    def get_target_batch(self):
+        assert self.target_time is not None
+        return replace(
+            self,
+            lengths=self.target_time[0].repeat(self.target_time.shape[1]),
+            time=self.target_time,
+            num_features=self.target_num_features,
+            cat_features=self.target_cat_features,
+            target_cat_features=None,
+            target_num_features=None,
+            target_time=None,
+            cat_mask=None,
+            num_mask=None,
         )
 
-    def __setitem__(self, feature_name: str, value: Any):
-        tensor, idx = self._find_tensor_and_idx(feature_name)
-        tensor[:, :, idx] = value
+    def append(self, other):
+        def append_tensor(tensor, other_tensor):
+            if tensor is None:
+                return None
+            new_tensor = torch.cat((tensor, torch.zeros_like(other_tensor)))
+            if tensor.ndim == 3:
+                other_tensor = other_tensor.reshape(-1, tensor.shape[2])
+            elif tensor.ndim == 2:
+                other_tensor = other_tensor.reshape(-1)
+            new_tensor[seq_indices.flatten(), batch_indices.flatten()] = other_tensor
+            return new_tensor
 
-    def __getitem__(
-        self,
-        feature_name: str,
-    ) -> torch.Tensor:  # of shape (len, batch)
-        tensor, idx = self._find_tensor_and_idx(feature_name)
-        return tensor[:, :, idx]
+        assert isinstance(other, self.__class__)
+        assert self.lengths.shape[0] == other.lengths.shape[0]
+        assert (other.lengths == other.time.shape[0]).all()
+        if (other.time.amin(0) < self.time.amax(0)).any():
+            logger.warning("Incorrect appended time. Result will be non monotonic.")
+        target_len, B = other.time.shape[0], other.lengths.shape[0]
+        seq_indices = (
+            torch.arange(target_len)[:, None] + self.lengths
+        )  # [target_len, B]
+        batch_indices = (
+            torch.arange(B).unsqueeze(0).expand(target_len, B)
+        )  # [target_len, B]
 
-    def __eq__(self, other):
-        assert isinstance(other, Batch)
-        equal = True
-        for field in fields(self):
-            my_field, other_field = getattr(self, field.name), getattr(
-                other, field.name
-            )
-            if isinstance(my_field, torch.Tensor | np.ndarray):
-                equal = equal and (my_field == other_field).all()
-        return equal
+        self.lengths += other.time.shape[0]
+        self.time = append_tensor(self.time, other.time)
+        self.num_features = append_tensor(self.num_features, other.num_features)
+        self.cat_features = append_tensor(self.cat_features, other.cat_features)
+        self.cat_mask = append_tensor(self.cat_mask, other.cat_mask)
+        self.num_mask = append_tensor(self.num_mask, other.num_mask)
+
+    def tail(self, tail_len: int):
+        """Returns a new batch containing only last tail_len elements of each sequence."""
+
+        def gather(tensor, target_ids):
+            if tensor is None:
+                return None
+            if tensor.ndim == 2:  # time
+                return torch.gather(tensor, 0, target_ids)
+            elif tensor.ndim == 3:  # cat|num
+                return torch.gather(
+                    tensor,
+                    0,
+                    target_ids[:, :, None].expand(
+                        -1, -1, tensor.shape[2]
+                    ),  # [target_len, B, D]
+                )
+            else:
+                raise ValueError
+
+        assert self.lengths.min() > tail_len, "tail_len is too big"
+
+        start_index = self.lengths - tail_len  # [1, B]
+        target_ids = torch.arange(tail_len)[:, None] + start_index  # [target_len, B]
+
+        return GenBatch(
+            lengths=torch.ones_like(self.lengths) * tail_len,
+            time=gather(self.time, target_ids),
+            index=copy(self.index),
+            num_features=gather(self.num_features, target_ids),
+            cat_features=gather(self.cat_features, target_ids),
+            target=self.target,
+            cat_features_names=copy(self.cat_features_names),
+            num_features_names=copy(self.num_features_names),
+            cat_mask=gather(self.cat_mask, target_ids),
+            num_mask=gather(self.num_mask, target_ids),
+        )
 
 
 @dataclass(kw_only=True)
@@ -120,14 +141,6 @@ class PredBatch:
     num_features: torch.Tensor | None = None  # (len, batch, features)
     num_features_names: list[str] | None = None
     cat_features: dict[str, torch.Tensor] | None = None  # {"name": (len, batch, C)}
-
-    def to(self, device: str):
-        for field in fields(self):
-            f = getattr(self, field.name)
-            if isinstance(f, torch.Tensor):
-                setattr(self, field.name, f.to(device))
-
-        return self
 
     def get_numerical(self):
         return torch.cat((self.time.unsqueeze(-1), self.num_features), dim=2)
@@ -143,7 +156,7 @@ class PredBatch:
                 cat_features.append(cat_tensor.argmax(dim=2))
             cat_features = torch.stack(cat_features, dim=2)
 
-        return Batch(
+        return GenBatch(
             lengths=self.lengths,
             time=self.time,
             index=None,

@@ -2,7 +2,7 @@ from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
 from ebes.types import Seq
 
-from ..data.data_types import Batch, DataConfig, PredBatch
+from ..data.data_types import GenBatch, DataConfig, PredBatch
 
 # from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
 
@@ -60,5 +60,5 @@ class ReconstructorBase(BaseModel):
             cat_features=cat_features,
         )
 
-    def generate(self, x: Seq) -> Batch:
+    def generate(self, x: Seq) -> GenBatch:
         return self.forward(x).to_batch()

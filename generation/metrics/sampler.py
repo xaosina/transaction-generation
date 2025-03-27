@@ -1,11 +1,11 @@
 from copy import deepcopy
+from typing import Optional
 
 import pandas as pd
 import torch
 from tqdm import tqdm
-from typing import Optional
-from generation.data.data_types import Batch
 
+from ..data.data_types import GenBatch
 from .estimator import MetricEstimator
 
 
@@ -70,10 +70,13 @@ class SampleEvaluator:
         ).estimate()
 
 
-def concat_samples(input: Batch, pred: Batch) -> tuple[Batch, Batch]:
-    res = deepcopy(input)
+def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
+    assert (
+        hist.target_time.shape[0] == pred.time.shape[0]
+    ), "Mismatch in sequence lengths between hist and pred"
+    res = deepcopy(hist)
 
-    res.target_time = pred.target_time
-    res.target_num_features = pred.target_num_features
-    res.target_cat_features = pred.target_cat_features
-    return input, res
+    res.target_time = pred.time
+    res.target_num_features = pred.num_features
+    res.target_cat_features = pred.cat_features
+    return hist, res

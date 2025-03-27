@@ -12,11 +12,9 @@ from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
 
-from generation.metrics.sampler import SampleEvaluator
-
-from .data.data_types import Batch
+from .data.data_types import GenBatch
+from .metrics.sampler import SampleEvaluator
 from .utils import LoadTime, get_profiler, record_function
-
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +23,8 @@ logger = logging.getLogger(__name__)
 class TrainConfig:
     """Training config for Machine Learning"""
 
-    # The number of workers for training
-    workers: int = field(default=8)  # The number of workers for training
-    # The number of workers for training
     # The experiment name
     exp_name: str = field(default="default_exp")
-
-
-def train(cfg: TrainConfig):
-    pass
 
 
 class Trainer:
@@ -46,8 +37,9 @@ class Trainer:
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
         lr_scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
-        train_loader: Iterable[Batch] | None = None,
-        val_loader: Iterable[Batch] | None = None,
+        train_loader: Iterable[GenBatch] | None = None,
+        val_loader: Iterable[GenBatch] | None = None,
+        metrics: Iterable[Metric] | None = None,
         evaluator: SampleEvaluator | None = None,
         run_name: str | None = None,
         total_iters: int | None = None,
@@ -135,11 +127,11 @@ class Trainer:
         return self._model
 
     @property
-    def train_loader(self) -> Iterable[Batch] | None:
+    def train_loader(self) -> Iterable[GenBatch] | None:
         return self._train_loader
 
     @property
-    def val_loader(self) -> Iterable[Batch] | None:
+    def val_loader(self) -> Iterable[GenBatch] | None:
         return self._val_loader
 
     @property
@@ -287,7 +279,7 @@ class Trainer:
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
 
     @torch.inference_mode()
-    def validate(self, loader: Iterable[Batch] | None = None) -> dict[str, Any]:
+    def validate(self, loader: Iterable[GenBatch] | None = None) -> dict[str, Any]:
         assert self._model is not None
         if loader is None:
             if self._val_loader is None:
