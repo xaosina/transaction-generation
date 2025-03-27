@@ -212,11 +212,13 @@ def train_test_split(
     return train_df, test_df
 
 
-def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=False):
+def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False):
     if isinstance(save_path, str):
         save_path = Path(save_path)
     if isinstance(cat_codes_path, str):
         cat_codes_path = Path(cat_codes_path)
+    if isinstance(idx_codes_path, str):
+        idx_codes_path = Path(idx_codes_path)
     mode = "overwrite" if overwrite else "error"
     spark = SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
     if isinstance(data, Path) or isinstance(data, str):
@@ -254,6 +256,17 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=Fal
         for cat_col in cat_features:
             vc = CatMap.read(cat_codes_path / cat_col)
             df = vc.encode(df)
+
+    if idx_codes_path is None:
+        print("Creating new idx codes.")
+        idc = cat_freq(df, index_columns)[0]
+        df = idc.encode(df)
+        idc.write(save_path / "idx", mode=mode)
+    else:
+        print("Reading idx codes.")
+        idc = CatMap.read(idx_codes_path)
+        df = idc.encode(df)
+        
     df = collect_lists(
         df,
         group_by=index_columns + target_columns,
@@ -263,3 +276,4 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, overwrite=Fal
 
     df_repartitioned.write.parquet((save_path / ("train" if cat_codes_path is None else 'test')).as_posix(), 
                                    mode=mode)
+    
