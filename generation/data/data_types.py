@@ -16,7 +16,7 @@ class DataConfig:
     test_path: str = ""
     batch_size: int = 128
     num_workers: int = 4
-    val_ratio: int = 0.15
+    val_ratio: float = 0.15
     train_resamples: int = 1
     #
     max_seq_len: int = 0

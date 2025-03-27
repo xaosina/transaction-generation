@@ -77,6 +77,17 @@ class ShardDataset(IterableDataset):
         self.random_end = random_end
         self.shuffle = shuffle
 
+    def __len__(self):
+        """
+        Due to the sharded nature of the dataset, it is impossible to determine the exact number of batches that will be yielded.
+        However, we can provide an upper bound, which is what this method does.
+        """
+        all_rows = sum(
+            [f.count_rows() for f in pq.ParquetDataset(self.partitions).fragments]
+        )
+        upper_bound = all_rows // self.data_conf.batch_size + self.data_conf.num_workers
+        return upper_bound
+
     @classmethod
     def train_val_split(
         cls, data_path, data_conf: DataConfig
@@ -92,7 +103,7 @@ class ShardDataset(IterableDataset):
         val_paths = paths[:val_size]
         train_paths = paths[val_size:]
         actual_val_size = sum(fragments[p] for p in val_paths) / total_rows
-        logger.info(f"Actual val size is {actual_val_size}")
+        logger.warning(f"Actual val size is {actual_val_size}")
 
         train_dataset = cls(
             train_paths,
@@ -135,7 +146,9 @@ class ShardDataset(IterableDataset):
         for shard_path in worker_shards:
             data = pd.read_parquet(
                 shard_path,
-                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]+ data_conf.num_names+ list(data_conf.cat_cardinalities.keys()),
+                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
+                + data_conf.num_names
+                + list(data_conf.cat_cardinalities.keys()),
             )
             data = self._preprocess(data)
 
