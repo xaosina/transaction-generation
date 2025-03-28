@@ -1,9 +1,9 @@
-from dataclasses import dataclass
 import logging
 import sys
 import time
 from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -126,6 +126,38 @@ def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
         return getattr(torch.optim.lr_scheduler, sch_conf.name)(optimizer, **params)
     except AttributeError:
         raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
+
+
+@contextmanager
+def log_to_file(filename: Path, file_lvl="info", cons_lvl="warning"):
+    if isinstance(file_lvl, str):
+        file_lvl = getattr(logging, file_lvl.upper())
+    if isinstance(cons_lvl, str):
+        cons_lvl = getattr(logging, cons_lvl.upper())
+
+    ch = logging.StreamHandler(stream=sys.stdout)
+    ch.setLevel(cons_lvl)
+    cfmt = logging.Formatter("{levelname:8} - {asctime} - {message}", style="{")
+    ch.setFormatter(cfmt)
+
+    fh = logging.FileHandler(filename)
+    fh.setLevel(file_lvl)
+    ffmt = logging.Formatter(
+        "{name: ^16} - {asctime} - {message}",
+        style="{",
+    )
+    fh.setFormatter(ffmt)
+    logger = logging.getLogger()
+    logger.setLevel(min(file_lvl, cons_lvl))
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    try:
+        yield
+    finally:
+        fh.close()
+        logger.removeHandler(fh)
+        logger.removeHandler(ch)
 
 
 @contextmanager

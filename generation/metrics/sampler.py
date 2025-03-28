@@ -8,9 +8,8 @@ from tqdm import tqdm
 from ..data.data_types import GenBatch
 from .estimator import MetricEstimator
 
-
+from generation.models.generator import Generator
 class SampleEvaluator:
-
     def __init__(
         self,
         ckpt: str,
@@ -31,20 +30,20 @@ class SampleEvaluator:
         )
         return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
 
-    def generate_samples(self, model, data_loader, blim=None, prefix=""):
+    def generate_samples(self, model: Generator, data_loader, blim=None, prefix=""):
         model.eval()
 
         gen_df_save_path = self.ckpt / f"validation_gen{prefix}.csv"
         gt_df_save_path = self.ckpt / f"validation_gt{prefix}.csv"
 
         pbar = tqdm(data_loader, total=len(data_loader))
-
+        breakpoint()
         for batch_idx, batch_input in enumerate(pbar):
             if blim is not None and batch_idx > blim:
                 break
 
             with torch.no_grad():
-                batch_pred = model.generate(batch_input)
+                batch_pred = model.generate(batch_input, self.gen_len)
             gt, gen = concat_samples(batch_input, batch_pred)
 
             gt = pd.DataFrame(data_loader.collate_fn.reverse(gt))
@@ -71,6 +70,7 @@ class SampleEvaluator:
 
 
 def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
+    breakpoint()
     assert (
         hist.target_time.shape[0] == pred.time.shape[0]
     ), "Mismatch in sequence lengths between hist and pred"

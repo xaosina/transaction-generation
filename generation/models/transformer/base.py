@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import Tensor, einsum, nn
 from torch.utils.checkpoint import checkpoint
-from .adapter import CatOutputAdapter, Num16x48OutputAdapter, Num48OutputAdapter, NoSepInputAdapter
+# from .adapter import CatOutputAdapter, Num16x48OutputAdapter, Num48OutputAdapter, NoSepInputAdapter
 
 
 class SinusodialEmbedding(nn.Module):
