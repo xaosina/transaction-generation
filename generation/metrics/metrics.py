@@ -171,7 +171,6 @@ class ShannonEntropy(BaseMetric):
         return shannon_entropy
 
 
-# TODO: There should be rework. We want the same args to get in compute foo
 class Coverage(BaseMetric):
 
     required_data_type = CoverageData

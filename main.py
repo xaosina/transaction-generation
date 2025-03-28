@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass, field
 import os
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Optional
 
 import pyrallis
 from generation.data.utils import get_dataloaders
@@ -32,7 +32,7 @@ class PipelineConfig:
     run_name: str = "debug"
     log_dir: str = "log/generation"
     device: str = "cuda:0"
-    metrics: list[str] = []
+    metrics: list[str] = field(default_factory=list)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
@@ -54,17 +54,19 @@ def main(cfg: PipelineConfig):
     batch = next(iter(train_loader))
     loss = get_loss(config=cfg.loss)
     out = model(batch)
-    batch = next(iter(test_loader))
+    # batch = next(iter(test_loader))
     loss_out = loss(batch, out)
     metrics, loss = None, None
 
     sample_evaluator = SampleEvaluator(
-        Path(cfg.log_dir) / cfg.run_name / "ckpt",
-        cfg.metrics,
-        cfg.device,
-        cfg.data_conf.generation_len,
-        cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
+        ckpt=Path(cfg.log_dir) / cfg.run_name / "ckpt",
+        metrics=cfg.metrics,
+        gen_len=cfg.data_conf.generation_len,
+        hist_len=cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
+        device=cfg.device,
     )
+
+    sample_evaluator.evaluate(model, test_loader)
 
     trainer = Trainer(
         model=model,

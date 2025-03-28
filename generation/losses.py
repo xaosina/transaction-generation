@@ -29,7 +29,7 @@ class BaselineLoss:
         super().__init__()
         self.ignore_index = -100
 
-    def _compute_loss(self, y_true: Batch, y_pred: PredBatch) -> torch.Tensor:
+    def __call__(self, y_true: Batch, y_pred: PredBatch) -> torch.Tensor:
         valid_mask = torch.arange(y_true.lengths.max())[:, None] < (
             y_true.lengths
         )  # [L, B]
@@ -59,20 +59,21 @@ class BaselineLoss:
             mse_num = F.mse_loss(
                 pred_num[:-1],
                 true_num[1:, :, num_feature_ids],
+                reduction="none"
             ) * valid_mask[1:].unsqueeze(-1)
 
             mse += mse_num.sum()
-            mse_count += valid_mask[1:].unsqueeze(-1).sum()
+            mse_count += mse_num.numel()
 
         mse = mse / mse_count
 
         ce = 0.0
         ce_total = 0
-
         if y_pred.cat_features is not None:
             for key in y_pred.cat_features:
-                true_cat = y_true[key].permute(1, 0)
+                true_cat = y_true[key]
                 true_cat[~valid_mask] = self.ignore_index
+                true_cat = true_cat.permute(1, 0)
 
                 true_num = y_pred.cat_features[key].permute(1, 2, 0)
 
@@ -82,10 +83,7 @@ class BaselineLoss:
                     ignore_index=self.ignore_index,
                 )
                 ce_total += 1
-            assert ce_total != 0.0
+
             ce = ce / ce_total
 
         return mse + ce # TODO: Weights
-
-    def __call__(self, *args, **kwds):
-        return self._compute_loss(*args, **kwds)

@@ -291,6 +291,7 @@ class Trainer:
         self._model.eval()
 
         self._metric_values = self._sample_evaluator.evaluate(self._model, loader)
+        logger.info("Epoch %04d: metrics: %s", self._last_epoch + 1, str(self._metric_values), )
 
         return None
 

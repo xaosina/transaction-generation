@@ -1,9 +1,9 @@
-from dataclasses import dataclass
 import logging
 import sys
 import time
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 

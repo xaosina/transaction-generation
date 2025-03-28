@@ -1,10 +1,9 @@
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import metrics
+from generation.metrics import metrics
 import pandas as pd
 
-# metrics
 from tmetrics.eval_density import run_eval_density
 from tmetrics.eval_detection import run_eval_detection
 

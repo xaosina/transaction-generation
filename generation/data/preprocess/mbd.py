@@ -188,6 +188,7 @@ def main():
         "data/temp/.test.csv",
         save_path="data/mbd-50k/",
         cat_codes_path="data/mbd-50k/cat_codes/",
+        idx_codes_path="data/mbd-50k/idx",
         metadata=METADATA,
         overwrite=True,
     )
