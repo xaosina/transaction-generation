@@ -12,8 +12,15 @@ from generation.metrics.sampler import SampleEvaluator
 from generation.losses import get_loss, LossConfig
 from generation.utils import get_optimizer, get_scheduler
 from generation.trainer import Trainer
-from generation.utils import OptimizerConfig, SchedulerConfig
+from generation.utils import (
+    OptimizerConfig,
+    SchedulerConfig,
+    get_unique_folder_suffix,
+    log_to_file,
+    LoginConfig
+)
 from generation.models.generator import ModelConfig
+
 
 @dataclass
 class TrainConfig:
@@ -30,7 +37,7 @@ class TrainConfig:
 @dataclass
 class PipelineConfig:
     run_name: str = "debug"
-    log_dir: str = "log/generation"
+    log_dir: Path = "log/generation"
     device: str = "cuda:0"
     metrics: list[str] = field(default_factory=list)
     data_conf: DataConfig = field(default_factory=DataConfig)
@@ -40,12 +47,23 @@ class PipelineConfig:
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
+    logging: LoginConfig = field(default_factory=LoginConfig)
 
-
-@pyrallis.wrap()
+@pyrallis.wrap("spec_config.yaml")
 def main(cfg: PipelineConfig):
-    pyrallis.dump(cfg, open("run_config.yaml", "w"))
+    cfg.run_name = cfg.run_name + get_unique_folder_suffix(
+        Path(cfg.log_dir) / cfg.run_name
+    )
+    log_file = Path(cfg.log_dir) / cfg.run_name / "log"
+    log_file.parent.mkdir(exist_ok=True, parents=True)
+    run_dir = Path(cfg.log_dir) / cfg.run_name
+    pyrallis.dump(cfg, open(run_dir / "config.yaml", "w"), sort_keys=False)
     print(cfg)
+    with log_to_file(log_file, cfg.logging):
+        run_pipeline(cfg)
+
+
+def run_pipeline(cfg):
     train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
     model = Generator(cfg.data_conf, cfg.model)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
@@ -67,6 +85,7 @@ def main(cfg: PipelineConfig):
     )
 
     sample_evaluator.evaluate(model, test_loader)
+    breakpoint()
 
     trainer = Trainer(
         model=model,

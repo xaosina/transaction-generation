@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Union
 from generation.metrics import metrics
 import pandas as pd
 
-from tmetrics.eval_density import run_eval_density
-from tmetrics.eval_detection import run_eval_detection
+from evaluation.eval_density import run_eval_density
+from evaluation.eval_detection import run_eval_detection
 
 from .types import BinaryData, CoverageData, OnlyPredData
 

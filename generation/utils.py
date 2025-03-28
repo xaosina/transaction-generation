@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 import time
 from collections.abc import Iterable
@@ -128,12 +129,18 @@ def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
         raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
 
 
+@dataclass
+class LoginConfig:
+    file_lvl: str = "info"
+    cons_lvl: str = "warning"
+
+
 @contextmanager
-def log_to_file(filename: Path, file_lvl="info", cons_lvl="warning"):
-    if isinstance(file_lvl, str):
-        file_lvl = getattr(logging, file_lvl.upper())
-    if isinstance(cons_lvl, str):
-        cons_lvl = getattr(logging, cons_lvl.upper())
+def log_to_file(filename: Path, log_cfg: LoginConfig):
+    if isinstance(log_cfg.file_lvl, str):
+        file_lvl = getattr(logging, log_cfg.file_lvl.upper())
+    if isinstance(log_cfg.cons_lvl, str):
+        cons_lvl = getattr(logging, log_cfg.cons_lvl.upper())
 
     ch = logging.StreamHandler(stream=sys.stdout)
     ch.setLevel(cons_lvl)
@@ -158,3 +165,13 @@ def log_to_file(filename: Path, file_lvl="info", cons_lvl="warning"):
         fh.close()
         logger.removeHandler(fh)
         logger.removeHandler(ch)
+
+
+def get_unique_folder_suffix(folder_path):
+    folder_path = str(folder_path)
+    if not os.path.exists(folder_path):
+        return ""
+    n = 1
+    while os.path.exists(f"{folder_path}({n})"):
+        n += 1
+    return f"({n})"

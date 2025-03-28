@@ -6,7 +6,7 @@ from ebes.types import Seq
 
 # from .transformer.ar import AR
 from ebes.model import GRU
-from .transformer.ar import AR
+# from .transformer.ar import AR
 
 
 class ARTransformer(BaseSeq2Seq):

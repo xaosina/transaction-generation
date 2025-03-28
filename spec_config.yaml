@@ -69,3 +69,7 @@ loss:
   name: baseline
 
 metrics: ["Accuracy", "Coverage", "Levenstein"]
+
+logging:
+  file_lvl: "info"
+  cons_lvl: "info"

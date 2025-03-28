@@ -10,7 +10,7 @@ data_conf:
     src_type12: 184
     src_type22: 84
     src_type32: 87
-  generation_len: 1
+  generation_len: 16
   index_name: client_id
   max_seq_len: 1045
   min_history_len: 16
@@ -28,7 +28,7 @@ data_conf:
       loc: 0.0
       scale: 365.0
   val_random_end: none
-  val_ratio: 0
+  val_ratio: 0.15
   val_transforms:
   - RescaleTime:
       loc: 0.0
