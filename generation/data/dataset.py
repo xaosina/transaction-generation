@@ -85,7 +85,7 @@ class ShardDataset(IterableDataset):
         all_rows = sum(
             [f.count_rows() for f in pq.ParquetDataset(self.partitions).fragments]
         )
-        upper_bound = all_rows // self.data_conf.batch_size + self.data_conf.num_workers
+        upper_bound = (self.n_resamples * all_rows) // self.data_conf.batch_size + self.data_conf.num_workers
         return upper_bound
 
     @classmethod
