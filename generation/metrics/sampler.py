@@ -1,4 +1,5 @@
 from copy import deepcopy
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -19,6 +20,7 @@ class SampleEvaluator:
         device: int = 0,
     ):
         self.ckpt = ckpt
+        Path(ckpt).mkdir(parents=True, exist_ok=True)
         self.metrics = metrics or []
         self.device = device
         self.gen_len = gen_len
@@ -37,8 +39,8 @@ class SampleEvaluator:
         gt_df_save_path = self.ckpt / f"validation_gt{prefix}.csv"
 
         pbar = tqdm(data_loader, total=len(data_loader))
-        breakpoint()
         for batch_idx, batch_input in enumerate(pbar):
+            batch_input = batch_input.to("cuda")
             if blim is not None and batch_idx > blim:
                 break
 
@@ -70,7 +72,6 @@ class SampleEvaluator:
 
 
 def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
-    breakpoint()
     assert (
         hist.target_time.shape[0] == pred.time.shape[0]
     ), "Mismatch in sequence lengths between hist and pred"

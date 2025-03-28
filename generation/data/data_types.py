@@ -53,7 +53,7 @@ class GenBatch(Batch):
         assert self.target_time is not None
         return replace(
             self,
-            lengths=self.target_time[0].repeat(self.target_time.shape[1]),
+            lengths=torch.full((self.target_time.shape[1],), self.target_time.shape[0]),
             time=self.target_time,
             num_features=self.target_num_features,
             cat_features=self.target_cat_features,
@@ -83,7 +83,7 @@ class GenBatch(Batch):
             logger.warning("Incorrect appended time. Result will be non monotonic.")
         target_len, B = other.time.shape[0], other.lengths.shape[0]
         seq_indices = (
-            torch.arange(target_len)[:, None] + self.lengths
+            torch.arange(target_len, device=self.lengths.device)[:, None] + self.lengths
         )  # [target_len, B]
         batch_indices = (
             torch.arange(B).unsqueeze(0).expand(target_len, B)
@@ -118,7 +118,9 @@ class GenBatch(Batch):
         assert self.lengths.min() > tail_len, "tail_len is too big"
 
         start_index = self.lengths - tail_len  # [1, B]
-        target_ids = torch.arange(tail_len)[:, None] + start_index  # [target_len, B]
+        target_ids = (
+            torch.arange(tail_len, device=start_index.device)[:, None] + start_index
+        )  # [target_len, B]
 
         return GenBatch(
             lengths=torch.ones_like(self.lengths) * tail_len,

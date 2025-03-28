@@ -65,11 +65,11 @@ def main(cfg: PipelineConfig):
 
 def run_pipeline(cfg):
     train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
-    model = Generator(cfg.data_conf, cfg.model)
+    model = Generator(cfg.data_conf, cfg.model).to("cuda")
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
     lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
     # loss = get_loss(cfg.loss)
-    batch = next(iter(train_loader))
+    batch = next(iter(train_loader)).to("cuda")
     loss = get_loss(config=cfg.loss)
     out = model(batch)
     # batch = next(iter(test_loader))

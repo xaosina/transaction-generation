@@ -30,7 +30,9 @@ class BaselineLoss:
         self.ignore_index = -100
 
     def __call__(self, y_true: Batch, y_pred: PredBatch) -> torch.Tensor:
-        valid_mask = torch.arange(y_true.lengths.max())[:, None] < (
+        valid_mask = torch.arange(y_true.lengths.max(), device=y_true.lengths.device)[
+            :, None
+        ] < (
             y_true.lengths
         )  # [L, B]
 
@@ -57,9 +59,7 @@ class BaselineLoss:
             true_num = y_true.num_features
 
             mse_num = F.mse_loss(
-                pred_num[:-1],
-                true_num[1:, :, num_feature_ids],
-                reduction="none"
+                pred_num[:-1], true_num[1:, :, num_feature_ids], reduction="none"
             ) * valid_mask[1:].unsqueeze(-1)
 
             mse += mse_num.sum()
@@ -86,4 +86,4 @@ class BaselineLoss:
 
             ce = ce / ce_total
 
-        return mse + ce # TODO: Weights
+        return mse + ce  # TODO: Weights

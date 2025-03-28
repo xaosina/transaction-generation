@@ -104,6 +104,7 @@ class SequenceCollator:
 
     def reverse(self, batch: GenBatch) -> Sequence[pd.Series]:
         batch = deepcopy(batch)
+
         def numpy_if_possible(arr):
             if isinstance(arr, torch.Tensor):
                 return arr.numpy(force=True)
@@ -123,20 +124,28 @@ class SequenceCollator:
 
         seqs = []
         for b in range(len(batch)):
-            s = pd.Series()
+            s = pd.Series(
+                index=["_seq_len"]
+                + num_names
+                + cat_names
+                + [self.time_name, self.index_name],
+                dtype=object,
+            )
             sl = seq_lens[b]
             s["_seq_len"] = sl
             # If pad start, then data are filled at the end
-            slice_idx = (
-                slice(0, sl) if self.padding_side == "end" else slice(-sl, None)
-            )
+            slice_idx = slice(0, sl) if self.padding_side == "end" else slice(-sl, None)
             if num_names is not None:
-                for i, name in enumerate(num_names):
-                    assert num_features is not None
-                    s[name] = num_features[slice_idx, b, i]
-            for i, name in enumerate(cat_names):
-                assert cat_features is not None
-                s[name] = cat_features[slice_idx, b, i]
+                s.loc[num_names] = list(num_features[slice_idx, b].T)
+                # for i, name in enumerate(num_names):
+                #     assert num_features is not None
+                #     s[name] = num_features[slice_idx, b, i]
+
+            if cat_names:
+                s[cat_names] = list(cat_features[slice_idx, b].T)
+            # for i, name in enumerate(cat_names):
+            #     assert cat_features is not None
+            #     s[name] = cat_features[slice_idx, b, i]
             s[self.time_name] = times[slice_idx, b]
             s[self.index_name] = index[b]
             seqs.append(s)
