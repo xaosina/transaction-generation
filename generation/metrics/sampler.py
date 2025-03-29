@@ -48,8 +48,8 @@ class SampleEvaluator:
                 batch_pred = model.generate(batch_input, self.gen_len)
             gt, gen = concat_samples(batch_input, batch_pred)
 
-            gt = pd.DataFrame(data_loader.collate_fn.reverse(gt))
-            gen = pd.DataFrame(data_loader.collate_fn.reverse(gen))
+            gt = pd.DataFrame(data_loader.collate_fn.reverse(gt, collected=False))
+            gen = pd.DataFrame(data_loader.collate_fn.reverse(gen, collected=False))
 
             gt.to_csv(gt_df_save_path, mode="a", index=False)
             gen.to_csv(gen_df_save_path, mode="a", index=False)

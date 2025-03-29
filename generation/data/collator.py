@@ -20,11 +20,11 @@ class SequenceCollator:
     padding_side: str = "end"
     padding_value: float = 0
 
-    def __call__(self, seqs: Sequence[pd.Series]) -> GenBatch:
+    def __call__(self, seqs: pd.DataFrame) -> GenBatch:
         assert (
             self.padding_side == "end" and self.padding_value == 0
         ), "CutTargetSequence and some masking will fail"
-        ml = min(max(s["_seq_len"] for s in seqs), self.max_seq_len)  # type: ignore
+        ml = min(seqs["_seq_len"].max(), self.max_seq_len)  # type: ignore
         bs = len(seqs)
 
         num_features = None
@@ -51,12 +51,13 @@ class SequenceCollator:
         if self.index_name:
             indices = []
 
-        seq_time_dtype: np.dtype = seqs[0][self.time_name].dtype  # type: ignore
+        seq_time_dtype: np.dtype = seqs.iloc[0][self.time_name].dtype  # type: ignore
         times = np.full((ml, bs), self.padding_value, dtype=seq_time_dtype)
 
         seq_lens = torch.empty(bs, dtype=torch.long)
 
-        for b, s in enumerate(seqs):
+        for b in range(len(seqs)):
+            s = seqs.iloc[b]
             sl = min(s["_seq_len"], ml)  # type: ignore
             seq_lens[b] = sl
             # If pad end, then data are filled at the beggining
@@ -102,52 +103,49 @@ class SequenceCollator:
 
         return batch
 
-    def reverse(self, batch: GenBatch) -> Sequence[pd.Series]:
-        batch = deepcopy(batch)
-
+    def reverse(self, batch: GenBatch, collected=True) -> pd.DataFrame:
         def numpy_if_possible(arr):
             if isinstance(arr, torch.Tensor):
                 return arr.numpy(force=True)
             return arr
 
+        def collect_array(arr):
+            arr = numpy_if_possible(arr)
+            assert arr is not None
+            L = arr.shape[0]
+            mask = (np.arange(L) < seq_lens[:, None]).reshape(-1)  # B*L
+            with_padding = arr.swapaxes(0, 1).reshape(-1, *arr.shape[2:])  # B*L, D
+            return with_padding[mask]  # D, sum(seq_len)
+
+        batch = deepcopy(batch)
         if self.batch_transforms is not None:
             for tf in self.batch_transforms[::-1]:
                 tf.reverse(batch)
 
-        num_features = numpy_if_possible(batch.num_features)
-        cat_features = numpy_if_possible(batch.cat_features)
-        index = batch.index
-        times = numpy_if_possible(batch.time)
-        seq_lens = batch.lengths.numpy(force=True)
         cat_names = batch.cat_features_names
         num_names = batch.num_features_names
+        seq_lens = batch.lengths.numpy(force=True)
+        seqs = pd.DataFrame(
+            columns=[self.index_name, self.time_name] + cat_names + num_names
+        )
+        seqs[self.index_name] = np.repeat(batch.index, seq_lens)
 
-        seqs = []
-        for b in range(len(batch)):
-            s = pd.Series(
-                index=["_seq_len"]
-                + num_names
-                + cat_names
-                + [self.time_name, self.index_name],
-                dtype=object,
+        if num_names:
+            seqs[num_names] = collect_array(batch.num_features)
+        if cat_names:
+            seqs[cat_names] = collect_array(batch.cat_features)
+
+        seqs[self.time_name] = collect_array(batch.time)
+
+        if collected:
+            seqs = (
+                seqs.groupby(self.index_name, sort=False)
+                .agg(list)
+                .map(np.array)
+                .reset_index()
             )
-            sl = seq_lens[b]
-            s["_seq_len"] = sl
-            # If pad start, then data are filled at the end
-            slice_idx = slice(0, sl) if self.padding_side == "end" else slice(-sl, None)
-            if num_names is not None:
-                s.loc[num_names] = list(num_features[slice_idx, b].T)
-                # for i, name in enumerate(num_names):
-                #     assert num_features is not None
-                #     s[name] = num_features[slice_idx, b, i]
-
-            if cat_names:
-                s[cat_names] = list(cat_features[slice_idx, b].T)
-            # for i, name in enumerate(cat_names):
-            #     assert cat_features is not None
-            #     s[name] = cat_features[slice_idx, b, i]
-            s[self.time_name] = times[slice_idx, b]
-            s[self.index_name] = index[b]
-            seqs.append(s)
+            seqs["_seq_len"] = seq_lens
+        else:
+            seqs["_seq_len"] = np.repeat(seq_lens, seq_lens)
 
         return seqs
