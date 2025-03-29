@@ -10,6 +10,8 @@ from ..data.data_types import GenBatch
 from .estimator import MetricEstimator
 
 from generation.models.generator import Generator
+
+
 class SampleEvaluator:
     def __init__(
         self,
@@ -32,32 +34,41 @@ class SampleEvaluator:
         )
         return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
 
-    def generate_samples(self, model: Generator, data_loader, blim=None, prefix=""):
+    def generate_samples(
+        self, model: Generator, data_loader, blim=None, prefix="", buffer_size=None
+    ):
         model.eval()
+        gen_path = self.ckpt / f"validation_gen{prefix}.csv"
+        gt_path = self.ckpt / f"validation_gt{prefix}.csv"
+        buffer_gt, buffer_gen = [], []
 
-        gen_df_save_path = self.ckpt / f"validation_gen{prefix}.csv"
-        gt_df_save_path = self.ckpt / f"validation_gt{prefix}.csv"
-
-        pbar = tqdm(data_loader, total=len(data_loader))
-        for batch_idx, batch_input in enumerate(pbar):
-            batch_input = batch_input.to("cuda")
-            if blim is not None and batch_idx > blim:
+        for batch_idx, batch_input in enumerate(tqdm(data_loader)):
+            if blim and batch_idx > blim:
                 break
 
+            batch_input = batch_input.to("cuda")
             with torch.no_grad():
                 batch_pred = model.generate(batch_input, self.gen_len)
-            gt, gen = concat_samples(batch_input, batch_pred)
 
+            gt, gen = concat_samples(batch_input, batch_pred)
             gt = pd.DataFrame(data_loader.collate_fn.reverse(gt, collected=False))
             gen = pd.DataFrame(data_loader.collate_fn.reverse(gen, collected=False))
 
-            gt.to_csv(gt_df_save_path, mode="a", index=False)
-            gen.to_csv(gen_df_save_path, mode="a", index=False)
+            buffer_gt.append(gt)
+            buffer_gen.append(gen)
 
-        return (
-            gt_df_save_path,
-            gen_df_save_path,
-        )
+            if buffer_size and len(buffer_gt) >= buffer_size:
+                self._save_buffers(buffer_gt, buffer_gen, gt_path, gen_path)
+                buffer_gt, buffer_gen = [], []
+
+        if buffer_gen:
+            self._save_buffers(buffer_gt, buffer_gen, gt_path, gen_path)
+
+        return gt_path, gen_path
+
+    def _save_buffers(self, buffer_gt, buffer_gen, gt_path, gen_path):
+        pd.concat(buffer_gt, ignore_index=True).to_csv(gt_path, mode="a", index=False)
+        pd.concat(buffer_gen, ignore_index=True).to_csv(gen_path, mode="a", index=False)
 
     def evaluate_and_save(self, name_prefix, gt_save_path, gen_save_path):
         return MetricEstimator(
