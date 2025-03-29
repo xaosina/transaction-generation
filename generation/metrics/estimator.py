@@ -31,7 +31,7 @@ class MetricEstimator:
         self.device = device
         self.name_prefix = name_prefix
 
-        self.metrics = [getattr(metrics, name) for name in metric_names]
+        self.metrics = [getattr(metrics, name)(name) for name in metric_names]
 
     def estimate(self) -> Dict[str, float]:
         return self.estimate_metrics() | self.estimate_tmetrics()

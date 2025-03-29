@@ -84,7 +84,7 @@ def run_pipeline(cfg):
         device=cfg.device,
     )
 
-    sample_evaluator.evaluate(model, test_loader)
+    sample_evaluator.evaluate(model, test_loader, blim=10)
     breakpoint()
 
     trainer = Trainer(
