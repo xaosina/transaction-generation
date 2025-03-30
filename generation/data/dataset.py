@@ -38,11 +38,6 @@ def searchsorted_vectorized(seqs, values):
     return positions
 
 
-def df_to_seqs(df: pd.DataFrame) -> list[pd.Series]:
-    """Return list of DataFrame rows as a series."""
-    return [df.iloc[i] for i in range(len(df))]
-
-
 class ShardDataset(IterableDataset):
     # TODO different collators
     # TODO function to sample batch from a general dataframe
@@ -77,6 +72,19 @@ class ShardDataset(IterableDataset):
         self.random_end = random_end
         self.shuffle = shuffle
 
+    def __len__(self):
+        """
+        Due to the sharded nature of the dataset, it is impossible to determine the exact number of batches that will be yielded.
+        However, we can provide an upper bound, which is what this method does.
+        """
+        all_rows = sum(
+            [f.count_rows() for f in pq.ParquetDataset(self.partitions).fragments]
+        )
+        upper_bound = (
+            self.n_resamples * all_rows
+        ) // self.data_conf.batch_size + self.data_conf.num_workers
+        return upper_bound
+
     @classmethod
     def train_val_split(
         cls, data_path, data_conf: DataConfig
@@ -92,7 +100,7 @@ class ShardDataset(IterableDataset):
         val_paths = paths[:val_size]
         train_paths = paths[val_size:]
         actual_val_size = sum(fragments[p] for p in val_paths) / total_rows
-        logger.info(f"Actual val size is {actual_val_size}")
+        logger.warning(f"Actual val size is {actual_val_size}")
 
         train_dataset = cls(
             train_paths,
@@ -135,7 +143,9 @@ class ShardDataset(IterableDataset):
         for shard_path in worker_shards:
             data = pd.read_parquet(
                 shard_path,
-                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]+ data_conf.num_names+ list(data_conf.cat_cardinalities.keys()),
+                columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
+                + data_conf.num_names
+                + list(data_conf.cat_cardinalities.keys()),
             )
             data = self._preprocess(data)
 
@@ -149,12 +159,12 @@ class ShardDataset(IterableDataset):
             for start in range(0, len(data), data_conf.batch_size):
                 batch = data.iloc[start : start + data_conf.batch_size]
                 if len(batch) == data_conf.batch_size:
-                    yield df_to_seqs(batch)
+                    yield batch.reset_index(drop=True)
                 else:
                     remaining_data = batch
 
         if remaining_data is not None:
-            yield df_to_seqs(remaining_data)
+            yield remaining_data.reset_index(drop=True)
 
     def _preprocess(self, data):
         data_conf = self.data_conf
@@ -282,17 +292,24 @@ if __name__ == "__main__":
         num_workers=data_conf.num_workers,
     )
     from time import time
+
     # from copy import deepcopy
     start = time()
-    # for seqs in tqdm(dataloader):
-    #     collated = collator(deepcopy(seqs))
-    #     seqs_r = collator.reverse(collated)
+    # for batch, seqs in tqdm(train_loader):
+    #     seqs_r = train_loader.collate_fn.reverse(batch, collected=True)
+
     #     for s in range(len(seqs)):
-    #         so = seqs[s]
-    #         sr = seqs_r[s]
+    #         so = seqs.iloc[s]
+    #         sr = seqs_r.iloc[s]
     #         assert set(so.index) == set(sr.index)
-    #         res = {i for i in so.index if not np.array_equal(so[i], sr[i], equal_nan=True)}
-    #         if (res != {"Time"}) and (res != set()):
+    #         res = []
+    #         for id in so.index:
+    #             if isinstance(so[id], np.ndarray):
+    #                 if not np.allclose(so[id], sr[id], 1e-7, equal_nan=True):
+    #                     res = res + [id]
+    #             elif so[id] != sr[id]:
+    #                 res = res + [id]
+    #         if (res != []):
     #             breakpoint()
 
     for batch in tqdm(dataloader):

@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Union
 from generation.metrics import metrics
 import pandas as pd
 
-from tmetrics.eval_density import run_eval_density
-from tmetrics.eval_detection import run_eval_detection
+from evaluation.eval_density import run_eval_density
+from evaluation.eval_detection import run_eval_detection
 
 from .types import BinaryData, CoverageData, OnlyPredData
 
@@ -31,7 +31,7 @@ class MetricEstimator:
         self.device = device
         self.name_prefix = name_prefix
 
-        self.metrics = [getattr(metrics, name) for name in metric_names]
+        self.metrics = [getattr(metrics, name)(name) for name in metric_names]
 
     def estimate(self) -> Dict[str, float]:
         return self.estimate_metrics() | self.estimate_tmetrics()

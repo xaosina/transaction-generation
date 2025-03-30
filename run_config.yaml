@@ -28,7 +28,7 @@ data_conf:
       loc: 0.0
       scale: 365.0
   val_random_end: none
-  val_ratio: 0
+  val_ratio: 0.15
   val_transforms:
   - RescaleTime:
       loc: 0.0

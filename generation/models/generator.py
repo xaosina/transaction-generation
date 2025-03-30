@@ -40,7 +40,7 @@ class Generator(BaseModel):  # TODO work
         x = self.reconstructor(x)
         return x
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=True) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 

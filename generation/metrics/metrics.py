@@ -36,7 +36,7 @@ class BaseMetric(ABC):
         return f"<Metric {self.name}: {self.result}>"
 
 
-class LevensteinMetric(BaseMetric):
+class Levenstein(BaseMetric):
 
     required_data_type = BinaryData
 

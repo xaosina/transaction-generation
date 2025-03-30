@@ -1,6 +1,5 @@
-import importlib
 from .metrics import (
-    LevensteinMetric,
+    Levenstein,
     Accuracy,
     F1Metric,
     Coverage,
