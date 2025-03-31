@@ -36,6 +36,7 @@ class SampleEvaluator:
         gt_df_save_path, gen_df_save_path = self.generate_samples(
             model, loader, blim, prefix
         )
+        breakpoint()
         return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
 
     def generate_samples(
