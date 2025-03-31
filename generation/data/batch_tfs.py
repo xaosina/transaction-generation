@@ -93,7 +93,21 @@ class RescaleTime(BatchTransform):
         batch.time.sub_(self.loc).div_(self.scale)
 
     def reverse(self, batch: GenBatch):
-        return batch.time.mul_(self.scale).add_(self.loc)
+        batch.time.mul_(self.scale).add_(self.loc)
+
+
+@dataclass
+class TimeToDiff(BatchTransform):
+    """Applies diff transform to time."""
+
+    def __call__(self, batch: GenBatch):
+        assert isinstance(batch.time, torch.Tensor)
+        _, B = batch.time.shape
+        batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
+
+    def reverse(self, batch: GenBatch):
+        assert (batch.time >= 0).all()
+        batch.time = batch.time.cumsum(0)
 
 
 @dataclass
