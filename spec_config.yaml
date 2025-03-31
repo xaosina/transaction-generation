@@ -68,7 +68,11 @@ scheduler:
 loss:
   name: baseline
 
-metrics: ["Accuracy", "Coverage", "Levenstein"]
+metrics: 
+  names: ["Accuracy", "Coverage", "Levenstein"]
+  subject_key: "client_id"
+  target_key: "event_type"
+  gen_len: *generation_len
 
 logging:
   file_lvl: "info"

@@ -19,6 +19,8 @@ class SampleEvaluator:
         metrics: Optional[list[str]] = None,
         gen_len: int = 16,
         hist_len: int = 16,
+        subject_key: str = 'client_id',
+        target_key: str = 'event_type',
         device: int = 0,
     ):
         self.ckpt = ckpt
@@ -27,6 +29,8 @@ class SampleEvaluator:
         self.device = device
         self.gen_len = gen_len
         self.hist_len = hist_len
+        self.subject_key = subject_key
+        self.target_key = target_key
 
     def evaluate(self, model, loader, blim=None, prefix=""):
         gt_df_save_path, gen_df_save_path = self.generate_samples(
@@ -43,7 +47,7 @@ class SampleEvaluator:
         buffer_gt, buffer_gen = [], []
 
         for batch_idx, batch_input in enumerate(tqdm(data_loader)):
-            if blim and batch_idx > blim:
+            if blim and batch_idx >= blim:
                 break
 
             batch_input = batch_input.to("cuda")
@@ -78,11 +82,12 @@ class SampleEvaluator:
             self.gen_len,
             self.hist_len,
             device=self.device,
+            subject_key=self.subject_key,
+            target_key=self.target_key,
         ).estimate()
 
 
 def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
-    breakpoint()
     assert (
         hist.target_time.shape[0] == pred.time.shape[0]
     ), "Mismatch in sequence lengths between hist and pred"

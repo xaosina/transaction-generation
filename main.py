@@ -33,13 +33,19 @@ class TrainConfig:
     ckpt_resume: Optional[str | os.PathLike] = None
     profiling: bool = False
 
+@dataclass
+class MetricConfig:
+    names: list[str] = field(default_factory=list)
+    subject_key: str = "client_id"
+    target_key: str = "event_type"
+    gen_len: int = 1
 
 @dataclass
 class PipelineConfig:
     run_name: str = "debug"
     log_dir: Path = "log/generation"
     device: str = "cuda:0"
-    metrics: list[str] = field(default_factory=list)
+    metrics: MetricConfig = field(default_factory=MetricConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
@@ -78,13 +84,16 @@ def run_pipeline(cfg):
 
     sample_evaluator = SampleEvaluator(
         ckpt=Path(cfg.log_dir) / cfg.run_name / "ckpt",
-        metrics=cfg.metrics,
-        gen_len=cfg.data_conf.generation_len,
+        metrics=cfg.metrics.names,
+        gen_len=cfg.metrics.gen_len,
         hist_len=cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
         device=cfg.device,
+        subject_key=cfg.metrics.subject_key,
+        target_key=cfg.metrics.target_key
     )
 
-    sample_evaluator.evaluate(model, test_loader, blim=10)
+    metrics = sample_evaluator.evaluate(model, test_loader, blim=10)
+    print(metrics)
     breakpoint()
 
     trainer = Trainer(
