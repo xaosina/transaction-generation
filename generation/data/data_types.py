@@ -79,7 +79,7 @@ class GenBatch(Batch):
         assert isinstance(other, self.__class__)
         assert self.lengths.shape[0] == other.lengths.shape[0]
         assert (other.lengths == other.time.shape[0]).all()
-        if (other.time.amin(0) < self.time.amax(0)).any():
+        if (self.time[1:] >= self.time[:-1]).all() and (other.time.amin(0) < self.time.amax(0)).any():
             logger.warning("Incorrect appended time. Result will be non monotonic.")
         target_len, B = other.time.shape[0], other.lengths.shape[0]
         seq_indices = (

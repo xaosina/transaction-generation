@@ -42,9 +42,12 @@ class SampleEvaluator:
         self, model: Generator, data_loader, blim=None, prefix="", buffer_size=None
     ):
         model.eval()
-        gen_path = self.ckpt / f"validation_gen{prefix}.csv"
-        gt_path = self.ckpt / f"validation_gt{prefix}.csv"
+        gen_dir = self.ckpt / f"validation_gen{prefix}"
+        gt_dir = self.ckpt / f"validation_gt{prefix}"
+        gen_dir.mkdir(parents=True, exist_ok=True)
+        gt_dir.mkdir(parents=True, exist_ok=True)
         buffer_gt, buffer_gen = [], []
+        part_counter = 0
 
         for batch_idx, batch_input in enumerate(tqdm(data_loader)):
             if blim and batch_idx >= blim:
@@ -54,24 +57,27 @@ class SampleEvaluator:
             with torch.no_grad():
                 batch_pred = model.generate(batch_input, self.gen_len)
             gt, gen = concat_samples(batch_input, batch_pred)
-            gt = pd.DataFrame(data_loader.collate_fn.reverse(gt, collected=False))
-            gen = pd.DataFrame(data_loader.collate_fn.reverse(gen, collected=False))
+            gt = data_loader.collate_fn.reverse(gt, collected=False)
+            gen = data_loader.collate_fn.reverse(gen, collected=False)
 
             buffer_gt.append(gt)
             buffer_gen.append(gen)
 
             if buffer_size and len(buffer_gt) >= buffer_size:
-                self._save_buffers(buffer_gt, buffer_gen, gt_path, gen_path)
+                self._save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
+                part_counter += 1
                 buffer_gt, buffer_gen = [], []
 
         if buffer_gen:
-            self._save_buffers(buffer_gt, buffer_gen, gt_path, gen_path)
+            self._save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
 
-        return gt_path, gen_path
+        return gen_dir, gt_dir
 
-    def _save_buffers(self, buffer_gt, buffer_gen, gt_path, gen_path):
-        pd.concat(buffer_gt, ignore_index=True).to_csv(gt_path, mode="a", index=False)
-        pd.concat(buffer_gen, ignore_index=True).to_csv(gen_path, mode="a", index=False)
+    def _save_buffers(self, buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter):
+        gt_file = gt_dir / f"part-{part_counter:04d}.parquet"
+        gen_file = gen_dir / f"part-{part_counter:04d}.parquet"
+        pd.concat(buffer_gt, ignore_index=True).to_parquet(gt_file, index=False)
+        pd.concat(buffer_gen, ignore_index=True).to_parquet(gen_file, index=False)
 
     def evaluate_and_save(self, name_prefix, gt_save_path, gen_save_path):
         return MetricEstimator(

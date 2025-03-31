@@ -19,6 +19,8 @@ class MetricEstimator:
         gen_save_path: Optional[Union[str, Path]] = None,
         name_prefix: str = "",
         metric_names: Optional[List[str]] = None,
+        detection_config: str = None,
+        log_dir: str = None,
         gen_len: int = 16,
         hist_len: int = 16,
         device: int = 0,
@@ -35,6 +37,8 @@ class MetricEstimator:
         self.name_prefix = name_prefix
         self.subject_key = subject_key
         self.target_key = target_key
+        self.detection_config = detection_config
+        self.log_dir = log_dir
 
         self.metrics: list[BaseMetric] = [
             getattr(metrics, name)(name) for name in metric_names
@@ -70,23 +74,30 @@ class MetricEstimator:
         results = dict()
         for metric_type in ["discriminative", "density"]:
             if metric_type == "discriminative":
-                # discr_res = run_eval_detection(
-                #     "not_tabsyn",
-                #     generated_path,
-                #     orig_path,
-                #     0,
-                #     dataset="mbd_short",
-                #     match_users=False,
-                #     gpu_ids=self.device,
-                #     verbose=False,
-                # )
+                discr_res = run_eval_detection(
+                    data=self.gen_save_path,
+                    orig=self.gt_save_path,
+                    log_dir=self.log_dir,
+                    data_conf=self.data_conf,
+                    dataset=self.detection_config,
+                    tail_len=self.tail_len,
+                    match_users=False,
+                    gpu_ids=self.device,
+                    verbose=False,
+                )
 
-                # discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
-                discr_score = 0.0
+                discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
+                # discr_score = 0.0
                 results[self.__ret_name("discriminative")] = float(discr_score)
 
             elif metric_type == "density":
-                sh_tr = run_eval_density(self.gen_save_path, self.gt_save_path)
+                sh_tr = run_eval_density(
+                    self.gen_save_path,
+                    self.gt_save_path,
+                    self.data_conf,
+                    self.log_cols,
+                    self.tail_len,
+                )
                 results[self.__ret_name("shape")] = float(sh_tr["shape"])
                 results[self.__ret_name("trend")] = float(sh_tr["trend"])
             else:

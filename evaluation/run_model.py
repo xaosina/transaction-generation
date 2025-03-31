@@ -59,6 +59,7 @@ def main(
     experiment: str,
     train_data: Path,
     test_data: Path = None,
+    log_dir: Path = None,
     specify: str = None,
     use_tqdm: bool = False,
     gpu_ids: List[int] | None = None,
@@ -99,6 +100,9 @@ def main(
     if isinstance(test_data, (str, Path)):
         test_data = Path(test_data)
         config.test_data.dataset.parquet_path = test_data
+
+    if log_dir:
+        config.log_dir = log_dir
 
     runner = Runner.get_runner(config["runner"]["name"])
     res = runner.run(config)

@@ -1,4 +1,4 @@
-run_name: "${method_name}/detection"
+run_name: "detection/${method_name}"
 common_seed: 0
 device: "cuda:0"
 
@@ -18,10 +18,3 @@ logging:
   file_lvl: info
   cons_lvl: error
 
-# OVERWRITE
-data:
-  dataset:
-    split_sizes:
-      - 0.70   # train
-      - 0.15  # train_val
-      - 0.15  # hpo_val

@@ -29,18 +29,20 @@ data_conf:
   padding_value: 0
 
   train_random_end: none
-  val_random_end: none
+  val_random_end: time
   
   train_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
+    - TimeToDiff
 
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
+    - TimeToDiff
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -71,6 +73,7 @@ loss:
 metrics: 
   names: ["Accuracy", "Coverage", "Levenstein"]
   target_key: "event_type"
+  detection_config: "configs/datasets/detection/mbd.yaml"
 
 logging:
   file_lvl: "info"
