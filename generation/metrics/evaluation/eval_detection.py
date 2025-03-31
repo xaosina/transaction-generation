@@ -7,7 +7,7 @@ import pandas as pd
 
 from .preprocess.detection import prepare_data
 from .run_model import main as run_model
-from ..generation.data.data_types import DataConfig
+from ...data.data_types import DataConfig
 
 DIRPATH = os.path.dirname(__file__) + "/.."
 

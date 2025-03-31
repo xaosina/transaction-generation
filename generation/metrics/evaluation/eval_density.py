@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sdmetrics.reports.single_table import QualityReport
-from ..generation.data.data_types import DataConfig
+from ...data.data_types import DataConfig
 
 DIRPATH = os.path.dirname(__file__)
 

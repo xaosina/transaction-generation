@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import pandas as pd
-from evaluation.eval_density import run_eval_density
-from evaluation.eval_detection import run_eval_detection
+from .evaluation.eval_density import run_eval_density
+from .evaluation.eval_detection import run_eval_detection
 
 from generation.metrics import metrics
 from generation.metrics.metrics import BaseMetric

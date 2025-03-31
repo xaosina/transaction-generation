@@ -1,6 +1,6 @@
 from pathlib import Path
 import pandas as pd
-from ...generation.data.data_types import DataConfig
+from ....data.data_types import DataConfig
 
 
 def prepare_data(
