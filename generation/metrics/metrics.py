@@ -80,7 +80,8 @@ class F1Metric(BaseMetric):
     def __init__(self, name, average='macro'):
         super().__init__(name)
         self.__average = average
-
+        
+    @staticmethod
     def f1_score_macro_unorder(cls_metric: UserStatistic) -> float:
         f1_score_sum = 0
         for _, value in cls_metric.items():
@@ -91,7 +92,7 @@ class F1Metric(BaseMetric):
             )
         return f1_score_sum / len(cls_metric)
 
-
+    @staticmethod
     def f1_score_micro_unorder(cls_metric: UserStatistic) -> float:
         tp, fp, fn = 0, 0, 0
         for _, value in cls_metric.items():
@@ -100,6 +101,7 @@ class F1Metric(BaseMetric):
             fn += value['fn']
         return 2 * tp / (2 * tp + fp + fn)
 
+    @staticmethod
     def get_statistics(gt: List[int], pred: List[int]) -> UserStatistic:
         cls_metric = dict() 
         gt_counter = collections.defaultdict(int, collections.Counter(gt))
@@ -181,9 +183,9 @@ class Coverage(BaseMetric):
 
     def compute(self, *args, **kwargs):
         if self.__userwise:
-            self.__compute_whole(*args, **kwargs)
+            return self.__compute_whole(*args, **kwargs)
         else:
-            self.__compute_userwise(*args, **kwargs)
+            return self.__compute_userwise(*args, **kwargs)
 
     def __compute_whole(self, data: CoverageData, _, target_key):
         unique_hist = data.y_hist[target_key].nunique() 
@@ -191,7 +193,6 @@ class Coverage(BaseMetric):
         return unique_pred / unique_hist
 
     def __compute_userwise(self, data:CoverageData, seq_key, target_key):
-        
         hists = data.y_hist.groupby(seq_key)[target_key].apply(lambda s: set(s))
         preds = data.y_pred.groupby(seq_key)[target_key].apply(lambda s: set(s))
         df = pd.concat((hists, preds), keys=["hists", "preds"], axis=1)

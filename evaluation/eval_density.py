@@ -72,7 +72,7 @@ def run_eval_density(
                 "src_type11": {"sdtype": "categorical"},
                 "dst_type11": {"sdtype": "categorical"},
                 "src_type32": {"sdtype": "categorical"},
-                "time_diff_days": {"sdtype": "numerical"},
+                # "time_diff_days": {"sdtype": "numerical"},
             },
             "sequence_key": "client_id",
             "sequence_index": "event_time",
