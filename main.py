@@ -38,7 +38,6 @@ class MetricConfig:
     names: list[str] = field(default_factory=list)
     subject_key: str = "client_id"
     target_key: str = "event_type"
-    gen_len: int = 1
 
 @dataclass
 class PipelineConfig:
@@ -80,28 +79,27 @@ def run_pipeline(cfg):
     out = model(batch)
     # batch = next(iter(test_loader))
     loss_out = loss(batch, out)
-    metrics, loss = None, None
 
     sample_evaluator = SampleEvaluator(
         ckpt=Path(cfg.log_dir) / cfg.run_name / "ckpt",
         metrics=cfg.metrics.names,
-        gen_len=cfg.metrics.gen_len,
+        gen_len=cfg.data_conf.generation_len,
         hist_len=cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
         device=cfg.device,
-        subject_key=cfg.metrics.subject_key,
+        subject_key=cfg.data_conf.index_name,
         target_key=cfg.metrics.target_key
     )
 
-    metrics = sample_evaluator.evaluate(model, test_loader, blim=10)
-    print(metrics)
-    breakpoint()
+    # metrics = sample_evaluator.evaluate(model, test_loader, blim=10)
+    # print(metrics)
+    # breakpoint()
 
     trainer = Trainer(
         model=model,
         loss=loss,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        sample_evaluator=sample_evaluator,
+        evaluator=sample_evaluator,
         train_loader=train_loader,
         val_loader=val_loader,
         run_name=cfg.run_name,
@@ -111,6 +109,7 @@ def run_pipeline(cfg):
     )
 
     trainer.run()
+    breakpoint()
     trainer.load_best_model()
 
     train_metrics = trainer.validate(loaders["full_train"])

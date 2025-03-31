@@ -39,7 +39,6 @@ class Trainer:
         lr_scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
         train_loader: Iterable[GenBatch] | None = None,
         val_loader: Iterable[GenBatch] | None = None,
-        metrics: Iterable[Metric] | None = None,
         evaluator: SampleEvaluator | None = None,
         run_name: str | None = None,
         total_iters: int | None = None,
@@ -108,8 +107,8 @@ class Trainer:
             self._model = model.to(device)
 
         self._loss = None
-        if loss is not None:
-            self._loss = loss.to(device)
+        if loss is not None:  # TODO: Мы хотим loss is nn.Module?
+            self._loss = loss.to(device) if isinstance(loss, nn.Module) else loss
 
         self._profiler = get_profiler()
 
@@ -161,7 +160,7 @@ class Trainer:
                 saved exectly there. If `None` `ckpt_dir` from construct is used with
                 subfolder named `run_name` from Trainer's constructor.
         """
-
+        breakpoint()
         if ckpt_path is None and self._ckpt_dir is None:
             logger.warning(
                 "`ckpt_path` was not passned to `save_ckpt` and `ckpt_dir` "
@@ -187,8 +186,8 @@ class Trainer:
         if self._sched:
             ckpt["sched"] = self._sched.state_dict()
 
-        if not ckpt_path.is_dir():
-            torch.save(ckpt, ckpt_path)
+        if ckpt_path.is_dir():
+            torch.save(ckpt, ckpt_path / 'model.pt')
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
         """Load model, optimizer and scheduler states.
@@ -250,7 +249,7 @@ class Trainer:
                 batch.to(self._device)
                 batch
 
-                with self.record_function("forward"):
+                with record_function("forward"):
                     pred = self._model(batch)
 
                 loss = self._loss(batch, pred)
@@ -291,7 +290,11 @@ class Trainer:
         self._model.eval()
 
         self._metric_values = self._sample_evaluator.evaluate(self._model, loader)
-        logger.info("Epoch %04d: metrics: %s", self._last_epoch + 1, str(self._metric_values), )
+        logger.info(
+            "Epoch %04d: metrics: %s",
+            self._last_epoch + 1,
+            str(self._metric_values),
+        )
 
         return None
 

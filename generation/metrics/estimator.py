@@ -36,8 +36,6 @@ class MetricEstimator:
         self.subject_key = subject_key
         self.target_key = target_key
 
-        self.usecols = None
-
         self.metrics: list[BaseMetric] = [
             getattr(metrics, name)(name) for name in metric_names
         ]
@@ -99,12 +97,12 @@ class MetricEstimator:
     def get_data(self) -> Dict[str, pd.DataFrame]:
 
         dfs = {
-            "gt": pd.read_csv(self.gt_save_path, usecols=self.usecols)[
-                [self.subject_key, self.target_key]
-            ],
-            "gen": pd.read_csv(self.gen_save_path, usecols=self.usecols)[
-                [self.subject_key, self.target_key]
-            ],
+            "gt": pd.read_csv(
+                self.gt_save_path, usecols=[self.subject_key, self.target_key]
+            ),
+            "gen": pd.read_csv(
+                self.gen_save_path, usecols=[self.subject_key, self.target_key]
+            ),
         }
 
         return dfs

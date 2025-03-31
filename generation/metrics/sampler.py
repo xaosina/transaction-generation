@@ -19,8 +19,8 @@ class SampleEvaluator:
         metrics: Optional[list[str]] = None,
         gen_len: int = 16,
         hist_len: int = 16,
-        subject_key: str = 'client_id',
-        target_key: str = 'event_type',
+        subject_key: str = "client_id",
+        target_key: str = "event_type",
         device: int = 0,
     ):
         self.ckpt = ckpt
@@ -44,6 +44,11 @@ class SampleEvaluator:
         model.eval()
         gen_path = self.ckpt / f"validation_gen{prefix}.csv"
         gt_path = self.ckpt / f"validation_gt{prefix}.csv"
+
+        for path in [gen_path, gt_path]:
+            if path.exists():
+                path.unlink()
+
         buffer_gt, buffer_gen = [], []
 
         for batch_idx, batch_input in enumerate(tqdm(data_loader)):

@@ -36,7 +36,6 @@ data_conf:
         loc: 0.0
         scale: 365.0
 
-
   val_transforms:
     - RescaleTime:
         loc: 0.0
@@ -70,10 +69,18 @@ loss:
 
 metrics: 
   names: ["Accuracy", "Coverage", "Levenstein"]
-  subject_key: "client_id"
   target_key: "event_type"
-  gen_len: *generation_len
 
 logging:
   file_lvl: "info"
   cons_lvl: "error"
+
+trainer:
+  total_iters: 100
+  total_epochs: null
+  ckpt_track_metric: epoch
+  iters_per_epoch: 50
+  patience: -1
+  profiling: false
+
+device: "cuda:0"
