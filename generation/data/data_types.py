@@ -48,6 +48,7 @@ class GenBatch(Batch):
     target_cat_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_num_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
+    monotonic_time: bool = True
 
     def get_target_batch(self):
         assert self.target_time is not None
@@ -79,7 +80,7 @@ class GenBatch(Batch):
         assert isinstance(other, self.__class__)
         assert self.lengths.shape[0] == other.lengths.shape[0]
         assert (other.lengths == other.time.shape[0]).all()
-        if (self.time[1:] >= self.time[:-1]).all() and (other.time.amin(0) < self.time.amax(0)).any():
+        if self.monotonic_time and (other.time.amin(0) < self.time.amax(0)).any():
             logger.warning("Incorrect appended time. Result will be non monotonic.")
         target_len, B = other.time.shape[0], other.lengths.shape[0]
         seq_indices = (
@@ -115,20 +116,20 @@ class GenBatch(Batch):
             else:
                 raise ValueError
 
-        assert self.lengths.min() > tail_len, "tail_len is too big"
+        assert self.lengths.min() >= tail_len, "tail_len is too big"
 
         start_index = self.lengths - tail_len  # [1, B]
         target_ids = (
             torch.arange(tail_len, device=start_index.device)[:, None] + start_index
         )  # [target_len, B]
 
-        return GenBatch(
+        return replace(
+            self,
             lengths=torch.ones_like(self.lengths) * tail_len,
             time=gather(self.time, target_ids),
             index=copy(self.index),
             num_features=gather(self.num_features, target_ids),
             cat_features=gather(self.cat_features, target_ids),
-            target=self.target,
             cat_features_names=copy(self.cat_features_names),
             num_features_names=copy(self.num_features_names),
             cat_mask=gather(self.cat_mask, target_ids),

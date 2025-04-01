@@ -41,7 +41,7 @@ class MetricEstimator:
         self.log_dir = log_dir
 
         self.metrics: list[BaseMetric] = [
-            getattr(metrics, name)(name) for name in metric_names
+            getattr(metrics, name) for name in metric_names
         ]
 
     def estimate(self) -> Dict[str, float]:

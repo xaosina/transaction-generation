@@ -104,11 +104,13 @@ class TimeToDiff(BatchTransform):
         assert isinstance(batch.time, torch.Tensor)
         _, B = batch.time.shape
         batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
+        batch.monotonic_time = False
 
     def reverse(self, batch: GenBatch):
-        if (batch.time >= 0).all():
+        if (batch.time < 0).any():
             logger.warning("Incorrect diffed time. Result will be non monotonic.")
         batch.time = batch.time.cumsum(0)
+        batch.monotonic_time = True
 
 
 @dataclass
