@@ -10,6 +10,8 @@ from ..data.data_types import GenBatch
 from .estimator import MetricEstimator
 
 from generation.models.generator import Generator
+from .evaluation.eval_density import run_eval_density
+from .evaluation.eval_detection import run_eval_detection
 
 
 class SampleEvaluator:
@@ -31,6 +33,9 @@ class SampleEvaluator:
         self.hist_len = hist_len
         self.subject_key = subject_key
         self.target_key = target_key
+        self.metrics: list[BaseMetric] = [
+            getattr(metrics, name) for name in metric_names
+        ]
 
     def evaluate(self, model, loader, blim=None, prefix="", buffer_size=None):
         gt_df_save_path, gen_df_save_path = self.generate_samples(
@@ -80,6 +85,69 @@ class SampleEvaluator:
         pd.concat(buffer_gt, ignore_index=True).to_parquet(gt_file, index=False)
         pd.concat(buffer_gen, ignore_index=True).to_parquet(gen_file, index=False)
 
+    def estimate(self) -> Dict[str, float]:
+        return self.estimate_metrics() | self.estimate_tmetrics()
+
+    def estimate_metrics(self) -> Dict[str, float]:
+        if not self.gt_save_path or not self.gen_save_path:
+            raise ValueError("Ground-truth or generated file path is not provided.")
+
+        gt = pd.read_parquet(self.gt_save_path)
+        gen = pd.read_parquet(self.gen_save_path)
+        dfs = self.get_data()
+
+        prepared_data = self.prepare_data_to_metrics(dfs)
+
+        # TODO: Сделать перемешивание клиентов если надо.
+
+        results = {}
+
+        for metric in self.metrics:
+            data = prepared_data.get(metric.required_data_type)
+            results[self.__ret_name("gtvsgt_" + metric.name)] = metric(
+                data["gt"], self.subject_key, self.target_key
+            )
+            results[self.__ret_name("gtvsgen_" + metric.name)] = metric(
+                data["gen"], self.subject_key, self.target_key
+            )
+        return results
+
+    def estimate_tmetrics(self) -> Dict[str, float]:
+
+        results = dict()
+        for metric_type in ["discriminative", "density"]:
+            if metric_type == "discriminative":
+                discr_res = run_eval_detection(
+                    data=self.gen_save_path,
+                    orig=self.gt_save_path,
+                    log_dir=self.log_dir,
+                    data_conf=self.data_conf,
+                    dataset=self.detection_config,
+                    tail_len=self.tail_len,
+                    match_users=False,
+                    gpu_ids=self.device,
+                    verbose=False,
+                )
+
+                discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
+                # discr_score = 0.0
+                results[self.__ret_name("discriminative")] = float(discr_score)
+
+            elif metric_type == "density":
+                sh_tr = run_eval_density(
+                    self.gen_save_path,
+                    self.gt_save_path,
+                    self.data_conf,
+                    self.log_cols,
+                    self.tail_len,
+                )
+                results[self.__ret_name("shape")] = float(sh_tr["shape"])
+                results[self.__ret_name("trend")] = float(sh_tr["trend"])
+            else:
+                raise Exception(f"Unknown metric type '{metric_type}'!")
+
+        return results
+
     def evaluate_and_save(self, name_prefix, gt_save_path, gen_save_path):
         return MetricEstimator(
             gt_save_path,
@@ -92,6 +160,9 @@ class SampleEvaluator:
             subject_key=self.subject_key,
             target_key=self.target_key,
         ).estimate()
+
+    def __ret_name(self, name: str) -> str:
+        return self.name_prefix + name
 
 
 def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:

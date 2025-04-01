@@ -16,7 +16,34 @@ class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
 
 
-class BaselineRepeater(BaseModel):
+class BaseGenerator(BaseModel):
+    def forward(self, x: GenBatch) -> PredBatch: ...
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
+
+
+class GroundTruthGenerator(BaseGenerator):
+    """To check that all preprocessing is fine. Get perfect baseline."""
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a GroundTruthGenerator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        assert hist.target_time and hist.target_time.shape[0] == gen_len
+        gen_batch = deepcopy(hist)
+        gen_batch.append(gen_batch.get_target_batch())
+
+        gen_batch.target_time = None
+        gen_batch.target_num_features = None
+        gen_batch.target_cat_features = None
+
+        if with_hist:
+            return hist  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return hist.tail(gen_len)
+
+
+class BaselineRepeater(BaseGenerator):
     def __init__(self, data_conf: DataConfig):
         super().__init__()
         self.data_conf = data_conf
@@ -40,7 +67,7 @@ class BaselineRepeater(BaseModel):
             return gen_batch
 
 
-class Generator(BaseModel):  # TODO work
+class Generator(BaseGenerator):  # TODO work
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
