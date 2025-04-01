@@ -11,34 +11,6 @@ from generation.metrics.metrics import BaseMetric
 from .types import BinaryData, CoverageData, OnlyPredData
 
 
-class MetricEstimator:
-
-    def __init__(
-        self,
-        gt_save_path: Optional[Union[str, Path]] = None,
-        gen_save_path: Optional[Union[str, Path]] = None,
-        name_prefix: str = "",
-        metric_names: Optional[List[str]] = None,
-        detection_config: str = None,
-        log_dir: str = None,
-        gen_len: int = 16,
-        hist_len: int = 16,
-        device: int = 0,
-        subject_key: str = "client_id",
-        target_key: str = "event_type",
-    ):
-
-        self.gt_save_path = Path(gt_save_path) if gt_save_path else None
-        self.gen_save_path = Path(gen_save_path) if gen_save_path else None
-        self.name_prefix = name_prefix
-        self.gen_len = gen_len
-        self.hist_len = hist_len
-        self.device = device
-        self.name_prefix = name_prefix
-        self.subject_key = subject_key
-        self.target_key = target_key
-        self.detection_config = detection_config
-        self.log_dir = log_dir
 
         self.metrics: list[BaseMetric] = [
             getattr(metrics, name) for name in metric_names
@@ -51,6 +23,8 @@ class MetricEstimator:
         if not self.gt_save_path or not self.gen_save_path:
             raise ValueError("Ground-truth or generated file path is not provided.")
 
+        gt = pd.read_parquet(self.gt_save_path)
+        gen = pd.read_parquet(self.gen_save_path)
         dfs = self.get_data()
 
         prepared_data = self.prepare_data_to_metrics(dfs)
@@ -104,19 +78,6 @@ class MetricEstimator:
                 raise Exception(f"Unknown metric type '{metric_type}'!")
 
         return results
-
-    def get_data(self) -> Dict[str, pd.DataFrame]:
-
-        dfs = {
-            "gt": pd.read_csv(
-                self.gt_save_path, usecols=[self.subject_key, self.target_key]
-            ),
-            "gen": pd.read_csv(
-                self.gen_save_path, usecols=[self.subject_key, self.target_key]
-            ),
-        }
-
-        return dfs
 
     def prepare_data_to_metrics(
         self, dfs: pd.DataFrame
