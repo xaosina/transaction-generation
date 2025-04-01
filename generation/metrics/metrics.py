@@ -10,60 +10,51 @@ import pandas as pd
 
 from Levenshtein import distance as lev_score
 from sklearn.metrics import accuracy_score
-from .types import BinaryData, CoverageData, OnlyPredData
 
 UserStatistic = NewType("UserStatistic", Dict[int, Dict[str, Union[int, float]]])
 
 
 class BaseMetric(ABC):
+    generation_len: int
 
     @abstractmethod
-    def __call__(self, *args, **kwargs): ...
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame): ...
 
     @abstractmethod
     def __repr__(self): ...
 
 
 class BinaryMetric(BaseMetric):
-
-    def __init__(self, subject_key, target_key):
-        self.subject_key = subject_key
-        self.target_key = target_key
-
-    def _group_list(self, data: BinaryData) -> pd.DataFrame:
-        preds = data.y_pred.groupby(self.subject_key)[self.target_key].apply(
-            lambda s: s.tolist()
-        )
-        gts = data.y_true.groupby(self.subject_key)[self.target_key].apply(
-            lambda s: s.tolist()
-        )
-        return pd.concat((gts, preds), keys=["gt", "pred"], axis=1)
+    target_key: str
 
     @abstractmethod
     def get_scores(self, row): ...
 
-    def __call__(self, data: BinaryData):
-        df = self._group_list(data)
-        return df.groupby(level=0).apply(self.get_scores).mean()
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame):
+        df = pd.concat(
+            (y_true[self.target_key], y_gen[self.target_key]),
+            keys=["gt", "pred"],
+            axis=1,
+        )
+        return df.apply(self.get_scores, axis=1).mean()
 
 
 class Levenstein(BinaryMetric):
-
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         lev_m = 1 - lev_score(gt, pred) / len(pred)
-        return pd.Series(data=[lev_m], index=["lev_score"])
+        return lev_m
 
     def __repr__(self):
-        return f"Levenstein on {self.target_key}" 
+        return f"Levenstein on {self.target_key}"
 
 
-class Accuracy(BaseMetric):
+class Accuracy(BinaryMetric):
 
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         acc_m = accuracy_score(gt, pred)
-        return pd.Series(data=[acc_m], index=["accuracy"])
+        return acc_m
 
     def __repr__(self):
         return f"Accuracy on {self.target_key}"
