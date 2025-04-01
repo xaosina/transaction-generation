@@ -35,7 +35,7 @@ class BinaryMetric(BaseMetric):
             (y_true[self.target_key], y_gen[self.target_key]),
             keys=["gt", "pred"],
             axis=1,
-        )
+        ).map(lambda x: x[-self.generation_len:])
         return df.apply(self.get_scores, axis=1).mean()
 
 
