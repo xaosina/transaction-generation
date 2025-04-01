@@ -14,23 +14,6 @@ from .data_types import DataConfig
 logger = logging.getLogger(__name__)  # noqa: F821
 
 
-def slice_rows(data, end_indices):
-    seq_lens = data["_seq_len"].values
-    n_rows = len(data)
-    cumulative_lengths = np.concatenate([[0], np.cumsum(seq_lens)])
-    row_indices = np.repeat(np.arange(n_rows), seq_lens)
-    pos_in_row = np.arange(len(row_indices)) - cumulative_lengths[row_indices]
-    keep_mask = pos_in_row < end_indices[row_indices]
-    split_indices = np.cumsum(end_indices[:-1])
-
-    for col in data_conf.seq_cols:
-        concatenated = np.concatenate(data[col].values)
-        truncated = concatenated[keep_mask]
-        data[col] = np.split(truncated, split_indices)
-    data["_seq_len"] = end_indices
-    return data
-
-
 def searchsorted_vectorized(seqs, values):
     positions = np.zeros_like(values, dtype=np.int64)
     for idx, value in enumerate(values):
@@ -196,11 +179,27 @@ class ShardDataset(IterableDataset):
                     data[data_conf.time_name], end_times
                 )
 
-            data = slice_rows(data, end_indices)
+            data = self._slice_rows(data, end_indices)
 
             # Post-process for time-based slicing
             data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
 
+        return data
+    
+    def _slice_rows(self, data, end_indices):
+        seq_lens = data["_seq_len"].values
+        n_rows = len(data)
+        cumulative_lengths = np.concatenate([[0], np.cumsum(seq_lens)])
+        row_indices = np.repeat(np.arange(n_rows), seq_lens)
+        pos_in_row = np.arange(len(row_indices)) - cumulative_lengths[row_indices]
+        keep_mask = pos_in_row < end_indices[row_indices]
+        split_indices = np.cumsum(end_indices[:-1])
+
+        for col in self.data_conf.seq_cols:
+            concatenated = np.concatenate(data[col].values)
+            truncated = concatenated[keep_mask]
+            data[col] = np.split(truncated, split_indices)
+        data["_seq_len"] = end_indices
         return data
 
 
@@ -295,8 +294,10 @@ if __name__ == "__main__":
 
     # from copy import deepcopy
     start = time()
+    import numpy as np
+    from tqdm import tqdm
     # for batch, seqs in tqdm(train_loader):
-    #     seqs_r = train_loader.collate_fn.reverse(batch, collected=True)
+    #     seqs_r = train_loader.collate_fn.reverse(batch)
 
     #     for s in range(len(seqs)):
     #         so = seqs.iloc[s]
@@ -305,7 +306,7 @@ if __name__ == "__main__":
     #         res = []
     #         for id in so.index:
     #             if isinstance(so[id], np.ndarray):
-    #                 if not np.allclose(so[id], sr[id], 1e-7, equal_nan=True):
+    #                 if not np.allclose(so[id], sr[id], 1e-6, equal_nan=True):
     #                     res = res + [id]
     #             elif so[id] != sr[id]:
     #                 res = res + [id]

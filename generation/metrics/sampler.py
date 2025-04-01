@@ -32,9 +32,9 @@ class SampleEvaluator:
         self.subject_key = subject_key
         self.target_key = target_key
 
-    def evaluate(self, model, loader, blim=None, prefix=""):
+    def evaluate(self, model, loader, blim=None, prefix="", buffer_size=None):
         gt_df_save_path, gen_df_save_path = self.generate_samples(
-            model, loader, blim, prefix
+            model, loader, blim, prefix, buffer_size=buffer_size
         )
         breakpoint()
         return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
@@ -58,8 +58,8 @@ class SampleEvaluator:
             with torch.no_grad():
                 batch_pred = model.generate(batch_input, self.gen_len)
             gt, gen = concat_samples(batch_input, batch_pred)
-            gt = data_loader.collate_fn.reverse(gt, collected=False)
-            gen = data_loader.collate_fn.reverse(gen, collected=False)
+            gt = data_loader.collate_fn.reverse(gt)
+            gen = data_loader.collate_fn.reverse(gen)
 
             buffer_gt.append(gt)
             buffer_gen.append(gen)

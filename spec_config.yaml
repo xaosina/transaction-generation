@@ -73,7 +73,6 @@ loss:
 metrics: 
   names: ["Accuracy", "Coverage", "Levenstein"]
   target_key: "event_type"
-  detection_config: "configs/datasets/detection/mbd.yaml"
 
 logging:
   file_lvl: "info"

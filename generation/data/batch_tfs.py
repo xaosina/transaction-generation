@@ -106,7 +106,8 @@ class TimeToDiff(BatchTransform):
         batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
 
     def reverse(self, batch: GenBatch):
-        assert (batch.time >= 0).all()
+        if (batch.time >= 0).all():
+            logger.warning("Incorrect diffed time. Result will be non monotonic.")
         batch.time = batch.time.cumsum(0)
 
 
