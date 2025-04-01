@@ -1,17 +1,20 @@
 """GenBatch transforms for data loading pipelines."""
 
+import logging
+import random
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal
 from dataclasses import dataclass
-import random
-import logging
+from typing import Any, Literal
 
-import torch
 import numpy as np
+import torch
+
+from generation.data.preprocess.quantile_transformer import (
+    QuantileTransformerTorch,
+)
 
 from .data_types import GenBatch
-
 
 logger = logging.getLogger(__name__)
 
@@ -436,3 +439,20 @@ class MaskValid(BatchTransform):
 
         if batch.cat_features is not None:
             batch.cat_mask = len_mask & (batch.cat_features != 0)
+
+@dataclass
+class QuntileTransform(BatchTransform):
+    """Add quantile transform for the feature"""
+
+    model_path: str
+    feature_name: str
+
+    def __post_init__(self):
+        self.qt_model = QuantileTransformerTorch()
+        self.qt_model.load(self.model_path)
+
+    def __call__(self, batch: GenBatch):
+        batch[self.feature_name] = self.qt_model.transform(batch[self.feature_name])
+
+    def reverse(self, batch):
+        batch[self.feature_name] = self.qt_model.inverse_transform(batch[self.feature_name])

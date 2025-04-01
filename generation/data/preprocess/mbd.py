@@ -1,8 +1,12 @@
+import argparse
 import pickle
+import shutil
+from pathlib import Path
 from typing import Dict, List
 
 import numpy as np
 import torch
+from generation.data.preprocess.quantile_transformer import QuantileTransformerTorch
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 from sklearn.preprocessing import LabelEncoder
@@ -30,24 +34,7 @@ def encode_client_ids(train_clients: Dict, test_clients: Dict, config) -> List[D
 
 
 def spark_connection():
-    return (
-        SparkSession.builder.appName("ClientDataProcessing")
-        .config("spark.executor.cores", "22")
-        .config("spark.executor.memory", "32g")
-        .config("spark.driver.cores", "22")
-        .config("spark.driver.memory", "32g")
-        .config("spark.driver.maxResultSize", "8g")
-        .config("spark.sql.shuffle.partitions", "1500")
-        .config(
-            "spark.eventLog.gcMetrics.youngGenerationGarbageCollectors",
-            "G1 Young Generation",
-        )
-        .config(
-            "spark.eventLog.gcMetrics.oldGenerationGarbageCollectors",
-            "G1 Old Generation",
-        )
-        .getOrCreate()
-    )
+    return SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
 
 
 def select_clients(df, cn):
@@ -146,56 +133,84 @@ METADATA = {
 }
 
 
-def prepocess_full_mbd():
+def prepocess_full_mbd(temp_path: Path):
+
     spark = spark_connection()
     spark_df = spark.read.parquet("/home/dev/sb-proj/data/mbd-dataset/detail/trx")
-
     spark_df = spark_df.dropna()
 
     spark_df = choose_years(spark_df, [2021, 2022])
-
     spark_df = filter_by_trx_in_month(spark_df, 2, 100)
-
     spark_df = select_clients(spark_df, 50_000)
 
-    spark_df.write.csv("data/temp/.temp.csv", header=True)
+    spark_df.write.parquet((temp_path / ".temp.parquet").as_posix())
 
-    spark_df = spark.read.csv("data/temp/.temp.csv", header=True, inferSchema=True)
+    spark_df = spark.read.parquet((temp_path / ".temp.parquet").as_posix())
+    breakpoint()
+    save_quantile_statistic(spark_df, temp_path, features_to_transform=['amount'])
 
     train_dataset, test_dataset = split_train_test(spark_df)
 
     train_dataset = set_time_features(train_dataset)
     test_dataset = set_time_features(test_dataset)
 
-    train_dataset.write.csv("data/temp/.train.csv", header=True, mode="overwrite")
-    test_dataset.write.csv("data/temp/.test.csv", header=True, mode="overwrite")
+    train_dataset.write.csv((temp_path / ".train.csv").as_posix(), header=True, mode="overwrite")
+    test_dataset.write.csv((temp_path / ".test.csv").as_posix(), header=True, mode="overwrite")
 
     spark.stop()
 
+def save_quantile_statistic(spark_df, temp_path: Path | str, features_to_transform=None):
+    assert features_to_transform is not None, 'feature for quantile transform should be defined.'
 
-def main():
-    prepocess_full_mbd()
+    for feature_name in features_to_transform:
+        amount_list = spark_df.select(feature_name).rdd.map(lambda row, name=feature_name: row[name]).collect()
+
+        breakpoint()
+        amount_np = np.array(amount_list, dtype=np.float64)
+        amount_tensor = torch.tensor(amount_np, dtype=torch.float64)
+        
+        qt = QuantileTransformerTorch(n_quantiles=1000, output_distribution='normal')
+        qt.fit(amount_tensor)
+
+        qt.save((temp_path  / f"quantile_transformer_{feature_name}.pt").as_posix())
+
+
+
+def main(dataset_name="mbd-50k"):
+    temp_path = Path("data/temp")
+    dataset_path = Path(f"data/{dataset_name}")
+
+    prepocess_full_mbd(temp_path)
 
     csv_to_parquet(
-        "data/temp/.train.csv",
-        save_path="data/mbd-50k/",
+        temp_path / ".train.csv",
+        save_path=dataset_path,
         cat_codes_path=None,
         metadata=METADATA,
         overwrite=True,
     )
 
     csv_to_parquet(
-        "data/temp/.test.csv",
-        save_path="data/mbd-50k/",
-        cat_codes_path="data/mbd-50k/cat_codes/",
-        idx_codes_path="data/mbd-50k/idx",
+        temp_path / ".test.csv",
+        save_path=dataset_path,
+        cat_codes_path=dataset_path / "cat_codes",
+        idx_codes_path=dataset_path / "idx",
         metadata=METADATA,
         overwrite=True,
     )
 
+    if temp_path.exists() and temp_path.is_dir():
+        shutil.rmtree(temp_path)
+        print(f"Temp directory was removed: {temp_path}")
+    else:
+        print(f"!WARNING! Temp directory is not found: {temp_path}")
+
 
 if __name__ == "__main__":
-    # TODO: Make args for path to dataset (in/out).
-    # TODO: Delete temp files after script.
-    # TODO: Refactor paths and strs and consts.
-    main()
+
+    parser = argparse.ArgumentParser(description="Preprocess and convert MBD dataset to Parquet")
+    parser.add_argument("--dataname", type=str, default="mbd-50k", help="Dataset name")
+    parser.add_argument("--remove-temp", type=bool, default=True, help='Cleanup temp files')
+    args = parser.parse_args()
+
+    main(dataset_name=args.dataname)
