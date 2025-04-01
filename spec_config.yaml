@@ -36,13 +36,18 @@ data_conf:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
-
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -77,3 +82,13 @@ metrics:
 logging:
   file_lvl: "info"
   cons_lvl: "error"
+
+trainer:
+  total_iters: 100
+  total_epochs: null
+  ckpt_track_metric: epoch
+  iters_per_epoch: 50
+  patience: -1
+  profiling: false
+
+device: "cuda:0"

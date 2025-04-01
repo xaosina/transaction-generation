@@ -19,8 +19,8 @@ class SampleEvaluator:
         metrics: Optional[list[str]] = None,
         gen_len: int = 16,
         hist_len: int = 16,
-        subject_key: str = 'client_id',
-        target_key: str = 'event_type',
+        subject_key: str = "client_id",
+        target_key: str = "event_type",
         device: int = 0,
     ):
         self.ckpt = ckpt

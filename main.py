@@ -79,7 +79,6 @@ def run_pipeline(cfg):
     out = model(batch)
     # batch = next(iter(test_loader))
     loss_out = loss(batch, out)
-    metrics, loss = None, None
 
     sample_evaluator = SampleEvaluator(
         ckpt=Path(cfg.log_dir) / cfg.run_name / "ckpt",
@@ -100,7 +99,7 @@ def run_pipeline(cfg):
         loss=loss,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        sample_evaluator=sample_evaluator,
+        evaluator=sample_evaluator,
         train_loader=train_loader,
         val_loader=val_loader,
         run_name=cfg.run_name,
@@ -110,6 +109,7 @@ def run_pipeline(cfg):
     )
 
     trainer.run()
+    breakpoint()
     trainer.load_best_model()
 
     train_metrics = trainer.validate(loaders["full_train"])

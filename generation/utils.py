@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-import time
+from time import time
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -14,13 +14,14 @@ from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
 
 class DummyProfiler:
-    def step(self):
+    def __enter__(self):
+        return self  # ← позволяет делать `with self._profiler as prof`
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
-
-@contextmanager
-def dummy_profiler():
-    yield DummyProfiler()
+    def step(self):
+        pass
 
 
 def get_profiler(activate: bool = False, save_path=None):
@@ -29,21 +30,22 @@ def get_profiler(activate: bool = False, save_path=None):
     def on_trace_ready(prof):
         prof.export_chrome_trace("trace.json")
 
-    profiler = profile(
-        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=schedule(
-            skip_first=5,
-            wait=1,
-            warmup=2,
-            active=10,
-            repeat=1,
-        ),
-        record_shapes=True,
-        on_trace_ready=on_trace_ready,
+    return (
+        profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=schedule(
+                skip_first=5,
+                wait=1,
+                warmup=2,
+                active=10,
+                repeat=1,
+            ),
+            record_shapes=True,
+            on_trace_ready=on_trace_ready,
+        )
+        if activate
+        else DummyProfiler()
     )
-    profiler_record = record_function
-
-    return (profiler, record_function) if activate else (dummy_profiler(), None)
 
 
 def dictprettyprint(data: Dict):
@@ -73,10 +75,11 @@ def get_state_dict(model, config):
 
 
 class LoadTime:
-    def __init__(self, loader):
+    def __init__(self, loader, disable=False):
         self.loader = loader
         self.full_time = 0
         self.iterator = None
+        self._disable = disable
 
     def __iter__(self):
         self.iterator = iter(self.loader)
@@ -88,12 +91,13 @@ class LoadTime:
                 "Iterator not initialized. Call __iter__() before __next__()."
             )
         try:
-            start = time.time()
+            start = time()
             value = next(self.iterator)
-            self.full_time += time.time() - start
+            self.full_time += time() - start
             return value
         except StopIteration:
-            print(f"Data Loading took: {self.full_time} seconds")
+            if not self._disable:
+                print(f"Data Loading took: {self.full_time} seconds")
             self.iterator = None
             self.full_time = 0
             raise
