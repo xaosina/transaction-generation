@@ -1,25 +1,25 @@
-from dataclasses import asdict, dataclass, field
 import os
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import pyrallis
-from generation.data.utils import get_dataloaders
-from generation.data.data_types import DataConfig
-from generation.models.generator import Generator
 
-from generation.metrics.sampler import SampleEvaluator
-from generation.losses import get_loss, LossConfig
-from generation.utils import get_optimizer, get_scheduler
+from generation.data.data_types import DataConfig
+from generation.data.utils import get_dataloaders
+from generation.losses import LossConfig, get_loss
+from generation.metrics.evaluator import EvaluatorConfig, SampleEvaluator
+from generation.models.generator import Generator, ModelConfig
 from generation.trainer import Trainer
 from generation.utils import (
+    LoginConfig,
     OptimizerConfig,
     SchedulerConfig,
+    get_optimizer,
+    get_scheduler,
     get_unique_folder_suffix,
     log_to_file,
-    LoginConfig
 )
-from generation.models.generator import ModelConfig
 
 
 @dataclass
@@ -33,18 +33,13 @@ class TrainConfig:
     ckpt_resume: Optional[str | os.PathLike] = None
     profiling: bool = False
 
-@dataclass
-class MetricConfig:
-    names: list[str] = field(default_factory=list)
-    subject_key: str = "client_id"
-    target_key: str = "event_type"
 
 @dataclass
 class PipelineConfig:
     run_name: str = "debug"
     log_dir: Path = "log/generation"
-    device: str = "cuda:0"
-    metrics: MetricConfig = field(default_factory=MetricConfig)
+    devices: list[str] = ["cuda:0"]
+    evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
@@ -52,6 +47,7 @@ class PipelineConfig:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
+
 
 @pyrallis.wrap("spec_config.yaml")
 def main(cfg: PipelineConfig):
@@ -79,15 +75,7 @@ def run_pipeline(cfg):
     # batch = next(iter(test_loader))
     loss_out = loss(batch, out)
 
-    sample_evaluator = SampleEvaluator(
-        gen_path=Path(cfg.log_dir) / cfg.run_name / "generated",
-        metrics=cfg.metrics.names,
-        gen_len=cfg.data_conf.generation_len,
-        hist_len=cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать
-        device=cfg.device,
-        subject_key=cfg.data_conf.index_name,
-        target_key=cfg.metrics.target_key
-    )
+    sample_evaluator = SampleEvaluator(cfg.data_conf, cfg.evaluator)
 
     metrics = sample_evaluator.evaluate(model, test_loader, blim=100, buffer_size=10)
     print(metrics)

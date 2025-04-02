@@ -91,4 +91,5 @@ trainer:
   patience: -1
   profiling: false
 
-device: "cuda:0"
+devices: 
+  - "cuda:0"

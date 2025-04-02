@@ -1,11 +1,11 @@
 import logging
 import os
 import sys
-from time import time
 from collections.abc import Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from time import time
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
@@ -184,22 +184,23 @@ def get_unique_folder_suffix(folder_path):
 def create_instances_from_module(
     module,
     configs: list[Mapping[str, Any] | str] | None = None,
+    common_kwargs: dict = field(default_factory=dict),
 ) -> list[Any] | None:
     instances = None
     if configs is not None:
         instances = []
         for config in configs:
             if isinstance(config, str):
-                instances.append(getattr(module, config)())
+                instances.append(getattr(module, config)(common_kwargs))
                 continue
 
             for class_name, params in config.items():
                 klass = getattr(module, class_name)
                 if isinstance(params, Mapping):
-                    instances.append(klass(**params))
+                    instances.append(klass(**(params | common_kwargs)))
                 elif isinstance(params, Sequence):
-                    instances.append(klass(*params))
+                    instances.append(klass(*params, **common_kwargs))
                 else:
-                    instances.append(klass(params))
+                    instances.append(klass(params, **common_kwargs))
                 break  # Only process first key-value pair in dict
     return instances

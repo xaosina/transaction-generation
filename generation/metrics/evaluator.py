@@ -1,5 +1,6 @@
 import shutil
 from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -10,41 +11,35 @@ from tqdm import tqdm
 
 from generation.models.generator import Generator
 
-from ..data.data_types import GenBatch
+from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
-from .evaluation.eval_density import run_eval_density
 from .evaluation.eval_detection import run_eval_detection
 
 
+@dataclass
+class EvaluatorConfig:
+    save_path: str
+    detection_config: str = None
+    devices: list[str] = ["cuda:0"]
+    metrics: Optional[list[Mapping[str, Any] | str]] = None
+
+
 class SampleEvaluator:
-    def __init__(
-        self,
-        gen_path: str,
-        metric_params: Optional[list[Mapping[str, Any] | str]] = None,
-        generation_len: int = 16,
-        history_len: int = 16,
-    ):
-        self.gen_path = Path(gen_path)
-        self.gen_path.mkdir(parents=True, exist_ok=True)
-        self.generation_len = generation_len
-        self.history_len = history_len
-        self.metrics = create_instances_from_module(m, metric_params) or []
+    def __init__(self, data_conf: DataConfig, eval_conf: EvaluatorConfig):
+        self.save_path = Path(eval_conf.save_path)
+        self.save_path.mkdir(parents=True, exist_ok=True)
+        self.detection_config = eval_conf.detection_config
+        self.devices = eval_conf.devices
+        self.data_conf = data_conf
+        self.metrics = (
+            create_instances_from_module(m, eval_conf.metrics, {"data_conf": data_conf})
+            or []
+        )
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         gt_dir, gen_dir = self.generate_samples(model, loader, blim, buffer_size)
 
-        gt = pd.read_parquet(gt_dir)
-        gen = pd.read_parquet(gen_dir)
-
-        results = {}
-        for metric in self.metrics:
-            values = metric(gt, gen)
-            if isinstance(values, dict):
-                for k, v in values.items():
-                    results[f"{str(metric)}_{k}"] = v
-            else:
-                results[str(metric)] = values
-
+        results = self.estimate_metrics(gt_dir, gen_dir)
         results |= self.estimate_tmetrics(gt_dir, gen_dir)
 
         if remove:
@@ -54,7 +49,7 @@ class SampleEvaluator:
     def generate_samples(
         self, model: Generator, data_loader, blim=None, buffer_size=None
     ):
-        gt_dir, gen_dir = self.gen_path / "gt", self.gen_path / "gen"
+        gt_dir, gen_dir = self.save_path / "gt", self.save_path / "gen"
         gt_dir += get_unique_folder_suffix(gt_dir)
         gen_dir += get_unique_folder_suffix(gen_dir)
 
@@ -89,37 +84,35 @@ class SampleEvaluator:
 
         return gt_dir, gen_dir
 
+    def estimate_metrics(self, gt_dir, gen_dir) -> dict:
+        gt = pd.read_parquet(gt_dir)
+        gen = pd.read_parquet(gen_dir)
+        assert (gt[self.data_conf.index_name] == gen[self.data_conf.index_name]).all()
+        results = {}
+        for metric in self.metrics:
+            values = metric(gt, gen)
+            if isinstance(values, dict):
+                for k, v in values.items():
+                    results[f"{str(metric)}_{k}"] = v
+            else:
+                results[str(metric)] = values
+        return results
 
-    def estimate_tmetrics(self) -> dict[str, float]:
-
+    def estimate_tmetrics(self, gt_dir, gen_dir) -> dict[str, float]:
         results = dict()
-        for metric_type in ["discriminative", "density"]:
-            if metric_type == "discriminative":
-                discr_res = run_eval_detection(
-                    data=self.gen_save_path,
-                    orig=self.gt_save_path,
-                    log_dir=self.log_dir,
-                    data_conf=self.data_conf,
-                    dataset=self.detection_config,
-                    tail_len=self.tail_len,
-                    match_users=False,
-                    gpu_ids=self.device,
-                    verbose=False,
-                )
-
-                discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
-                # discr_score = 0.0
-                results[self.__ret_name("discriminative")] = float(discr_score)
-
-            elif metric_type == "density":
-                sh_tr = run_eval_density(
-                    self.gen_save_path,
-                    self.gt_save_path,
-                    self.data_conf,
-                    self.log_cols,
-                    self.tail_len,
-                )
-
+        if self.detection_config:
+            discr_res = run_eval_detection(
+                data=gen_dir,
+                orig=gt_dir,
+                log_dir=self.save_path,
+                data_conf=self.data_conf,
+                dataset=self.detection_config,
+                tail_len=self.data_conf.generation_len,
+                gpu_ids=self.devices,
+                verbose=False,
+            )
+            discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
+            results["Uncond Discriminative"] = float(discr_score)
         return results
 
 
