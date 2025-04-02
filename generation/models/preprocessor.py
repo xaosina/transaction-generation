@@ -8,8 +8,8 @@ from ebes.types import Seq
 
 from ..data.data_types import DataConfig, GenBatch
 from ..data.batch_tfs import NewFeatureTransform
-from ..data.utils import get_batch_transforms
-
+from ..utils import create_instances_from_module
+from ..data import batch_tfs
 
 class Batch2TransformedSeq(Batch2Seq):
     def __init__(
@@ -31,7 +31,7 @@ class Batch2TransformedSeq(Batch2Seq):
             else:
                 num_count = 0
         # Init batch_transforms. Update initial features.
-        self.batch_transforms = get_batch_transforms(batch_transforms)
+        self.batch_transforms = create_instances_from_module(batch_tfs, batch_transforms)
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)

@@ -48,7 +48,6 @@ class PipelineConfig:
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
-    # model_conf: Mapping[str, Any] = field(default_factory=lambda: {})
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
@@ -81,7 +80,7 @@ def run_pipeline(cfg):
     loss_out = loss(batch, out)
 
     sample_evaluator = SampleEvaluator(
-        ckpt=Path(cfg.log_dir) / cfg.run_name / "ckpt",
+        gen_path=Path(cfg.log_dir) / cfg.run_name / "generated",
         metrics=cfg.metrics.names,
         gen_len=cfg.data_conf.generation_len,
         hist_len=cfg.data_conf.min_history_len,  # Здесь надо как-то по-другому делать

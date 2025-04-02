@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
 import yaml
@@ -179,3 +179,27 @@ def get_unique_folder_suffix(folder_path):
     while os.path.exists(f"{folder_path}({n})"):
         n += 1
     return f"({n})"
+
+
+def create_instances_from_module(
+    module,
+    configs: list[Mapping[str, Any] | str] | None = None,
+) -> list[Any] | None:
+    instances = None
+    if configs is not None:
+        instances = []
+        for config in configs:
+            if isinstance(config, str):
+                instances.append(getattr(module, config)())
+                continue
+
+            for class_name, params in config.items():
+                klass = getattr(module, class_name)
+                if isinstance(params, Mapping):
+                    instances.append(klass(**params))
+                elif isinstance(params, Sequence):
+                    instances.append(klass(*params))
+                else:
+                    instances.append(klass(params))
+                break  # Only process first key-value pair in dict
+    return instances

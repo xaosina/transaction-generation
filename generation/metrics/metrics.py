@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-from typing import List, Set, Dict, Union, NewType
+from typing import List, Dict, Union, NewType
 
 import collections
 
