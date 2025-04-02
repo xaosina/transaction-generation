@@ -137,7 +137,7 @@ class DistributionMetric(BaseMetric):
     @abstractmethod
     def get_scores(self, p): ...
 
-    def __call__(self, y_gen: pd.DataFrame):
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame):
         vals = np.array(list(y_gen[self.target_key].value_counts()), dtype=float)
         total = vals.sum()
         p = vals / total
@@ -182,17 +182,32 @@ class HistoryAwareMetric(BaseMetric):
     @abstractmethod
     def get_scores(row): ...
 
-    def __call__(self, y_hist: pd.DataFrame, y_gen: pd.DataFrame) -> pd.DataFrame:
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame):
         if self.userwise:
             df = pd.concat(
-                (y_hist[self.target_key].agg(set), y_gen[self.target_key].agg(set)),
+                (
+                    y_gen[self.target_key]
+                    .map(lambda x: x[: -self.generation_len])
+                    .agg(set),
+                    y_gen[self.target_key]
+                    .map(lambda x: x[-self.generation_len :])
+                    .agg(set),
+                ),
                 keys=["hists", "preds"],
                 axis=1,
             )
             return df.apply(self.get_scores, axis=1).mean()
         else:
-            unique_hist = y_hist[self.target_key].nunique()
-            unique_pred = y_gen[self.target_key].nunique()
+            unique_hist = (
+                y_gen[self.target_key]
+                .map(lambda x: x[: -self.generation_len])
+                .nunique()
+            )
+            unique_pred = (
+                y_gen[self.target_key]
+                .map(lambda x: x[-self.generation_len :])
+                .nunique()
+            )
 
             return unique_pred / unique_hist
 
@@ -202,7 +217,6 @@ class Coverage(HistoryAwareMetric):
     def get_scores(row):
         hists, preds = row["hists"], row["preds"]
         return len(preds) / len(hists)
-    
+
     def __repr__(self):
         return self.userwise * "Userwise" + f"Coverage on {self.target_key}"
-
