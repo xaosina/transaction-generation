@@ -160,7 +160,6 @@ class Trainer:
                 saved exectly there. If `None` `ckpt_dir` from construct is used with
                 subfolder named `run_name` from Trainer's constructor.
         """
-        breakpoint()
         if ckpt_path is None and self._ckpt_dir is None:
             logger.warning(
                 "`ckpt_path` was not passned to `save_ckpt` and `ckpt_dir` "

@@ -16,7 +16,58 @@ class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
 
 
-class Generator(BaseModel):  # TODO work
+class BaseGenerator(BaseModel):
+    def forward(self, x: GenBatch) -> PredBatch: ...
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
+
+
+class GroundTruthGenerator(BaseGenerator):
+    """To check that all preprocessing is fine. Get perfect baseline."""
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a GroundTruthGenerator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        assert hist.target_time and hist.target_time.shape[0] == gen_len
+        gen_batch = deepcopy(hist)
+        gen_batch.append(gen_batch.get_target_batch())
+
+        gen_batch.target_time = None
+        gen_batch.target_num_features = None
+        gen_batch.target_cat_features = None
+
+        if with_hist:
+            return hist  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return hist.tail(gen_len)
+
+
+class BaselineRepeater(BaseGenerator):
+    def __init__(self, data_conf: DataConfig):
+        super().__init__()
+        self.data_conf = data_conf
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a repeator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
+        assert isinstance(hist.time, torch.Tensor)
+        hist = deepcopy(hist)
+        gen_batch = hist.tail(gen_len)
+        if hist.monotonic_time:  # Time is monotonic.
+            corr = torch.cat((torch.zeros_like(hist.time[:1]), hist.time))
+            corr = corr[hist.lengths - gen_len, torch.arange(hist.time.shape[1])]
+            gen_batch.time = gen_batch.time + gen_batch.time[-1] - corr
+            # This complicated correction assures same behavior as with timediff
+        if with_hist:
+            return hist.append(gen_batch)
+        else:
+            return gen_batch
+
+
+class Generator(BaseGenerator):  # TODO work
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
@@ -48,17 +99,18 @@ class Generator(BaseModel):  # TODO work
             x (Seq): Input sequence [L, B, D]
 
         """
-        self.eval()
         hist = deepcopy(hist)
 
         with torch.no_grad():
             for _ in range(gen_len):
                 x = self.preprocess(hist)
-                x = self.encoder.generate(x) # Sequence of shape [1, B, D]
+                x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
                 x = self.projector(x)
-                x = self.reconstructor.generate(x) # GenBatch with sizes [1, B, D] for cat, num
-                hist.append(x) # Append GenBatch, result is [L+1, B, D]
+                x = self.reconstructor.generate(
+                    x
+                )  # GenBatch with sizes [1, B, D] for cat, num
+                hist.append(x)  # Append GenBatch, result is [L+1, B, D]
         if with_hist:
-            return hist # Return GenBatch of size [L + gen_len, B, D]
+            return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
-            return hist.tail(gen_len) # Return GenBatch of size [gen_len, B, D]
+            return hist.tail(gen_len)  # Return GenBatch of size [gen_len, B, D]

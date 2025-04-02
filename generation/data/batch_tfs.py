@@ -1,7 +1,6 @@
 """GenBatch transforms for data loading pipelines."""
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -96,7 +95,24 @@ class RescaleTime(BatchTransform):
         batch.time.sub_(self.loc).div_(self.scale)
 
     def reverse(self, batch: GenBatch):
-        return batch.time.mul_(self.scale).add_(self.loc)
+        batch.time.mul_(self.scale).add_(self.loc)
+
+
+@dataclass
+class TimeToDiff(BatchTransform):
+    """Applies diff transform to time."""
+
+    def __call__(self, batch: GenBatch):
+        assert isinstance(batch.time, torch.Tensor)
+        _, B = batch.time.shape
+        batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
+        batch.monotonic_time = False
+
+    def reverse(self, batch: GenBatch):
+        if (batch.time < 0).any():
+            logger.warning("Incorrect diffed time. Result will be non monotonic.")
+        batch.time = batch.time.cumsum(0)
+        batch.monotonic_time = True
 
 
 @dataclass
@@ -455,4 +471,6 @@ class QuntileTransform(BatchTransform):
         batch[self.feature_name] = self.qt_model.transform(batch[self.feature_name])
 
     def reverse(self, batch):
-        batch[self.feature_name] = self.qt_model.inverse_transform(batch[self.feature_name])
+        batch[self.feature_name] = self.qt_model.inverse_transform(
+            batch[self.feature_name]
+        )

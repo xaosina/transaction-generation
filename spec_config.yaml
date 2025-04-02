@@ -29,17 +29,25 @@ data_conf:
   padding_value: 0
 
   train_random_end: none
-  val_random_end: none
+  val_random_end: time
   
   train_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
+    - TimeToDiff
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
+    - TimeToDiff
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len

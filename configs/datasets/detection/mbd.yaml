@@ -1,4 +1,3 @@
-log_dir: log/mbd_detection
 patience: 10
 n_classes: 2
 main_metric: MulticlassAUROC
@@ -6,16 +5,23 @@ main_loss:
   name: nn.CrossEntropyLoss
 
 cc:
-  event_type: 19
-  src_type11: 11
-  dst_type11: 13
-  src_type32: 37 
+  src_type32: 87
+  src_type11: 45
+  event_subtype: 60
+  dst_type11: 55
+  event_type: 54
+  currency: 2 # Initially 12
+  dst_type12: 253
+  src_type22: 84
+  src_type12: 184
+  # src_type31: 1455
+  # src_type21: 8000
 nn:
   - amount
 
 data:
   dataset:
-    parquet_path: "data/mbd_short/detection/data"
+    parquet_path: 
     random_split: true
     split_seed: 42
 
@@ -26,19 +32,16 @@ data:
 
   preprocessing:
     common_pipeline: &common_pipeline
-      max_seq_len: 150
-      time_name: event_time
+      max_seq_len: 1000
+      time_name: days_since_first_tx
       index_name: client_id
       target_name: generated
       cat_cardinalities: ${cc}
       num_names: ${nn}
       batch_transforms:
-        # - DatetimeToFloat:
-        #     loc: "2022-01-01"
-        #     scale: [365, "D"]
-        # - RescaleTime:
-        #     loc: 0.0
-        #     scale: 183
+        - RescaleTime:
+            loc: 0.0
+            scale: 365.0
         - TimeToFeatures:
             process_type: ${model.preprocess.params.time_process}
         - TargetToLong

@@ -10,60 +10,51 @@ import pandas as pd
 
 from Levenshtein import distance as lev_score
 from sklearn.metrics import accuracy_score
-from .types import BinaryData, CoverageData, OnlyPredData
 
 UserStatistic = NewType("UserStatistic", Dict[int, Dict[str, Union[int, float]]])
 
 
 class BaseMetric(ABC):
+    generation_len: int
 
     @abstractmethod
-    def __call__(self, *args, **kwargs): ...
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame): ...
 
     @abstractmethod
     def __repr__(self): ...
 
 
 class BinaryMetric(BaseMetric):
-
-    def __init__(self, subject_key, target_key):
-        self.subject_key = subject_key
-        self.target_key = target_key
-
-    def _group_list(self, data: BinaryData) -> pd.DataFrame:
-        preds = data.y_pred.groupby(self.subject_key)[self.target_key].apply(
-            lambda s: s.tolist()
-        )
-        gts = data.y_true.groupby(self.subject_key)[self.target_key].apply(
-            lambda s: s.tolist()
-        )
-        return pd.concat((gts, preds), keys=["gt", "pred"], axis=1)
+    target_key: str
 
     @abstractmethod
     def get_scores(self, row): ...
 
-    def __call__(self, data: BinaryData):
-        df = self._group_list(data)
-        return df.groupby(level=0).apply(self.get_scores).mean()
+    def __call__(self, y_true: pd.DataFrame, y_gen: pd.DataFrame):
+        df = pd.concat(
+            (y_true[self.target_key], y_gen[self.target_key]),
+            keys=["gt", "pred"],
+            axis=1,
+        ).map(lambda x: x[-self.generation_len :])
+        return df.apply(self.get_scores, axis=1).mean()
 
 
 class Levenstein(BinaryMetric):
-
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         lev_m = 1 - lev_score(gt, pred) / len(pred)
-        return pd.Series(data=[lev_m], index=["lev_score"])
+        return lev_m
 
     def __repr__(self):
-        return f"Levenstein on {self.target_key}" 
+        return f"Levenstein on {self.target_key}"
 
 
-class Accuracy(BaseMetric):
+class Accuracy(BinaryMetric):
 
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         acc_m = accuracy_score(gt, pred)
-        return pd.Series(data=[acc_m], index=["accuracy"])
+        return acc_m
 
     def __repr__(self):
         return f"Accuracy on {self.target_key}"
@@ -125,7 +116,7 @@ class F1Metric(BaseMetric):
         return cls_metric
 
     def get_scores(self, row):
-        gt, pred = row.iloc[0]
+        gt, pred = row["gt"], row["pred"]
         f1_function = (
             self.f1_score_macro_unorder
             if self.__average == "macro"
@@ -133,7 +124,7 @@ class F1Metric(BaseMetric):
         )
         f1 = f1_function(self.get_statistics(gt, pred))
 
-        return pd.Series(data=[f1], index=[f"f1_{self.__average}"])
+        return f1
 
     def __repr__(self):
         return f"F1_{self.__average} on {self.target_key}"
@@ -141,21 +132,22 @@ class F1Metric(BaseMetric):
 
 class DistributionMetric(BaseMetric):
 
-    # If we can use metrics without necessary argument _ in upper level - REMOVE
-    def __init__(self, _, target_key):
-        self.target_key = target_key
+    target_key: str
 
-    def _get_distribution(self, data: OnlyPredData):
-        vals = np.array(list(data.y_pred[self.target_key].value_counts()), dtype=float)
+    @abstractmethod
+    def get_scores(self, p): ...
+
+    def __call__(self, y_gen: pd.DataFrame):
+        vals = np.array(list(y_gen[self.target_key].value_counts()), dtype=float)
         total = vals.sum()
-        return vals / total
+        p = vals / total
+
+        return self.get_scores(p)
 
 
 class Gini(DistributionMetric):
 
-    def __call__(self, data: OnlyPredData):
-
-        p = self._get_distribution(data)
+    def get_scores(self, p):
 
         p_sorted = np.sort(p)
         n = len(p_sorted)
@@ -173,8 +165,7 @@ class Gini(DistributionMetric):
 
 class ShannonEntropy(DistributionMetric):
 
-    def __call__(self, data: OnlyPredData):
-        p = self._get_distribution(data)
+    def get_scores(self, p):
 
         shannon_entropy = -np.sum(p * np.log2(p))
 
@@ -185,36 +176,33 @@ class ShannonEntropy(DistributionMetric):
 
 
 class HistoryAwareMetric(BaseMetric):
-    def __init__(self, subject_key, target_key, userwise=False):
-        self.subject_key = subject_key
-        self.target_key = target_key
-        self.userwise = userwise
+    target_key: str
+    userwise: bool
 
-    def _get_groups(self, data: CoverageData) -> pd.DataFrame:
-        hists = data.y_hist.groupby(self.subject_key)[self.target_key].agg(set)
-        preds = data.y_pred.groupby(self.subject_key)[self.target_key].agg(set)
-        return pd.concat((hists, preds), keys=["hists", "preds"], axis=1)
+    @abstractmethod
+    def get_scores(row): ...
+
+    def __call__(self, y_hist: pd.DataFrame, y_gen: pd.DataFrame) -> pd.DataFrame:
+        if self.userwise:
+            df = pd.concat(
+                (y_hist[self.target_key].agg(set), y_gen[self.target_key].agg(set)),
+                keys=["hists", "preds"],
+                axis=1,
+            )
+            return df.apply(self.get_scores, axis=1).mean()
+        else:
+            unique_hist = y_hist[self.target_key].nunique()
+            unique_pred = y_gen[self.target_key].nunique()
+
+            return unique_pred / unique_hist
 
 
 class Coverage(HistoryAwareMetric):
 
-    def __call__(self, *args, **kwargs):
-        if self.userwise:
-            return self._compute_userwise(*args, **kwargs)
-        else:
-            return self._compute_whole(*args, **kwargs)
+    def get_scores(row):
+        hists, preds = row["hists"], row["preds"]
+        return len(preds) / len(hists)
+    
+    def __repr__(self):
+        return self.userwise * "Userwise" + f"Coverage on {self.target_key}"
 
-    def _compute_whole(self, data: CoverageData):
-        unique_hist = data.y_hist[self.target_key].nunique()
-        unique_pred = data.y_pred[self.target_key].nunique()
-
-        return unique_pred / unique_hist
-
-    def _compute_userwise(self, data: CoverageData):
-        df = self._get_groups(data)
-
-        def get_scores(row):
-            hists, preds = row["hists"], row["preds"]
-            return len(preds) / len(hists)
-
-        return df.groupby(level=0).apply(get_scores).mean()

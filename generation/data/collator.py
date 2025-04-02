@@ -103,49 +103,42 @@ class SequenceCollator:
 
         return batch
 
-    def reverse(self, batch: GenBatch, collected=True) -> pd.DataFrame:
-        def numpy_if_possible(arr):
-            if isinstance(arr, torch.Tensor):
-                return arr.numpy(force=True)
-            return arr
+    def reverse(self, batch: GenBatch) -> pd.DataFrame:
+        def to_numpy(x):
+            return x.numpy(force=True) if isinstance(x, torch.Tensor) else x
 
-        def collect_array(arr):
-            arr = numpy_if_possible(arr)
-            assert arr is not None
-            L = arr.shape[0]
-            mask = (np.arange(L) < seq_lens[:, None]).reshape(-1)  # B*L
-            with_padding = arr.swapaxes(0, 1).reshape(-1, *arr.shape[2:])  # B*L, D
-            return with_padding[mask]  # D, sum(seq_len)
+        def collect(arr, mask):
+            arr = to_numpy(arr)
+            _, _, D = arr.shape
+            arr = arr.swapaxes(0, 1).reshape(-1, D)  # B*L, D
+            arr = arr[mask]  # sum(seq_lens, D)
+            return [np.split(arr[:, d], np.cumsum(seq_lens[:-1])) for d in range(D)]
 
         batch = deepcopy(batch)
-        if self.batch_transforms is not None:
-            for tf in self.batch_transforms[::-1]:
+        if self.batch_transforms:
+            for tf in reversed(self.batch_transforms):
                 tf.reverse(batch)
 
-        cat_names = batch.cat_features_names
-        num_names = batch.num_features_names
-        seq_lens = batch.lengths.numpy(force=True)
-        seqs = pd.DataFrame(
-            columns=[self.index_name, self.time_name] + cat_names + num_names
-        )
-        seqs[self.index_name] = np.repeat(batch.index, seq_lens)
+        cat_names = batch.cat_features_names or []
+        num_names = batch.num_features_names or []
+        seq_lens = to_numpy(batch.lengths)
 
+        L, B = batch.time.shape
+        valid_mask = (np.arange(L) < seq_lens[:, None]).ravel()
+        # Combine features into (L, B, D) array
+        features = collect(batch.time[:, :, None], valid_mask)
         if num_names:
-            seqs[num_names] = collect_array(batch.num_features)
+            features += collect(batch.num_features, valid_mask)
         if cat_names:
-            seqs[cat_names] = collect_array(batch.cat_features)
+            features += collect(batch.cat_features, valid_mask)
 
-        seqs[self.time_name] = collect_array(batch.time)
+        data = np.empty((B, len(features)), dtype=object)
+        for d in range(len(features)):
+            data[:, d] = features[d]
 
-        if collected:
-            seqs = (
-                seqs.groupby(self.index_name, sort=False)
-                .agg(list)
-                .map(np.array)
-                .reset_index()
-            )
-            seqs["_seq_len"] = seq_lens
-        else:
-            seqs["_seq_len"] = np.repeat(seq_lens, seq_lens)
+        # Assemble DataFrame
+        df = pd.DataFrame(data, columns=[self.time_name] + num_names + cat_names)
+        df.insert(0, self.index_name, batch.index)
+        df.insert(1, "_seq_len", seq_lens)
 
-        return seqs
+        return df

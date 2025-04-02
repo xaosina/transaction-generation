@@ -90,9 +90,9 @@ def run_pipeline(cfg):
         target_key=cfg.metrics.target_key
     )
 
-    # metrics = sample_evaluator.evaluate(model, test_loader, blim=10)
-    # print(metrics)
-    # breakpoint()
+    metrics = sample_evaluator.evaluate(model, test_loader, blim=100, buffer_size=10)
+    print(metrics)
+    breakpoint()
 
     trainer = Trainer(
         model=model,

@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sdmetrics.reports.single_table import QualityReport
+from ...data.data_types import DataConfig
 
 DIRPATH = os.path.dirname(__file__)
 
@@ -43,43 +44,38 @@ def parse_args():
     return parser.parse_args()
 
 
+def preproc_parquet(path, data_conf: DataConfig, tail_len):
+    df = pd.read_parquet(path)
+    if tail_len:
+        assert df._seq_len.min() >= tail_len
+        df[data_conf.seq_cols] = df[data_conf.seq_cols].map(lambda x: x[-tail_len:])
+    df = df.explode(data_conf.seq_cols)
+    return df
+
+
 def run_eval_density(
-    data: Path,
-    orig: Path,
-    dataset: str = "datafusion",
+    syn_path: Path,
+    real_path: Path,
+    data_conf: DataConfig,
+    log_cols: list[str],
+    tail_len: int = None,
     save_results: bool = False,
-    max_rows=None,
 ):
-    syn_path = data
-    real_path = orig
     # Load
-    syn_data = pd.read_csv(syn_path, nrows=max_rows)
+    syn_data = preproc_parquet(syn_path, data_conf, tail_len)
     print("Synth ready")
-    real_data = pd.read_csv(real_path, nrows=max_rows)
+    real_data = preproc_parquet(real_path, data_conf, tail_len)
     print("Real ready")
-
-    try:
-
-        metadata_path = DIRPATH + f"/data/{dataset}/metadata_for_density.json"
-        with open(metadata_path, "r") as f:
-            metadata = json.load(f)["metadata"]
-
-    except FileNotFoundError:
-        metadata = {
-            "columns": {
-                "amount": {"sdtype": "numerical"},
-                "event_type": {"sdtype": "categorical"},
-                "src_type11": {"sdtype": "categorical"},
-                "dst_type11": {"sdtype": "categorical"},
-                "src_type32": {"sdtype": "categorical"},
-                # "time_diff_days": {"sdtype": "numerical"},
-            },
-            "sequence_key": "client_id",
-            "sequence_index": "event_time",
-            "log_cols_for_density": ["amount"],
-        }
+    # Prepare metadata
+    metadata = {"columns": {}}
+    for num_name in data_conf.num_names:
+        metadata["columns"][num_name] = {"sdtype": "numerical"}
+    for cat_name in data_conf.cat_cardinalities:
+        metadata["columns"][cat_name] = {"sdtype": "categorical"}
+    metadata["sequence_key"] = data_conf.index_name
+    metadata["sequence_index"] = data_conf.time_name
     # Preprocess
-    for col in metadata["log_cols_for_density"]:
+    for col in log_cols:
         print(col)
         syn_data[col] = log10_scale(syn_data[col])
         real_data[col] = log10_scale(real_data[col])
