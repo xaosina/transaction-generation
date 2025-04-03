@@ -38,7 +38,7 @@ data_conf:
     - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+        model_path: "data/mbd-50k/quantile_transformer_amount.pt"
 
   val_transforms:
     - RescaleTime:
@@ -47,7 +47,7 @@ data_conf:
     - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+        model_path: "data/mbd-50k/quantile_transformer_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -75,10 +75,53 @@ scheduler:
 loss:
   name: baseline
 
-metrics: 
-  names: ["Accuracy", "Coverage", "Levenstein"]
-  target_key: "event_type"
+evaluator:
+  devices: ["cuda:0"]
+  metrics:
+    - Levenstein:
+        target_key: event_type
+    - Accuracy:
+        target_key: event_type
+    - F1Metric:
+        target_key: event_type
+        average: macro
+    - F1Metric:
+        target_key: event_type
+        average: micro
 
+    - Gini:
+        target_key: event_type
+    - ShannonEntropy:
+        target_key: event_type
+
+    - CardinalityCoverage:
+        target_key: event_type
+        overall: False
+    - CardinalityCoverage:
+        target_key: event_type
+        overall: True
+    - NoveltyScore:
+        target_key: event_type
+        overall: False
+    - NoveltyScore:
+        target_key: event_type
+        overall: True
+
+
+    - ShannonEntropy:
+        target_key: event_type
+    - ShannonEntropy:
+        target_key: event_type
+
+    - Density:
+        log_cols: ["amount"]
+        with_timediff: True
+        save_details: True
+
+    - Detection:
+        dataset_config_path: configs/datasets/detection/mbd.yaml
+        conditional: False
+        verbose: True
 logging:
   file_lvl: "info"
   cons_lvl: "error"

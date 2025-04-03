@@ -44,7 +44,7 @@ class QuantileTransformerTorch:
         self.references_ = torch.linspace(0, 1, self.n_quantiles)
 
     def transform(self, batch: torch.Tensor) -> torch.Tensor:
-
+        self.to(batch.device)
         u = self._torch_interp(batch, self.quantiles_, self.references_)
         if self.output_distribution == "uniform":
             return u
@@ -58,6 +58,7 @@ class QuantileTransformerTorch:
             raise ValueError("Unknown target distribution: " + self.output_distribution)
 
     def inverse_transform(self, batch: torch.Tensor) -> torch.Tensor:
+        self.to(batch.device)
         if self.output_distribution == "uniform":
             u = batch
         elif self.output_distribution == "normal":
@@ -68,6 +69,10 @@ class QuantileTransformerTorch:
         else:
             raise ValueError("Unknown target distribution: " + self.output_distribution)
         return self._torch_interp(u, self.references_, self.quantiles_)
+
+    def to(self, device):
+        self.quantiles_ = self.quantiles_.to(device)
+        self.references_ = self.references_.to(device)
 
     def save(self, path: str):
         torch.save(

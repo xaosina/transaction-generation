@@ -29,7 +29,7 @@ class GroundTruthGenerator(BaseGenerator):
         raise "No need to train a GroundTruthGenerator."
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        assert hist.target_time and hist.target_time.shape[0] == gen_len
+        assert hist.target_time.shape[0] == gen_len
         gen_batch = deepcopy(hist)
         gen_batch.append(gen_batch.get_target_batch())
 

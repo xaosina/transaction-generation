@@ -1,7 +1,7 @@
 import logging
 import os
 from collections.abc import Iterable, Sized
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -13,7 +13,7 @@ from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
 
 from .data.data_types import GenBatch
-from .metrics.sampler import SampleEvaluator
+from .metrics.evaluator import SampleEvaluator
 from .utils import LoadTime, get_profiler, record_function
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class TrainConfig:
     """Training config for Machine Learning"""
 
     # The experiment name
-    exp_name: str = field(default="default_exp")
+    exp_name: str = "default_exp"
 
 
 class Trainer:
@@ -186,7 +186,7 @@ class Trainer:
             ckpt["sched"] = self._sched.state_dict()
 
         if ckpt_path.is_dir():
-            torch.save(ckpt, ckpt_path / 'model.pt')
+            torch.save(ckpt, ckpt_path / "model.pt")
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
         """Load model, optimizer and scheduler states.

@@ -1,6 +1,7 @@
 log/*
 data/**/*.csv
 data/**/*.crc
+data/**/*.pt
 data/**/*.parquet
 data/**/*_SUCCESS
 dev/**

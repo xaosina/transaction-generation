@@ -184,14 +184,15 @@ def get_unique_folder_suffix(folder_path):
 def create_instances_from_module(
     module,
     configs: list[Mapping[str, Any] | str] | None = None,
-    common_kwargs: dict = field(default_factory=dict),
+    common_kwargs: dict = None,
 ) -> list[Any] | None:
+    common_kwargs = common_kwargs or dict()
     instances = None
     if configs is not None:
         instances = []
         for config in configs:
             if isinstance(config, str):
-                instances.append(getattr(module, config)(common_kwargs))
+                instances.append(getattr(module, config)(**common_kwargs))
                 continue
 
             for class_name, params in config.items():
