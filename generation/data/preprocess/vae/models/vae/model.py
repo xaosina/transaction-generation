@@ -1,12 +1,249 @@
+import math
+
+from dataclasses import dataclass
+from typing import Any, Mapping, Sequence
+
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.init as nn_init
 import torch.nn.functional as F
-from torch import Tensor
+import torch.nn.init as nn_init
+from ebes.types import Seq
+from generation.data.batch_tfs import NewFeatureTransform
+from generation.data.data_types import DataConfig, GenBatch, PredBatch
+from generation.data.utils import get_batch_transforms
 
-import typing as ty
-import math
+# class Tokenizer(nn.Module):
+#     def __init__(self, d_numerical, categories, d_token, bias=True):
+#         super().__init__()
+#         self.linear = nn.Linear(1, d_token, bias=bias)
+#         if categories is not None:
+#             self.category_embeddings = nn.ModuleList(
+#                 [
+#                     nn.Embedding(num_embeddings=num_classes, embedding_dim=d_token)
+#                     for num_classes in categories
+#                 ]
+#             )
+#         else:
+#             self.category_embeddings = None
+#     def forward(self, x_num, x_cat=None):
+#         token_num = self.linear(x_num).unsqueeze(1)
+#         assert x_num.shape[1] == token_num.shape[1]
+#         if x_cat is not None and self.category_embeddings is not None:
+#             tokens_cat = []
+#             for i, emb in enumerate(self.category_embeddings):
+#                 tokens_cat.append(emb(x_cat[:, i]).unsqueeze(1))
+#             breakpoint()
+#             tokens_cat = torch.cat(tokens_cat, dim=1)
+#             tokens = torch.cat([token_num, tokens_cat], dim=1)
+#         else:
+#             tokens = token_num
+#         return tokens
+
+
+@dataclass
+class VaeConfig:
+    num_layers: int = 2
+    d_token: int = 6
+    n_head: int = 2
+    factor: int = 64
+
+
+class VAE(nn.Module):
+    def __init__(
+        self,
+        vae_conf: VaeConfig,
+        cat_cardinalities: Mapping[str, int],
+        num_names: Sequence[str] | None = None,
+        batch_transforms: list[Mapping[str, Any] | str] | None = None,
+        pretrain=True,
+    ):
+        super().__init__()
+        self.encoder = Encoder(
+            vae_conf.num_layers,
+            vae_conf.d_token,
+            vae_conf.n_head,
+            vae_conf.factor,
+            cat_cardinalities=cat_cardinalities,
+            num_names=num_names,
+            batch_transforms=batch_transforms,
+            pretrain=pretrain,
+        )
+        self.decoder = Decoder(
+            vae_conf.num_layers,
+            vae_conf.d_token,
+            vae_conf.n_head,
+            vae_conf.factor,
+            num_names=num_names,
+            cat_cardinalities=cat_cardinalities,
+        )
+
+    def forward(self, batch: GenBatch) -> PredBatch:
+        seq, params = self.encoder(batch)
+        h = self.decoder(seq)
+        return h, params
+
+
+class Encoder(nn.Module):
+    def __init__(
+        self,
+        num_layers,
+        d_token,
+        n_head,
+        factor,
+        cat_cardinalities: Mapping[str, int],
+        num_count: int | None = None,
+        num_names: Sequence[str] | None = None,
+        batch_transforms: list[Mapping[str, Any] | str] | None = None,
+        pretrain=False,
+        bias=True,
+    ):
+        super(Encoder, self).__init__()
+        self.d_token = d_token
+        self.pretrain = pretrain
+
+        cat_cardinalities = cat_cardinalities if cat_cardinalities is not None else {}
+        if num_count is None:
+            if num_names is not None:
+                num_count = len(num_names)
+            else:
+                num_count = 0
+        self.batch_transforms = get_batch_transforms(batch_transforms)
+        if self.batch_transforms:
+            for tfs in self.batch_transforms:
+                assert isinstance(tfs, NewFeatureTransform)
+                for num_name in tfs.num_names:
+                    num_count += 1
+                for cat_name, card in tfs.cat_cardinalities.items():
+                    cat_cardinalities[cat_name] = card
+
+        self.tokenizer = Tokenizer(
+            d_numerical=num_count,
+            categories=list(cat_cardinalities.values()),
+            d_token=d_token,
+            bias=bias,
+        )
+
+        self.encoder_mu = Transformer(num_layers, d_token, n_head, d_token, factor)
+        self.encoder_std = None
+        if self.pretrain:
+            self.encoder_std = Transformer(num_layers, d_token, n_head, d_token, factor)
+
+    def reparametrize(self, mu, logvar) -> torch.Tensor:
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, batch: GenBatch) -> Seq:
+        if self.batch_transforms is not None:
+            for tf in self.batch_transforms:
+                tf(batch)
+
+        seq_lens = batch.lengths
+        x_num = batch.num_features
+        x_cat = batch.cat_features
+        time = batch.time
+
+        L, B, D_num = x_num.shape
+        _, _, D_cat = x_cat.shape
+        valid_mask = (
+            (torch.arange(L).to(seq_lens) < seq_lens[:, None]).permute(1, 0).ravel()
+        )  # B, L -> L * B
+
+        x_num = x_num.reshape(-1, D_num)  # L*B, D_num
+        x_num = x_num[valid_mask]
+
+        x_cat = x_cat.reshape(-1, D_cat)  # L*B, D_cat
+        x_cat = x_cat[valid_mask]
+
+        x = self.tokenizer(x_num, x_cat)  # (L*B)', D_num + D_cat, d_token
+
+        mu_z = self.encoder_mu(x)  # (L*B)', D_num + D_cat, d_token
+        if self.pretrain:
+            std_z = self.encoder_std(x)  # (L*B)', D_num + D_cat, d_token
+            z = self.reparametrize(mu_z, std_z)  # (L*B)', D_num + D_cat, d_token
+            D_vae = (D_num + D_cat) * self.d_token
+            z = z.reshape(-1, D_vae)  # (L*B)', D_vae
+
+            with_pad = torch.zeros(L * B, D_vae).to(z)
+            with_pad[valid_mask] = z
+            with_pad = with_pad.reshape(L, B, D_vae)  # L, B, D_vae
+
+            return Seq(tokens=with_pad, lengths=seq_lens, time=time), {  # [L, B, D_vae]
+                "mu_z": mu_z,
+                "std_z": std_z,
+            }
+        else:
+            return Seq(
+                tokens=mu_z,
+                lengths=seq_lens,
+                time=time,
+            )
+
+
+class Decoder(nn.Module):
+    def __init__(
+        self,
+        num_layers,
+        d_token,
+        n_head,
+        factor,
+        num_names: Sequence[str] | None = None,
+        cat_cardinalities: Mapping[str, int] = None,
+    ):
+        super(Decoder, self).__init__()
+        self.d_token = d_token
+        self.num_names = num_names
+        self.cat_cardinalities = cat_cardinalities
+        num_counts = 1  # Time
+        if self.num_names:
+            num_counts += len(self.num_names)
+
+        self.decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
+        self.reconstructor = Reconstructor(
+            num_counts,
+            self.cat_cardinalities if self.cat_cardinalities else {},
+            d_token=d_token,
+        )
+
+    def forward(self, seq: Seq) -> PredBatch:
+        x = seq.tokens
+        seq_lens = seq.lengths
+        time = seq.time
+
+        L, B, D_vae = x.shape
+        D = D_vae // self.d_token
+        assert D * self.d_token == D_vae
+
+        x = x.reshape(L, B, D, self.d_token)
+        x = x.permute(1, 0, 2, 3)  # [B, L, D, d_token]
+
+        valid_mask = (torch.arange(L).to(seq_lens) < seq_lens[:, None]).ravel()  # B, L, -> B*L
+        x = x.reshape(-1, D, self.d_token)  # B*L, D
+        x = x[valid_mask]
+
+        h = self.decoder(x)
+
+        recon_num, recon_cat = self.reconstructor(h)
+
+        time = recon_num[:, 0]
+        num_features = None
+        if self.num_names:
+            num_features = recon_num[:, 1 : len(self.num_names) + 1]
+
+        cat_features = None
+        if self.cat_cardinalities:
+            cat_features = {}
+            for cat_name, cat_dim in self.cat_cardinalities.items():
+                cat_features[cat_name] = recon_cat[cat_name]
+        return PredBatch(
+            lengths=seq_lens,
+            time=time,
+            num_features=num_features,
+            num_features_names=self.num_names,
+            cat_features=cat_features,
+        )
+
 
 class Tokenizer(nn.Module):
 
@@ -19,21 +256,17 @@ class Tokenizer(nn.Module):
         else:
             d_bias = d_numerical + len(categories)
             category_offsets = torch.tensor([0] + categories[:-1]).cumsum(0)
-            self.register_buffer('category_offsets', category_offsets)
+            self.register_buffer("category_offsets", category_offsets)
             self.category_embeddings = nn.Embedding(sum(categories), d_token)
             nn_init.kaiming_uniform_(self.category_embeddings.weight, a=math.sqrt(5))
-            print(f'{self.category_embeddings.weight.shape=}')
+            print(f"{self.category_embeddings.weight.shape=}")
 
-        # take [CLS] token into account
-        # self.weight = nn.Parameter(Tensor(d_numerical + 1 - 1, d_token)) # 0
-        self.weight = nn.Parameter(Tensor(d_numerical + 1, d_token)) # 0
-        self.bias = nn.Parameter(Tensor(d_bias, d_token)) if bias else None
+        self.weight = nn.Parameter(torch.Tensor(d_numerical, d_token))
+        self.bias = nn.Parameter(torch.Tensor(d_bias, d_token)) if bias else None
         # The initialization is inspired by nn.Linear
         nn_init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             nn_init.kaiming_uniform_(self.bias, a=math.sqrt(5))
-        
-        # self.cnn_1d = nn.Conv1d(in_channels=1, out_channels=6, kernel_size=1) # 0.5
 
     @property
     def n_tokens(self):
@@ -44,60 +277,152 @@ class Tokenizer(nn.Module):
     def forward(self, x_num, x_cat):
         x_some = x_num if x_cat is None else x_cat
         assert x_some is not None
-        # x_amount = x_num[:, None, 0, None] #1
         x_num = torch.cat(
-            [torch.ones(len(x_some), 1, device=x_some.device)] 
-            # + ([] if x_num is None else [x_num[:, 1, None]]), #2
-            + ([] if x_num is None else [x_num]), #2
+            ([] if x_num is None else [x_num]),
             dim=1,
         )
 
-        x = self.weight[None] * x_num[:, :, None] # 3 Изначально это применялось на всех numerical, теперь без amount
+        x = self.weight[None] * x_num[:, :, None]
 
-        # x_amount_emb = self.cnn_1d(x_amount) # 4
-        # x_amount_emb = x_amount_emb.transpose(1, 2) # 5
-                
         if x_cat is not None:
             x = torch.cat(
-                # [x[:, 0, None], x_amount_emb, x[:, 1, None],  self.category_embeddings(x_cat + self.category_offsets[None])], # 6
-                [x, self.category_embeddings(x_cat + self.category_offsets[None])], # 6
+                [x, self.category_embeddings(x_cat + self.category_offsets[None])],
                 dim=1,
             )
         if self.bias is not None:
-            bias = torch.cat(
-                [
-                    torch.zeros(1, self.bias.shape[1], device=x.device),
-                    self.bias,
-                ]
-            )
+            bias = self.bias
             x = x + bias[None]
 
         return x
 
-class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.5):
-        super(MLP, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.output_dim = output_dim
-        self.dropout = dropout
 
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, output_dim)
-        self.dropout = nn.Dropout(p=dropout)
+class Reconstructor(nn.Module):
+    def __init__(self, d_numerical, cat_cardinalities, d_token):
+        super(Reconstructor, self).__init__()
 
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.dropout(x)
-        x = self.fc2(x)
+        self.d_numerical = d_numerical
+        self.cat_cardinalities = cat_cardinalities
+        self.d_token = d_token
+
+        self.weight = nn.Parameter(torch.Tensor(d_numerical, d_token))
+        nn.init.xavier_uniform_(self.weight, gain=1 / math.sqrt(2))
+        self.cat_recons = nn.ModuleDict()
+        print(self.cat_cardinalities.items())
+        for cat_name, cat_dim in self.cat_cardinalities.items():
+            recon = nn.Linear(d_token, cat_dim)
+            nn.init.xavier_uniform_(recon.weight, gain=1 / math.sqrt(2))
+            self.cat_recons[cat_name] = recon
+
+    def forward(self, h):
+        h_num = h[:, : self.d_numerical]
+        h_cat = h[:, self.d_numerical :]
+        assert (h_num.shape[-2] + h_cat.shape[-2]) == (
+            self.d_numerical + len(self.cat_cardinalities.values())
+        )
+
+        recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
+        recon_x_cat = {}
+        print(self.cat_cardinalities.keys())
+        for i, cat_name in enumerate(self.cat_cardinalities.keys()):
+            recon_x_cat[cat_name] = self.cat_recons[cat_name](h_cat[:, i])
+
+        return recon_x_num, recon_x_cat
+
+
+class Transformer(nn.Module):
+
+    def __init__(
+        self,
+        n_layers: int,
+        d_token: int,
+        n_heads: int,
+        d_out: int,
+        d_ffn_factor: int,
+        attention_dropout=0.0,
+        ffn_dropout=0.0,
+        residual_dropout=0.0,
+        activation="relu",
+        prenormalization=True,
+        initialization="kaiming",
+    ):
+        super().__init__()
+
+        def make_normalization():
+            return nn.LayerNorm(d_token)
+
+        d_hidden = int(d_token * d_ffn_factor)
+        self.layers = nn.ModuleList([])
+        for layer_idx in range(n_layers):
+            layer = nn.ModuleDict(
+                {
+                    "attention": MultiheadAttention(
+                        d_token, n_heads, attention_dropout, initialization
+                    ),
+                    "linear0": nn.Linear(d_token, d_hidden),
+                    "linear1": nn.Linear(d_hidden, d_token),
+                    "norm1": make_normalization(),
+                }
+            )
+            if not prenormalization or layer_idx:
+                layer["norm0"] = make_normalization()
+
+            self.layers.append(layer)
+
+        self.activation = nn.ReLU()
+        self.last_activation = nn.ReLU()
+        # self.activation = lib.get_activation_fn(activation)
+        # self.last_activation = lib.get_nonglu_activation_fn(activation)
+        self.prenormalization = prenormalization
+        self.last_normalization = make_normalization() if prenormalization else None
+        self.ffn_dropout = ffn_dropout
+        self.residual_dropout = residual_dropout
+        self.head = nn.Linear(d_token, d_out)
+
+    def _start_residual(self, x, layer, norm_idx):
+        x_residual = x
+        if self.prenormalization:
+            norm_key = f"norm{norm_idx}"
+            if norm_key in layer:
+                x_residual = layer[norm_key](x_residual)
+        return x_residual
+
+    def _end_residual(self, x, x_residual, layer, norm_idx):
+        if self.residual_dropout:
+            x_residual = F.dropout(x_residual, self.residual_dropout, self.training)
+        x = x + x_residual
+        if not self.prenormalization:
+            x = layer[f"norm{norm_idx}"](x)
         return x
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for layer_idx, layer in enumerate(self.layers):
+            is_last_layer = layer_idx + 1 == len(self.layers)
+
+            x_residual = self._start_residual(x, layer, 0)
+            x_residual = layer["attention"](
+                # for the last attention, it is enough to process only [CLS]
+                x_residual,
+                x_residual,
+            )
+
+            x = self._end_residual(x, x_residual, layer, 0)
+
+            x_residual = self._start_residual(x, layer, 1)
+            x_residual = layer["linear0"](x_residual)
+            x_residual = self.activation(x_residual)
+            if self.ffn_dropout:
+                x_residual = F.dropout(x_residual, self.ffn_dropout, self.training)
+            x_residual = layer["linear1"](x_residual)
+            x = self._end_residual(x, x_residual, layer, 1)
+        return x
+
+
 class MultiheadAttention(nn.Module):
-    def __init__(self, d, n_heads, dropout, initialization = 'kaiming'):
+    def __init__(self, d, n_heads, dropout, initialization="kaiming"):
 
         if n_heads > 1:
             assert d % n_heads == 0
-        assert initialization in ['xavier', 'kaiming']
+        assert initialization in ["xavier", "kaiming"]
 
         super().__init__()
         self.W_q = nn.Linear(d, d)
@@ -108,7 +433,7 @@ class MultiheadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout) if dropout else None
 
         for m in [self.W_q, self.W_k, self.W_v]:
-            if initialization == 'xavier' and (n_heads > 1 or m is not self.W_v):
+            if initialization == "xavier" and (n_heads > 1 or m is not self.W_v):
                 # gain is needed since W_qkv is represented with 3 separate layers
                 nn_init.xavier_uniform_(m.weight, gain=1 / math.sqrt(2))
             nn_init.zeros_(m.bias)
@@ -124,8 +449,8 @@ class MultiheadAttention(nn.Module):
             .reshape(batch_size * self.n_heads, n_tokens, d_head)
         )
 
-    def forward(self, x_q, x_kv, key_compression = None, value_compression = None):
-  
+    def forward(self, x_q, x_kv, key_compression=None, value_compression=None):
+
         q, k, v = self.W_q(x_q), self.W_k(x_kv), self.W_v(x_kv)
         for tensor in [q, k, v]:
             assert tensor.shape[-1] % self.n_heads == 0
@@ -146,9 +471,8 @@ class MultiheadAttention(nn.Module):
 
         a = q @ k.transpose(1, 2)
         b = math.sqrt(d_head_key)
-        attention = F.softmax(a/b , dim=-1)
+        attention = F.softmax(a / b, dim=-1)
 
-        
         if self.dropout is not None:
             attention = self.dropout(attention)
         x = attention @ self._reshape(v)
@@ -161,379 +485,3 @@ class MultiheadAttention(nn.Module):
             x = self.W_out(x)
 
         return x
-        
-class Transformer(nn.Module):
-
-    def __init__(
-        self,
-        n_layers: int,
-        d_token: int,
-        n_heads: int,
-        d_out: int,
-        d_ffn_factor: int,
-        attention_dropout = 0.0,
-        ffn_dropout = 0.0,
-        residual_dropout = 0.0,
-        activation = 'relu',
-        prenormalization = True,
-        initialization = 'kaiming',      
-    ):
-        super().__init__()
-
-        def make_normalization():
-            return nn.LayerNorm(d_token)
-
-        d_hidden = int(d_token * d_ffn_factor)
-        self.layers = nn.ModuleList([])
-        for layer_idx in range(n_layers):
-            layer = nn.ModuleDict(
-                {
-                    'attention': MultiheadAttention(
-                        d_token, n_heads, attention_dropout, initialization
-                    ),
-                    'linear0': nn.Linear(
-                        d_token, d_hidden
-                    ),
-                    'linear1': nn.Linear(d_hidden, d_token),
-                    'norm1': make_normalization(),
-                }
-            )
-            if not prenormalization or layer_idx:
-                layer['norm0'] = make_normalization()
-   
-            self.layers.append(layer)
-
-        self.activation = nn.ReLU()
-        self.last_activation = nn.ReLU()
-        # self.activation = lib.get_activation_fn(activation)
-        # self.last_activation = lib.get_nonglu_activation_fn(activation)
-        self.prenormalization = prenormalization
-        self.last_normalization = make_normalization() if prenormalization else None
-        self.ffn_dropout = ffn_dropout
-        self.residual_dropout = residual_dropout
-        self.head = nn.Linear(d_token, d_out)
-
-
-    def _start_residual(self, x, layer, norm_idx):
-        x_residual = x
-        if self.prenormalization:
-            norm_key = f'norm{norm_idx}'
-            if norm_key in layer:
-                x_residual = layer[norm_key](x_residual)
-        return x_residual
-
-    def _end_residual(self, x, x_residual, layer, norm_idx):
-        if self.residual_dropout:
-            x_residual = F.dropout(x_residual, self.residual_dropout, self.training)
-        x = x + x_residual
-        if not self.prenormalization:
-            x = layer[f'norm{norm_idx}'](x)
-        return x
-
-    def forward(self, x):
-        for layer_idx, layer in enumerate(self.layers):
-            is_last_layer = layer_idx + 1 == len(self.layers)
-
-            x_residual = self._start_residual(x, layer, 0)
-            x_residual = layer['attention'](
-                # for the last attention, it is enough to process only [CLS]
-                x_residual,
-                x_residual,
-            )
-
-            x = self._end_residual(x, x_residual, layer, 0)
-
-            x_residual = self._start_residual(x, layer, 1)
-            x_residual = layer['linear0'](x_residual)
-            x_residual = self.activation(x_residual)
-            if self.ffn_dropout:
-                x_residual = F.dropout(x_residual, self.ffn_dropout, self.training)
-            x_residual = layer['linear1'](x_residual)
-            x = self._end_residual(x, x_residual, layer, 1)
-        return x
-
-
-class AE(nn.Module):
-    def __init__(self, hid_dim, n_head):
-        super(AE, self).__init__()
- 
-        self.hid_dim = hid_dim
-        self.n_head = n_head
-
-
-        self.encoder = MultiheadAttention(hid_dim, n_head)
-        self.decoder = MultiheadAttention(hid_dim, n_head)
-
-    def get_embedding(self, x):
-        return self.encoder(x, x).detach() 
-
-    def forward(self, x):
-
-        z = self.encoder(x, x)
-        h = self.decoder(z, z)
-        
-        return h
-
-class VAE(nn.Module):
-    def __init__(self, d_numerical, categories, num_layers, hid_dim, n_head = 1, factor = 4, bias = True):
-        super(VAE, self).__init__()
- 
-        self.d_numerical = d_numerical
-        self.categories = categories
-        self.hid_dim = hid_dim
-        d_token = hid_dim
-        self.n_head = n_head
- 
-        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias = bias)
-
-        self.encoder_mu = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-        self.encoder_logvar = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-        self.decoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-    def get_embedding(self, x):
-        return self.encoder_mu(x, x).detach() 
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def forward(self, x_num, x_cat):
-        x = self.Tokenizer(x_num, x_cat)
-
-        mu_z = self.encoder_mu(x)
-        std_z = self.encoder_logvar(x)
-
-        z = self.reparameterize(mu_z, std_z)
-
-        
-        batch_size = x_num.size(0)
-        h = self.decoder(z[:,1:])
-        
-        return (
-            h, 
-            {
-                "mu_z": mu_z,
-                "std_z": std_z
-                }
-            )
-
-
-class VectorQuantizerEMA(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay, epsilon=1e-5):
-        super(VectorQuantizerEMA, self).__init__()
-
-        self._embedding_dim = embedding_dim
-        self._num_embeddings = num_embeddings
-
-        self._embedding = nn.Embedding(self._num_embeddings, self._embedding_dim)
-        self._embedding.weight.data.normal_()
-        self._commitment_cost = commitment_cost
-
-        self.register_buffer('_ema_cluster_size', torch.zeros(num_embeddings))
-        self._ema_w = nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim))
-        self._ema_w.data.normal_()
-
-        self._decay = decay
-        self._epsilon = epsilon
-
-    def forward(self, inputs):
-        # convert inputs from BCHW -> BHWC
-        # inputs = inputs.permute(0, 2, 3, 1).contiguous()
-        input_shape = inputs.shape
-
-        # Flatten input
-        flat_input = inputs.view(-1, self._embedding_dim)
-
-        # Calculate distances
-        distances = (torch.sum(flat_input**2, dim=1, keepdim=True)
-                    + torch.sum(self._embedding.weight**2, dim=1)
-                    - 2 * torch.matmul(flat_input, self._embedding.weight.t()))
-
-        # Encoding
-        encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
-        encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
-        encodings.scatter_(1, encoding_indices, 1)
-
-        # Quantize and unflatten
-        quantized = torch.matmul(encodings, self._embedding.weight).view(input_shape)
-
-        # Use EMA to update the embedding vectors
-        if self.training:
-            self._ema_cluster_size = self._ema_cluster_size * self._decay + \
-                                     (1 - self._decay) * torch.sum(encodings, 0)
-
-            # Laplace smoothing of the cluster size
-            n = torch.sum(self._ema_cluster_size.data)
-            self._ema_cluster_size = (
-                (self._ema_cluster_size + self._epsilon)
-                / (n + self._num_embeddings * self._epsilon) * n)
-
-            dw = torch.matmul(encodings.t(), flat_input)
-            self._ema_w = nn.Parameter(self._ema_w * self._decay + (1 - self._decay) * dw)
-
-            self._embedding.weight = nn.Parameter(self._ema_w / self._ema_cluster_size.unsqueeze(1))
-
-        # Loss
-        e_latent_loss = F.mse_loss(quantized.detach(), inputs)
-        loss = self._commitment_cost * e_latent_loss
-
-        # Straight Through Estimator
-        quantized = inputs + (quantized - inputs).detach()
-        avg_probs = torch.mean(encodings, dim=0)
-        perplexity = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
-        perplexity = perplexity / self._num_embeddings
-        # convert quantized from BHWC -> BCHW
-        # return loss, quantized.permute(0, 3, 1, 2).contiguous(), perplexity, encodings
-        return loss, quantized, perplexity, encodings
-
-
-class VQ_VAE(nn.Module):
-    def __init__(self, d_numerical, categories, num_layers, hid_dim, num_embeddings, n_head = 1, factor = 4, bias = True, decay = 0.99, commitment_cost = 0.25):
-        super(VQ_VAE, self).__init__()
- 
-        self.d_numerical = d_numerical
-        self.categories = categories
-        self.hid_dim = hid_dim
-        d_token = hid_dim
-        self.n_head = n_head
- 
-        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias = bias)
-
-        self.encoder_mu = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-        self.encoder_logvar = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-        self.decoder = Transformer(num_layers, hid_dim, n_head, hid_dim, factor)
-
-        self.vq_ema = VectorQuantizerEMA(
-            num_embeddings, hid_dim**2, 
-            commitment_cost, decay
-        )
-
-    def get_embedding(self, x):
-        return self.encoder_mu(x, x).detach() 
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-
-    def forward(self, x_num, x_cat):
-        x = self.Tokenizer(x_num, x_cat)
-
-        mu_z = self.encoder_mu(x)
-        std_z = self.encoder_logvar(x)
-
-        z = self.reparameterize(mu_z, std_z)
-
-        vq_loss, quantized, perplexity, _ = self.vq_ema(z[:,1:])
-        
-        batch_size = x_num.size(0)
-        h = self.decoder(quantized)
-        
-        return (
-            h, 
-            {
-                "latent_loss": vq_loss,
-                "perplexity": perplexity
-            }
-        )
-
-
-
-class Reconstructor(nn.Module):
-    def __init__(self, d_numerical, categories, d_token):
-        super(Reconstructor, self).__init__()
-
-        self.d_numerical = d_numerical
-        self.categories = categories
-        self.d_token = d_token
-        
-        self.weight = nn.Parameter(Tensor(d_numerical, d_token))  
-        nn.init.xavier_uniform_(self.weight, gain=1 / math.sqrt(2))
-        self.cat_recons = nn.ModuleList()
-
-        for d in categories:
-            recon = nn.Linear(d_token, d)
-            nn.init.xavier_uniform_(recon.weight, gain=1 / math.sqrt(2))
-            self.cat_recons.append(recon)
-
-    def forward(self, h):
-        h_num  = h[:, :self.d_numerical]
-        h_cat  = h[:, self.d_numerical:]
-
-        recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
-        recon_x_cat = []
-
-        for i, recon in enumerate(self.cat_recons):
-      
-            recon_x_cat.append(recon(h_cat[:, i]))
-
-        return recon_x_num, recon_x_cat
-
-
-class Model_VAE(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head = 1, factor = 4,  bias = True, 
-                 vq_vae=False,
-                 num_embeddings=None,
-                 decay=0.0,
-                 commitment_cost=0.0,
-                 ):
-        super(Model_VAE, self).__init__()
-
-        
-        if vq_vae:
-            self.VAE = VQ_VAE(d_numerical, categories, num_layers, d_token, n_head = n_head, factor = factor, bias = bias,
-                              num_embeddings=num_embeddings, commitment_cost=commitment_cost, decay=decay)
-        else:
-            self.VAE = VAE(d_numerical, categories, num_layers, d_token, n_head = n_head, factor = factor, bias = bias)
-
-        self.Reconstructor = Reconstructor(d_numerical, categories, d_token)
-
-    def get_embedding(self, x_num, x_cat):
-        x = self.Tokenizer(x_num, x_cat)
-        return self.VAE.get_embedding(x)
-
-    def forward(self, x_num, x_cat):
-
-        h, params = self.VAE(x_num, x_cat)
-
-        # recon_x_num, recon_x_cat = self.Reconstructor(h[:, 1:])
-        recon_x_num, recon_x_cat = self.Reconstructor(h)
-
-        return recon_x_num, recon_x_cat, params
-
-
-class Encoder_model(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
-        super(Encoder_model, self).__init__()
-        self.Tokenizer = Tokenizer(d_numerical, categories, d_token, bias)
-        self.VAE_Encoder = Transformer(num_layers, d_token, n_head, d_token, factor)
-
-    def load_weights(self, Pretrained_VAE):
-        self.Tokenizer.load_state_dict(Pretrained_VAE.VAE.Tokenizer.state_dict())
-        self.VAE_Encoder.load_state_dict(Pretrained_VAE.VAE.encoder_mu.state_dict())
-
-    def forward(self, x_num, x_cat):
-        x = self.Tokenizer(x_num, x_cat)
-        z = self.VAE_Encoder(x)
-
-        return z
-
-class Decoder_model(nn.Module):
-    def __init__(self, num_layers, d_numerical, categories, d_token, n_head, factor, bias = True):
-        super(Decoder_model, self).__init__()
-        self.VAE_Decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
-        self.Detokenizer = Reconstructor(d_numerical, categories, d_token)
-        
-    def load_weights(self, Pretrained_VAE):
-        self.VAE_Decoder.load_state_dict(Pretrained_VAE.VAE.decoder.state_dict())
-        self.Detokenizer.load_state_dict(Pretrained_VAE.Reconstructor.state_dict())
-
-    def forward(self, z):
-
-        h = self.VAE_Decoder(z)
-        x_hat_num, x_hat_cat = self.Detokenizer(h)
-
-        return x_hat_num, x_hat_cat

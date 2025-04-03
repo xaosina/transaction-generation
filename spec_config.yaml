@@ -60,9 +60,6 @@ model:
     batch_transforms:
       - TimeToFeatures:
           process_type: "diff"
-      - QuantileTransform:
-          feature_name: "amount"
-          model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
 optimizer:
   name: Adam

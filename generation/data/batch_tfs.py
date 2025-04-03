@@ -457,7 +457,7 @@ class MaskValid(BatchTransform):
             batch.cat_mask = len_mask & (batch.cat_features != 0)
 
 @dataclass
-class QuntileTransform(BatchTransform):
+class QuantileTransform(BatchTransform):
     """Add quantile transform for the feature"""
 
     model_path: str

@@ -16,5 +16,5 @@ build/*
 
 transaction_me*/*
 generation/data/preprocess/data/
-
+data/
 *temp.ipynb
