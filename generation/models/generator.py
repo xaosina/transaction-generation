@@ -11,7 +11,7 @@ from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
 

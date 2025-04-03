@@ -103,7 +103,7 @@ class LoadTime:
             raise
 
 
-@dataclass
+@dataclass(frozen=True)
 class OptimizerConfig:
     name: str = "Adam"
     params: Optional[dict[str, Any]] = None
@@ -119,7 +119,7 @@ def get_optimizer(
         raise ValueError(f"Unknkown optimizer: {optim_conf.name}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class SchedulerConfig:
     name: Optional[str] = "StepLR"
     params: Optional[dict[str, Any]] = None
@@ -133,7 +133,7 @@ def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
         raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoginConfig:
     file_lvl: str = "info"
     cons_lvl: str = "warning"

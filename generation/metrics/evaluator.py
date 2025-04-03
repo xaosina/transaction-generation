@@ -1,6 +1,6 @@
 import shutil
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -13,14 +13,13 @@ from generation.models.generator import Generator
 
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
-from .evaluation.eval_detection import run_eval_detection
+from .pipelines.eval_detection import run_eval_detection
 
 
-@dataclass
+@dataclass(frozen=True)
 class EvaluatorConfig:
     save_path: str
-    detection_config: str = None
-    devices: list[str] = ["cuda:0"]
+    devices: list[str] = field(default_factory=lambda: ["cuda:0"])
     metrics: Optional[list[Mapping[str, Any] | str]] = None
 
 

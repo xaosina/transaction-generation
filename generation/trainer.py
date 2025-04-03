@@ -19,7 +19,7 @@ from .utils import LoadTime, get_profiler, record_function
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class TrainConfig:
     """Training config for Machine Learning"""
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from generation.data.data_types import Batch, PredBatch
 
 
-@dataclass
+@dataclass(frozen=True)
 class LossConfig:
     name: Optional[str] = "baseline"
     c_dim: Optional[int] = None

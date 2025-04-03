@@ -22,7 +22,7 @@ from generation.utils import (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class TrainConfig:
     total_iters: Optional[int] = 100_000
     total_epochs: Optional[int] = None
@@ -38,7 +38,7 @@ class TrainConfig:
 class PipelineConfig:
     run_name: str = "debug"
     log_dir: Path = "log/generation"
-    devices: list[str] = ["cuda:0"]
+    devices: list[str] = field(default_factory=lambda: ["cuda:0"])
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)

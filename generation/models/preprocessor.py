@@ -85,7 +85,7 @@ class Batch2TransformedSeq(Batch2Seq):
         return super().forward(batch, copy=False)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PreprocessorConfig:
     cat_emb_dim: Optional[int] = None
     num_emb_dim: Optional[int] = None
