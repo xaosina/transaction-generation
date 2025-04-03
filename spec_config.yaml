@@ -92,3 +92,9 @@ trainer:
   profiling: false
 
 device: "cuda:0"
+
+vae:
+  num_layers: 2
+  d_token: 6
+  n_head: 2
+  factor: 64
