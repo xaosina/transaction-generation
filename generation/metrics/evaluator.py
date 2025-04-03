@@ -1,57 +1,66 @@
+import shutil
 from copy import deepcopy
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Mapping, Optional
 
+from . import metrics as m
 import pandas as pd
 import torch
 from tqdm import tqdm
 
-from ..data.data_types import GenBatch
-from .estimator import MetricEstimator
-
 from generation.models.generator import Generator
-from .evaluation.eval_density import run_eval_density
-from .evaluation.eval_detection import run_eval_detection
+
+from ..data.data_types import DataConfig, GenBatch
+from ..utils import create_instances_from_module, get_unique_folder_suffix
+
+
+@dataclass(frozen=True)
+class EvaluatorConfig:
+    devices: list[str] = field(default_factory=lambda: ["cuda:0"])
+    metrics: Optional[list[Mapping[str, Any] | str]] = None
 
 
 class SampleEvaluator:
     def __init__(
-        self,
-        ckpt: str,
-        metrics: Optional[list[str]] = None,
-        gen_len: int = 16,
-        hist_len: int = 16,
-        subject_key: str = "client_id",
-        target_key: str = "event_type",
-        device: int = 0,
+        self, log_dir: str, data_conf: DataConfig, eval_config: EvaluatorConfig
     ):
-        self.ckpt = ckpt
-        Path(ckpt).mkdir(parents=True, exist_ok=True)
-        self.metrics = metrics or []
-        self.device = device
-        self.gen_len = gen_len
-        self.hist_len = hist_len
-        self.subject_key = subject_key
-        self.target_key = target_key
-        self.metrics: list[BaseMetric] = [
-            getattr(metrics, name) for name in metric_names
-        ]
-
-    def evaluate(self, model, loader, blim=None, prefix="", buffer_size=None):
-        gt_df_save_path, gen_df_save_path = self.generate_samples(
-            model, loader, blim, prefix, buffer_size=buffer_size
+        self.log_dir = Path(log_dir)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        self.data_config = data_conf
+        self.metrics = (
+            create_instances_from_module(
+                m,
+                eval_config.metrics,
+                {
+                    "devices": eval_config.devices,
+                    "data_conf": data_conf,
+                    "log_dir": log_dir,
+                },
+            )
+            or []
         )
-        breakpoint()
-        return self.evaluate_and_save(prefix, gt_df_save_path, gen_df_save_path)
+
+    def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
+        gt_dir, gen_dir = self.generate_samples(model, loader, blim, buffer_size)
+
+        results = self.estimate_metrics(gt_dir, gen_dir)
+
+        if remove:
+            shutil.rmtree(gt_dir), shutil.rmtree(gen_dir)
+        return results
 
     def generate_samples(
-        self, model: Generator, data_loader, blim=None, prefix="", buffer_size=None
+        self, model: Generator, data_loader, blim=None, buffer_size=None
     ):
-        model.eval()
-        gen_dir = self.ckpt / f"validation_gen{prefix}"
-        gt_dir = self.ckpt / f"validation_gt{prefix}"
-        gen_dir.mkdir(parents=True, exist_ok=True)
+        gt_dir, gen_dir = self.log_dir / "gt", self.log_dir / "gen"
+        gt_dir = Path(str(gt_dir) + get_unique_folder_suffix(gt_dir))
+        gen_dir = Path(str(gen_dir) + get_unique_folder_suffix(gen_dir))
+
         gt_dir.mkdir(parents=True, exist_ok=True)
+        gen_dir.mkdir(parents=True, exist_ok=True)
+
+        model.eval()
         buffer_gt, buffer_gen = [], []
         part_counter = 0
 
@@ -61,8 +70,10 @@ class SampleEvaluator:
 
             batch_input = batch_input.to("cuda")
             with torch.no_grad():
-                batch_pred = model.generate(batch_input, self.gen_len)
-            gt, gen = concat_samples(batch_input, batch_pred)
+                batch_pred = model.generate(
+                    batch_input, self.data_config.generation_len
+                )
+            gt, gen = _concat_samples(batch_input, batch_pred)
             gt = data_loader.collate_fn.reverse(gt)
             gen = data_loader.collate_fn.reverse(gen)
 
@@ -70,108 +81,48 @@ class SampleEvaluator:
             buffer_gen.append(gen)
 
             if buffer_size and len(buffer_gt) >= buffer_size:
-                self._save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
+                _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
                 part_counter += 1
                 buffer_gt, buffer_gen = [], []
 
-        if buffer_gen:
-            self._save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
+        if buffer_gt:
+            _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
 
-        return gen_dir, gt_dir
+        return gt_dir, gen_dir
 
-    def _save_buffers(self, buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter):
-        gt_file = gt_dir / f"part-{part_counter:04d}.parquet"
-        gen_file = gen_dir / f"part-{part_counter:04d}.parquet"
-        pd.concat(buffer_gt, ignore_index=True).to_parquet(gt_file, index=False)
-        pd.concat(buffer_gen, ignore_index=True).to_parquet(gen_file, index=False)
-
-    def estimate(self) -> Dict[str, float]:
-        return self.estimate_metrics() | self.estimate_tmetrics()
-
-    def estimate_metrics(self) -> Dict[str, float]:
-        if not self.gt_save_path or not self.gen_save_path:
-            raise ValueError("Ground-truth or generated file path is not provided.")
-
-        gt = pd.read_parquet(self.gt_save_path)
-        gen = pd.read_parquet(self.gen_save_path)
-        dfs = self.get_data()
-
-        prepared_data = self.prepare_data_to_metrics(dfs)
-
-        # TODO: Сделать перемешивание клиентов если надо.
-
+    def estimate_metrics(self, gt_dir, gen_dir) -> dict:
+        gt = pd.read_parquet(gt_dir)
+        gen = pd.read_parquet(gen_dir)
+        assert (
+            gt[self.data_config.index_name] == gen[self.data_config.index_name]
+        ).all()
         results = {}
-
         for metric in self.metrics:
-            data = prepared_data.get(metric.required_data_type)
-            results[self.__ret_name("gtvsgt_" + metric.name)] = metric(
-                data["gt"], self.subject_key, self.target_key
-            )
-            results[self.__ret_name("gtvsgen_" + metric.name)] = metric(
-                data["gen"], self.subject_key, self.target_key
-            )
-        return results
-
-    def estimate_tmetrics(self) -> Dict[str, float]:
-
-        results = dict()
-        for metric_type in ["discriminative", "density"]:
-            if metric_type == "discriminative":
-                discr_res = run_eval_detection(
-                    data=self.gen_save_path,
-                    orig=self.gt_save_path,
-                    log_dir=self.log_dir,
-                    data_conf=self.data_conf,
-                    dataset=self.detection_config,
-                    tail_len=self.tail_len,
-                    match_users=False,
-                    gpu_ids=self.device,
-                    verbose=False,
-                )
-
-                discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
-                # discr_score = 0.0
-                results[self.__ret_name("discriminative")] = float(discr_score)
-
-            elif metric_type == "density":
-                sh_tr = run_eval_density(
-                    self.gen_save_path,
-                    self.gt_save_path,
-                    self.data_conf,
-                    self.log_cols,
-                    self.tail_len,
-                )
-                results[self.__ret_name("shape")] = float(sh_tr["shape"])
-                results[self.__ret_name("trend")] = float(sh_tr["trend"])
+            values = metric(gt, gen)
+            if isinstance(values, dict):
+                for k, v in values.items():
+                    assert f"{str(metric)} {k}" not in results, "Dont overwrite metric"
+                    results[f"{str(metric)} {k}"] = v
             else:
-                raise Exception(f"Unknown metric type '{metric_type}'!")
-
+                assert str(metric) not in results, "Dont overwrite metric"
+                results[str(metric)] = values
         return results
 
-    def evaluate_and_save(self, name_prefix, gt_save_path, gen_save_path):
-        return MetricEstimator(
-            gt_save_path,
-            gen_save_path,
-            name_prefix,
-            self.metrics,
-            self.gen_len,
-            self.hist_len,
-            device=self.device,
-            subject_key=self.subject_key,
-            target_key=self.target_key,
-        ).estimate()
 
-    def __ret_name(self, name: str) -> str:
-        return self.name_prefix + name
+def _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter):
+    gt_file = gt_dir / f"part-{part_counter:04d}.parquet"
+    gen_file = gen_dir / f"part-{part_counter:04d}.parquet"
+    pd.concat(buffer_gt, ignore_index=True).to_parquet(gt_file, index=False)
+    pd.concat(buffer_gen, ignore_index=True).to_parquet(gen_file, index=False)
 
 
-def concat_samples(hist: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
+def _concat_samples(gt: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
     assert (
-        hist.target_time.shape[0] == pred.time.shape[0]
+        gt.target_time.shape[0] == pred.time.shape[0]
     ), "Mismatch in sequence lengths between hist and pred"
-    res = deepcopy(hist)
+    gen = deepcopy(gt)
 
-    res.target_time = pred.time
-    res.target_num_features = pred.num_features
-    res.target_cat_features = pred.cat_features
-    return hist, res
+    gen.target_time = pred.time
+    gen.target_num_features = pred.num_features
+    gen.target_cat_features = pred.cat_features
+    return gt, gen

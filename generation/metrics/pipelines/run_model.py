@@ -62,7 +62,7 @@ def main(
     log_dir: Path = None,
     specify: str = None,
     use_tqdm: bool = False,
-    gpu_ids: List[int] | None = None,
+    devices: List[int] | None = None,
     logging_lvl: str = "info",
 ) -> pd.DataFrame:
     """
@@ -85,12 +85,11 @@ def main(
     config = collect_config(dataset, method, experiment, specify)
     config.logging.file_lvl = logging_lvl
     config.logging.cons_lvl = logging_lvl
-    if gpu_ids is not None:
-        gpu_devices = [f"cuda:{num}" for num in gpu_ids]
-        config.device = gpu_devices[0]
-        config.runner.device_list = gpu_devices
-        config.runner.params.n_runs = len(gpu_devices)
-        config.runner.params.n_workers = len(gpu_devices)
+    if devices is not None:
+        config.device = devices[0]
+        config.runner.device_list = devices
+        config.runner.params.n_runs = len(devices)
+        config.runner.params.n_workers = len(devices)
 
     if isinstance(train_data, (str, Path)):
         train_data = Path(train_data)

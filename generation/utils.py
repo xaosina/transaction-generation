@@ -1,12 +1,12 @@
 import logging
 import os
 import sys
-from time import time
 from collections.abc import Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from time import time
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
 import yaml
@@ -103,7 +103,7 @@ class LoadTime:
             raise
 
 
-@dataclass
+@dataclass(frozen=True)
 class OptimizerConfig:
     name: str = "Adam"
     params: Optional[dict[str, Any]] = None
@@ -119,7 +119,7 @@ def get_optimizer(
         raise ValueError(f"Unknkown optimizer: {optim_conf.name}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class SchedulerConfig:
     name: Optional[str] = "StepLR"
     params: Optional[dict[str, Any]] = None
@@ -133,7 +133,7 @@ def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
         raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoginConfig:
     file_lvl: str = "info"
     cons_lvl: str = "warning"
@@ -179,3 +179,27 @@ def get_unique_folder_suffix(folder_path):
     while os.path.exists(f"{folder_path}({n})"):
         n += 1
     return f"({n})"
+
+
+def create_instances_from_module(
+    module,
+    configs: list[Mapping[str, Any] | str] | None = None,
+    common_kwargs: dict = None,
+) -> list[Any] | None:
+    common_kwargs = common_kwargs or dict()
+    instances = None
+    if configs is not None:
+        instances = []
+        for config in configs:
+            if isinstance(config, str):
+                instances.append(getattr(module, config)(**common_kwargs))
+                continue
+
+            for class_name, params in config.items():
+                klass = getattr(module, class_name)
+                if isinstance(params, Mapping):
+                    instances.append(klass(**(params | common_kwargs)))
+                else:
+                    raise TypeError("Class config has to be mapping")
+                break  # Only process first key-value pair in dict
+    return instances

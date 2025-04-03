@@ -10,7 +10,7 @@ from ebes.types import Batch
 logger = logging.getLogger(__name__)  # noqa: F821
 
 
-@dataclass
+@dataclass(frozen=True)
 class DataConfig:
     train_path: str = ""
     test_path: str = ""

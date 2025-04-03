@@ -1,9 +1,10 @@
 import logging
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 import numpy as np
 from torch.utils.data import DataLoader
 
+from ..utils import create_instances_from_module
 from . import batch_tfs
 from .collator import SequenceCollator
 from .data_types import DataConfig
@@ -22,31 +23,10 @@ def save_partitioned_parquet(df, save_path, num_shards=20):
     df.to_parquet(save_path, partition_cols=["shard"], engine="pyarrow")
 
 
-def get_batch_transforms(batch_transforms: list[Mapping[str, Any] | str] | None = None):
-    tfs = None
-    if batch_transforms is not None:
-        tfs = []
-        for bt in batch_transforms:
-            if isinstance(bt, str):
-                tfs.append(getattr(batch_tfs, bt)())
-                continue
-
-            for name, params in bt.items():  # has params
-                klass = getattr(batch_tfs, name)
-                if isinstance(params, Mapping):
-                    tfs.append(klass(**params))
-                elif isinstance(params, Sequence):
-                    tfs.append(klass(*params))
-                else:
-                    tfs.append(klass(params))
-                break
-    return tfs
-
-
 def get_collator(
     data_conf: DataConfig, batch_transforms: list[Mapping[str, Any] | str] | None = None
 ) -> SequenceCollator:
-    tfs = get_batch_transforms(batch_transforms)
+    tfs = create_instances_from_module(batch_tfs, batch_transforms)
     return SequenceCollator(
         time_name=data_conf.time_name,
         cat_cardinalities=data_conf.cat_cardinalities,

@@ -36,7 +36,7 @@ class ReconstructorBase(BaseModel):
 
         self.head = Projection(in_features, out_dim)
 
-    def forward(self, x: Seq) -> dict:
+    def forward(self, x: Seq) -> PredBatch:
         out = self.head(x).tokens
         time = out[:, :, 0]
         start_id = 1

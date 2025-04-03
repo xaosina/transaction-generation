@@ -2,15 +2,15 @@ from .metrics import (
     Levenstein,
     Accuracy,
     F1Metric,
-    Coverage,
+    CardinalityCoverage,
     Gini,
     ShannonEntropy,
 )
 from functools import partial
 
 
-CoverageUserwise = partial(Coverage, userwise=True)
-CoverageSimple = partial(Coverage, userwise=False)
+CardinalityCoverageUserwise = partial(CardinalityCoverage, userwise=True)
+CardinalityCoverageSimple = partial(CardinalityCoverage, userwise=False)
 F1Macro = partial(F1Metric, average="macro")
 F1Micro = partial(F1Metric, average="micro")
 
@@ -20,8 +20,8 @@ __all__ = [
     "Accuracy",
     "F1Macro",
     "F1Micro",
-    "CoverageUserwise",
-    "CoverageSimple",
+    "CardinalityCoverageUserwise",
+    "CardinalityCoverageSimple",
     "Gini",
     "ShannonEntropy",
 ]
