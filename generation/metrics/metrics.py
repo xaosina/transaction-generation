@@ -203,12 +203,13 @@ class GenVsHistoryMetric(BaseMetric):
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
-        return {"relative": gen_score / orig_score, "gen": gen_score}
+        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        return {"relative": relative, "orig": orig_score}
 
 
 @dataclass
 class CardinalityCoverage(GenVsHistoryMetric):
-    def get_scores(row):
+    def get_scores(self, row):
         hists, preds = row["hists"], row["preds"]
         return len(np.unique(preds)) / len(np.unique(hists))
 
@@ -218,7 +219,7 @@ class CardinalityCoverage(GenVsHistoryMetric):
 
 @dataclass
 class NoveltyScore(GenVsHistoryMetric):
-    def get_scores(row):
+    def get_scores(self, row):
         hists, preds = row["hists"], row["preds"]
         hists, preds = set(hists), set(preds)
         return len(preds - hists) / len(preds)
@@ -234,6 +235,12 @@ class Density(BaseMetric):
     save_details: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
+        data_conf = deepcopy(self.data_conf)
+        num_names = data_conf.num_names or []
+        if self.with_timediff:
+            num_names += ["time_delta"]
+        cat_names = list(data_conf.cat_cardinalities or {})
+        seq_cols = num_names + cat_names
 
         def log10_scale(x):
             linear = (x <= np.e) & (x >= -np.e)  # to match the derivatives
@@ -243,14 +250,16 @@ class Density(BaseMetric):
 
         def preproc_parquet(df):
             df = deepcopy(df)
-            data_conf = self.data_conf
             time_name, gen_len = data_conf.time_name, data_conf.generation_len
             assert df._seq_len.min() >= data_conf.generation_len
 
             if self.with_timediff:
                 df["time_delta"] = df[time_name].map(lambda x: np.diff(x, prepend=0))
-            df[data_conf.seq_cols] = df[data_conf.seq_cols].map(lambda x: x[-gen_len:])
-            df = df.explode(data_conf.seq_cols)
+
+            df = df[seq_cols].map(lambda x: x[-gen_len:])
+            df = df.explode(seq_cols)
+            df[cat_names] = df[cat_names].astype("int64")
+            df[num_names] = df[num_names].astype("float32")
             return df
 
         # Preprocess
@@ -258,20 +267,17 @@ class Density(BaseMetric):
         orig = preproc_parquet(orig)
         # Prepare metadata
         metadata = {"columns": {}}
-        for num_name in self.data_conf.num_names:
+        for num_name in num_names:
             metadata["columns"][num_name] = {"sdtype": "numerical"}
-        for cat_name in self.data_conf.cat_cardinalities:
+        for cat_name in cat_names:
             metadata["columns"][cat_name] = {"sdtype": "categorical"}
         # metadata["sequence_key"] = self.data_conf.index_name  # TODO doesn't matter?
         # metadata["sequence_index"] = self.data_conf.time_name  # TODO doesn't matter?
 
-        if self.with_timediff:
-            metadata["columns"]["time_diff"] = {"sdtype": "numerical"}
-
         if self.log_cols:
             for col in self.log_cols:
-                gen[col] = log10_scale(gen[col])
-                orig[col] = log10_scale(orig[col])
+                gen[col] = log10_scale(gen[col].values)
+                orig[col] = log10_scale(orig[col].values)
 
         gen = gen[metadata["columns"].keys()]
         orig = orig[metadata["columns"].keys()]
@@ -286,8 +292,8 @@ class Density(BaseMetric):
             save_dir = f"{self.log_dir}/density"
             Path(save_dir).mkdir(parents=True, exist_ok=True)
             with open(f"{save_dir}/density.txt", "w") as f:
-                f.write(f"{Shape}\n")
-                f.write(f"{Trend}\n")
+                f.write(f"Shape: {Shape}\n")
+                f.write(f"Trend: {Trend}\n")
             shapes = qual_report.get_details(property_name="Column Shapes")
             trends = qual_report.get_details(property_name="Column Pair Trends")
             shapes.to_csv(f"{save_dir}/shape.csv")
@@ -305,12 +311,13 @@ class Detection(BaseMetric):
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
-        tail_len = None if self.conditional else self.data_conf.generation_len
+        data_conf = deepcopy(self.data_conf)
+        tail_len = None if self.conditional else data_conf.generation_len
         discr_res = run_eval_detection(
             orig=orig,
             gen=gen,
             log_dir=self.log_dir,
-            data_conf=self.data_conf,
+            data_conf=data_conf,
             dataset=self.dataset_config_path,
             tail_len=tail_len,
             devices=self.devices,

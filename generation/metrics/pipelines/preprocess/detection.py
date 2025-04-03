@@ -25,5 +25,6 @@ def prepare_data(
     if tail_len:
         assert final_df._seq_len.min() >= tail_len
         final_df[seq_cols] = final_df[seq_cols].map(lambda x: x[-tail_len:])
+        final_df["_seq_len"] = tail_len
     # Save
     final_df.to_parquet(save_path, index=False)

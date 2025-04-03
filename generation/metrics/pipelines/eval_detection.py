@@ -9,7 +9,7 @@ from .preprocess.detection import prepare_data
 from .run_model import main as run_model
 from ...data.data_types import DataConfig
 
-DIRPATH = os.path.dirname(__file__) + "/.."
+DIRPATH = os.path.dirname(__file__) + "/../../.."
 
 
 def run_eval_detection(

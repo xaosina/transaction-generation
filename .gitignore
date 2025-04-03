@@ -6,6 +6,7 @@ data/**/*.parquet
 data/**/*_SUCCESS
 dev/**
 ebes/*
+tests/log**
 **.parquet
 
 # Byte-compiled / optimized / DLL files
