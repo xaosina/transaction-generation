@@ -102,24 +102,24 @@ class Encoder(nn.Module):
         self.d_token = d_token
         self.pretrain = pretrain
 
-        cat_cardinalities = cat_cardinalities if cat_cardinalities is not None else {}
         if num_count is None:
             if num_names is not None:
                 num_count = len(num_names)
             else:
                 num_count = 0
+
         self.batch_transforms = get_batch_transforms(batch_transforms)
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
-                for num_name in tfs.num_names:
+                for _ in tfs.num_names:
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
-
+        
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
-            categories=list(cat_cardinalities.values()),
+            categories=list(cat_cardinalities.values()) if cat_cardinalities is not None else None,
             d_token=d_token,
             bias=bias,
         )
@@ -140,21 +140,36 @@ class Encoder(nn.Module):
                 tf(batch)
 
         seq_lens = batch.lengths
-        x_num = batch.num_features
-        x_cat = batch.cat_features
+        
+        L = 0
+        B = 0
+        D_num = 0
+        D_cat = 0
+        x_num = None
+        if batch.num_features is not None:
+            x_num = batch.num_features
+            L, B, D_num = x_num.shape
+
+        x_cat = None
+        if batch.cat_features is not None:
+            x_cat = batch.cat_features
+            L, B, D_cat = x_cat.shape
+
+        assert L > 0, 'No features to vae train'
+
         time = batch.time
 
-        L, B, D_num = x_num.shape
-        _, _, D_cat = x_cat.shape
         valid_mask = (
             (torch.arange(L).to(seq_lens) < seq_lens[:, None]).permute(1, 0).ravel()
         )  # B, L -> L * B
 
-        x_num = x_num.reshape(-1, D_num)  # L*B, D_num
-        x_num = x_num[valid_mask]
+        if batch.num_features is not None:
+            x_num = x_num.reshape(-1, D_num)  # L*B, D_num
+            x_num = x_num[valid_mask]
 
-        x_cat = x_cat.reshape(-1, D_cat)  # L*B, D_cat
-        x_cat = x_cat[valid_mask]
+        if batch.cat_features is not None:
+            x_cat = x_cat.reshape(-1, D_cat)  # L*B, D_cat
+            x_cat = x_cat[valid_mask]
 
         x = self.tokenizer(x_num, x_cat)  # (L*B)', D_num + D_cat, d_token
 
@@ -216,26 +231,36 @@ class Decoder(nn.Module):
         assert D * self.d_token == D_vae
 
         x = x.reshape(L, B, D, self.d_token)
-        x = x.permute(1, 0, 2, 3)  # [B, L, D, d_token]
+        x = x.permute(0, 1, 2, 3)  # [B, L, D, d_token]
 
-        valid_mask = (torch.arange(L).to(seq_lens) < seq_lens[:, None]).ravel()  # B, L, -> B*L
+        valid_mask = (torch.arange(L).to(seq_lens) < seq_lens[:, None]).permute(1, 0).ravel()  # B, L, -> B*L
         x = x.reshape(-1, D, self.d_token)  # B*L, D
         x = x[valid_mask]
 
         h = self.decoder(x)
 
         recon_num, recon_cat = self.reconstructor(h)
-
+        
         time = recon_num[:, 0]
+
         num_features = None
-        if self.num_names:
+        if self.num_names is not None:
             num_features = recon_num[:, 1 : len(self.num_names) + 1]
+            D_num = num_features.shape[-1]
+            with_pad = torch.zeros(L * B, D_num).to(num_features)
+            with_pad[valid_mask] = num_features
+            with_pad = with_pad.reshape(L, B, D_num)  # L, B, D_num
 
         cat_features = None
-        if self.cat_cardinalities:
+        if self.cat_cardinalities is not None:
             cat_features = {}
-            for cat_name, cat_dim in self.cat_cardinalities.items():
-                cat_features[cat_name] = recon_cat[cat_name]
+            for cat_name in self.cat_cardinalities.keys():
+                cat = recon_cat[cat_name]
+                D_cat = cat.shape[-1]
+                with_pad = torch.zeros(L * B, D_cat).to(cat)
+                with_pad[valid_mask] = cat
+                cat_features[cat_name] = with_pad.reshape(L, B, D_cat)
+
         return PredBatch(
             lengths=seq_lens,
             time=time,
