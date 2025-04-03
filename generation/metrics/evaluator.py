@@ -13,25 +13,25 @@ from generation.models.generator import Generator
 
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
-from .pipelines.eval_detection import run_eval_detection
 
 
 @dataclass(frozen=True)
 class EvaluatorConfig:
+    data_conf: DataConfig
     save_path: str
     devices: list[str] = field(default_factory=lambda: ["cuda:0"])
     metrics: Optional[list[Mapping[str, Any] | str]] = None
 
 
 class SampleEvaluator:
-    def __init__(self, data_conf: DataConfig, eval_conf: EvaluatorConfig):
-        self.save_path = Path(eval_conf.save_path)
-        self.save_path.mkdir(parents=True, exist_ok=True)
-        self.detection_config = eval_conf.detection_config
-        self.devices = eval_conf.devices
-        self.data_conf = data_conf
+    def __init__(self, eval_config: EvaluatorConfig):
+        Path(eval_config.save_path).mkdir(parents=True, exist_ok=True)
+        self.data_config = eval_config.data_conf
+        self.eval_config = eval_config
         self.metrics = (
-            create_instances_from_module(m, eval_conf.metrics, {"data_conf": data_conf})
+            create_instances_from_module(
+                m, eval_config.metrics, {"eval_config": eval_config}
+            )
             or []
         )
 
@@ -39,7 +39,6 @@ class SampleEvaluator:
         gt_dir, gen_dir = self.generate_samples(model, loader, blim, buffer_size)
 
         results = self.estimate_metrics(gt_dir, gen_dir)
-        results |= self.estimate_tmetrics(gt_dir, gen_dir)
 
         if remove:
             shutil.rmtree(gt_dir), shutil.rmtree(gen_dir)
@@ -48,7 +47,10 @@ class SampleEvaluator:
     def generate_samples(
         self, model: Generator, data_loader, blim=None, buffer_size=None
     ):
-        gt_dir, gen_dir = self.save_path / "gt", self.save_path / "gen"
+        gt_dir, gen_dir = (
+            self.eval_config.save_path / "gt",
+            self.eval_config.save_path / "gen",
+        )
         gt_dir += get_unique_folder_suffix(gt_dir)
         gen_dir += get_unique_folder_suffix(gen_dir)
 
@@ -92,26 +94,11 @@ class SampleEvaluator:
             values = metric(gt, gen)
             if isinstance(values, dict):
                 for k, v in values.items():
-                    results[f"{str(metric)}_{k}"] = v
+                    assert f"{str(metric)} {k}" not in results, "Dont overwrite metric"
+                    results[f"{str(metric)} {k}"] = v
             else:
+                assert str(metric) not in results, "Dont overwrite metric"
                 results[str(metric)] = values
-        return results
-
-    def estimate_tmetrics(self, gt_dir, gen_dir) -> dict[str, float]:
-        results = dict()
-        if self.detection_config:
-            discr_res = run_eval_detection(
-                data=gen_dir,
-                orig=gt_dir,
-                log_dir=self.save_path,
-                data_conf=self.data_conf,
-                dataset=self.detection_config,
-                tail_len=self.data_conf.generation_len,
-                gpu_ids=self.devices,
-                verbose=False,
-            )
-            discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
-            results["Uncond Discriminative"] = float(discr_score)
         return results
 
 

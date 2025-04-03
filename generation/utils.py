@@ -198,9 +198,7 @@ def create_instances_from_module(
                 klass = getattr(module, class_name)
                 if isinstance(params, Mapping):
                     instances.append(klass(**(params | common_kwargs)))
-                elif isinstance(params, Sequence):
-                    instances.append(klass(*params, **common_kwargs))
                 else:
-                    instances.append(klass(params, **common_kwargs))
+                    raise TypeError("Class config has to be mapping")
                 break  # Only process first key-value pair in dict
     return instances

@@ -9,13 +9,14 @@ from Levenshtein import distance as lev_score
 from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import accuracy_score
 
-from ..data.data_types import DataConfig
+from .evaluator import EvaluatorConfig
+from .pipelines.eval_detection import run_eval_detection
 
 UserStatistic = NewType("UserStatistic", Dict[int, Dict[str, Union[int, float]]])
 
 
 class BaseMetric(ABC):
-    data_conf: DataConfig
+    eval_config: EvaluatorConfig
 
     @abstractmethod
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame): ...
@@ -35,7 +36,7 @@ class BinaryMetric(BaseMetric):
             (orig[self.target_key], gen[self.target_key]),
             keys=["gt", "pred"],
             axis=1,
-        ).map(lambda x: x[-self.data_conf.generation_len :])
+        ).map(lambda x: x[-self.eval_config.data_conf.generation_len :])
         return df.apply(self.get_scores, axis=1).mean()
 
 
@@ -181,8 +182,9 @@ class GenVsHistoryMetric(BaseMetric):
     def get_scores(row): ...
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
-        hist = gen[self.target_key].map(lambda x: x[: -self.data_conf.generation_len])
-        preds = gen[self.target_key].map(lambda x: x[-self.data_conf.generation_len :])
+        gen_len = self.eval_config.data_conf.generation_len
+        hist = gen[self.target_key].map(lambda x: x[:-gen_len])
+        preds = gen[self.target_key].map(lambda x: x[-gen_len:])
         df = pd.concat((hist, preds), keys=["hists", "preds"], axis=1)
         if not self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
@@ -222,15 +224,14 @@ class Density(BaseMetric):
             return np.where(linear, x / (np.e * np.log(10)), np.sign(x) * np.log10(y))
 
         def preproc_parquet(df):
-            assert df._seq_len.min() >= self.data_conf.generation_len
+            data_conf = self.eval_config.data_conf
+            time_name, gen_len = data_conf.time_name, data_conf.generation_len
+            assert df._seq_len.min() >= data_conf.generation_len
+
             if self.with_timediff:
-                df["time_delta"] = df[self.data_conf.time_name].map(
-                    lambda x: np.diff(x, prepend=0)
-                )
-            df[self.data_conf.seq_cols] = df[self.data_conf.seq_cols].map(
-                lambda x: x[-self.data_conf.generation_len :]
-            )
-            df = df.explode(self.data_conf.seq_cols)
+                df["time_delta"] = df[time_name].map(lambda x: np.diff(x, prepend=0))
+            df[data_conf.seq_cols] = df[data_conf.seq_cols].map(lambda x: x[-gen_len:])
+            df = df.explode(data_conf.seq_cols)
             return df
 
         # Preprocess
@@ -238,12 +239,12 @@ class Density(BaseMetric):
         orig = preproc_parquet(orig)
         # Prepare metadata
         metadata = {"columns": {}}
-        for num_name in self.data_conf.num_names:
+        for num_name in self.eval_config.data_conf.num_names:
             metadata["columns"][num_name] = {"sdtype": "numerical"}
-        for cat_name in self.data_conf.cat_cardinalities:
+        for cat_name in self.eval_config.data_conf.cat_cardinalities:
             metadata["columns"][cat_name] = {"sdtype": "categorical"}
-        # metadata["sequence_key"] = self.data_conf.index_name  # TODO doesn't matter?
-        # metadata["sequence_index"] = self.data_conf.time_name  # TODO doesn't matter?
+        # metadata["sequence_key"] = self.eval_config.data_conf.index_name  # TODO doesn't matter?
+        # metadata["sequence_index"] = self.eval_config.data_conf.time_name  # TODO doesn't matter?
 
         if self.with_timediff:
             metadata["columns"]["time_diff"] = {"sdtype": "numerical"}
@@ -266,3 +267,33 @@ class Density(BaseMetric):
             trends = qual_report.get_details(property_name="Column Pair Trends")
             res |= {"Shape details": shapes, "Trend details:": trends}
         return res
+
+    def __repr__(self):
+        return "Density"
+
+
+class Detection(BaseMetric):
+    dataset_config_path: str
+    conditional: bool = False
+    verbose: bool = False
+
+    def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
+        if self.conditional:
+            tail_len = None
+        else:
+            tail_len = self.eval_config.data_conf.generation_len
+        discr_res = run_eval_detection(
+            orig=orig,
+            gen=gen,
+            log_dir=self.eval_config.save_path,
+            data_conf=self.eval_config.data_conf,
+            dataset=self.dataset_config_path,
+            tail_len=tail_len,
+            devices=self.eval_config.devices,
+            verbose=self.verbose,
+        )
+        discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
+        return float(discr_score)
+
+    def __repr__(self):
+        return self.conditional * "Conditional" + "Detection"
