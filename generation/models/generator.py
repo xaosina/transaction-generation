@@ -67,7 +67,7 @@ class BaselineRepeater(BaseGenerator):
             return gen_batch
 
 
-class Generator(BaseGenerator):  # TODO work
+class Generator(BaseGenerator):
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)

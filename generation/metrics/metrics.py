@@ -271,8 +271,6 @@ class Density(BaseMetric):
             metadata["columns"][num_name] = {"sdtype": "numerical"}
         for cat_name in cat_names:
             metadata["columns"][cat_name] = {"sdtype": "categorical"}
-        # metadata["sequence_key"] = self.data_conf.index_name  # TODO doesn't matter?
-        # metadata["sequence_index"] = self.data_conf.time_name  # TODO doesn't matter?
 
         if self.log_cols:
             for col in self.log_cols:

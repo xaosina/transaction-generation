@@ -22,8 +22,6 @@ def searchsorted_vectorized(seqs, values):
 
 
 class ShardDataset(IterableDataset):
-    # TODO different collators
-    # TODO function to sample batch from a general dataframe
     # TODO option to create in memory, or memory efficient dataset
     # TODO getitem
 
