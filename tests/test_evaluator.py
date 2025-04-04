@@ -9,8 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 
-from main import PipelineConfig
-
+import pytest
 from generation.data.utils import get_dataloaders
 from generation.metrics.evaluator import SampleEvaluator
 from generation.models.generator import (
@@ -18,6 +17,7 @@ from generation.models.generator import (
     Generator,
     GroundTruthGenerator,
 )
+from main import PipelineConfig
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -25,15 +25,21 @@ logging.basicConfig(
 )
 
 
-def test_evaluator():
+@pytest.fixture
+def config() -> PipelineConfig:
+    return pyrallis.parse(
+        args=["--config", "spec_config.yaml"], config_class=PipelineConfig
+    )
 
-    cfg = pyrallis.parse(config_class=PipelineConfig, config_path="spec_config.yaml")
+
+def test_evaluator(config: PipelineConfig):
+
     logger.info("Config ready")
-    train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
-    evaluator = SampleEvaluator("tests/log/evaluation", cfg.data_conf, cfg.evaluator)
+    train_loader, val_loader, test_loader = get_dataloaders(config.data_conf)
+    evaluator = SampleEvaluator("tests/log/evaluation", config.data_conf, config.evaluator)
     logger.info(evaluator.metrics)
     # model = Generator(cfg.data_conf, cfg.model).to("cuda")
-    model = BaselineRepeater(cfg.data_conf)
+    model = BaselineRepeater(config.data_conf)
     # model = GroundTruthGenerator()
     # Setup ready
     metrics = evaluator.evaluate(model, test_loader, blim=10, buffer_size=50)

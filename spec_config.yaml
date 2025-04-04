@@ -78,21 +78,21 @@ loss:
 evaluator:
   devices: ["cuda:0"]
   metrics:
-    - Levenstein:
+    - Levenshtein:
         target_key: event_type
     - Accuracy:
         target_key: event_type
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: macro
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: micro
+    - F1Metric:
+        target_key: event_type
+        average: macro
+    - F1Metric:
+        target_key: event_type
+        average: micro
 
-    # - Gini:
-    #     target_key: event_type
-    # - ShannonEntropy:
-    #     target_key: event_type
+    - Gini:
+        target_key: event_type
+    - ShannonEntropy:
+        target_key: event_type
 
     - CardinalityCoverage:
         target_key: event_type
