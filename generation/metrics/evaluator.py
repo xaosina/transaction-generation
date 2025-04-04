@@ -53,7 +53,7 @@ class SampleEvaluator:
         results = self.estimate_metrics(gt_dir, gen_dir)
         logger.info("Metrics done.")
         if remove:
-            shutil.rmtree(gt_dir), shutil.rmtree(gen_dir)
+            shutil.rmtree(log_dir)
         return results
 
     def generate_samples(
