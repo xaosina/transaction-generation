@@ -11,7 +11,7 @@ import torch.nn.init as nn_init
 from ebes.types import Seq
 from generation.data.batch_tfs import NewFeatureTransform
 from generation.data.data_types import DataConfig, GenBatch, PredBatch
-from generation.data.utils import get_batch_transforms
+from generation.data.utils import create_instances_from_module
 
 # class Tokenizer(nn.Module):
 #     def __init__(self, d_numerical, categories, d_token, bias=True):
@@ -108,7 +108,7 @@ class Encoder(nn.Module):
             else:
                 num_count = 0
 
-        self.batch_transforms = get_batch_transforms(batch_transforms)
+        self.batch_transforms = create_instances_from_module(batch_transforms)
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
