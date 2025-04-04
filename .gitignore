@@ -6,6 +6,7 @@ data/**/*.parquet
 data/**/*_SUCCESS
 dev/**
 ebes/*
+tests/log**
 **.parquet
 
 # Byte-compiled / optimized / DLL files
@@ -17,5 +18,4 @@ build/*
 
 transaction_me*/*
 generation/data/preprocess/data/
-data/
 *temp.ipynb

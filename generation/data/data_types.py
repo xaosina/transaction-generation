@@ -37,7 +37,7 @@ class DataConfig:
     def seq_cols(self):
         seq_cols = [self.time_name]
         if self.cat_cardinalities is not None:
-            seq_cols += list(self.cat_cardinalities.keys())
+            seq_cols += list(self.cat_cardinalities)
         if self.num_names is not None:
             seq_cols += self.num_names
         return seq_cols

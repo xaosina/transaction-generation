@@ -1,10 +1,10 @@
+import logging
 import shutil
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
-from . import metrics as m
 import pandas as pd
 import torch
 from tqdm import tqdm
@@ -13,6 +13,9 @@ from generation.models.generator import Generator
 
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
+from . import metrics as m
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -42,20 +45,22 @@ class SampleEvaluator:
         )
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
-        gt_dir, gen_dir = self.generate_samples(model, loader, blim, buffer_size)
-
+        log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
+        for metric in self.metrics:
+            metric.log_dir = log_dir
+        gt_dir, gen_dir = self.generate_samples(model, loader, log_dir, blim, buffer_size)
+        logger.info("Sampling done.")
         results = self.estimate_metrics(gt_dir, gen_dir)
-
+        logger.info("Metrics done.")
         if remove:
             shutil.rmtree(gt_dir), shutil.rmtree(gen_dir)
         return results
 
     def generate_samples(
-        self, model: Generator, data_loader, blim=None, buffer_size=None
+        self, model: Generator, data_loader, log_dir, blim=None, buffer_size=None
     ):
-        gt_dir, gen_dir = self.log_dir / "gt", self.log_dir / "gen"
-        gt_dir = Path(str(gt_dir) + get_unique_folder_suffix(gt_dir))
-        gen_dir = Path(str(gen_dir) + get_unique_folder_suffix(gen_dir))
+        base_dir = log_dir / "samples"
+        gt_dir, gen_dir = base_dir / "gt", base_dir / "gen"
 
         gt_dir.mkdir(parents=True, exist_ok=True)
         gen_dir.mkdir(parents=True, exist_ok=True)
@@ -74,8 +79,8 @@ class SampleEvaluator:
                     batch_input, self.data_config.generation_len
                 )
             gt, gen = _concat_samples(batch_input, batch_pred)
-            gt = data_loader.collate_fn.reverse(gt)
-            gen = data_loader.collate_fn.reverse(gen)
+            gt = data_loader.collate_fn.reverse(gt.to("cpu"))
+            gen = data_loader.collate_fn.reverse(gen.to("cpu"))
 
             buffer_gt.append(gt)
             buffer_gen.append(gen)
@@ -98,6 +103,7 @@ class SampleEvaluator:
         ).all()
         results = {}
         for metric in self.metrics:
+            logger.info(f"{metric} is started")
             values = metric(gt, gen)
             if isinstance(values, dict):
                 for k, v in values.items():

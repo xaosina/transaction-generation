@@ -9,7 +9,7 @@ import pytest
 import torch
 from ebes.types import Seq
 from generation.data.data_types import GenBatch, PredBatch
-from generation.data.preprocess.vae.models.vae.model import (
+from generation.models.autoencoders.vae import (
     VAE,
     Decoder,
     Encoder,

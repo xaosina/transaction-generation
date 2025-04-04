@@ -94,7 +94,6 @@ def main(
     if isinstance(train_data, (str, Path)):
         train_data = Path(train_data)
         config.data.dataset.parquet_path = train_data
-        config.run_name = train_data.parts[-2]
 
     if isinstance(test_data, (str, Path)):
         test_data = Path(test_data)

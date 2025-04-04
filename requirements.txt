@@ -6,5 +6,5 @@ torcheval==0.0.7
 omegaconf==2.3.0
 lightgbm==4.3.0
 ebes==0.0.7
-sdmetrics==0.15.1
+sdmetrics==0.19.0
 Levenshtein==0.26.1
