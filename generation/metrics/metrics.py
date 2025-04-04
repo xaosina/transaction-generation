@@ -1,3 +1,7 @@
+"""
+Coverage and Gini Index were implemented following the approach described in https://www.mdpi.com/2078-2489/16/2/151
+"""
+
 import collections
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -47,10 +51,10 @@ class BinaryMetric(BaseMetric):
 
 
 @dataclass
-class Levenstein(BinaryMetric):
+class Levenshtein(BinaryMetric):
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
-        lev_m = 1 - lev_score(gt, pred) / len(pred)
+        lev_m = 1 - lev_score(gt, pred) / max(len(pred), len(gt))
         return lev_m
 
     def __repr__(self):
@@ -75,6 +79,8 @@ class F1Metric(BinaryMetric):
 
     @staticmethod
     def f1_score_macro_unorder(cls_metric: UserStatistic) -> float:
+        if not cls_metric:
+            return 1.0
         f1_score_sum = 0
         for _, value in cls_metric.items():
             f1_score_sum += (
@@ -89,6 +95,9 @@ class F1Metric(BinaryMetric):
 
     @staticmethod
     def f1_score_micro_unorder(cls_metric: UserStatistic) -> float:
+        if not cls_metric:
+            return 1.0
+
         tp, fp, fn = 0, 0, 0
         for _, value in cls_metric.items():
             tp += value["tp"]
@@ -97,22 +106,27 @@ class F1Metric(BinaryMetric):
         return 2 * tp / (2 * tp + fp + fn)
 
     @staticmethod
-    def get_statistics(gt: List[int], pred: List[int]) -> UserStatistic:
+    def get_statistics(gt: np.ndarray, pred: np.ndarray) -> UserStatistic:
+        assert isinstance(gt, np.ndarray) and isinstance(pred, np.ndarray)
+        if len(gt) == 0 and len(pred) == 0:
+            return {}
+
         cls_metric = dict()
-        gt_counter = collections.defaultdict(int, collections.Counter(gt))
-        pred_counter = collections.defaultdict(int, collections.Counter(pred))
-        for cls in set(gt + pred):
-            gt_cls = gt_counter[cls]
-            pred_cls = pred_counter[cls]
+        gt_counter = collections.Counter(gt)
+        pred_counter = collections.Counter(pred)
+
+        all_classes = set(np.concatenate([gt, pred]))
+        for cls in all_classes:
+            gt_cls = gt_counter.get(cls, 0)
+            pred_cls = pred_counter.get(cls, 0)
+
             tp = min(gt_cls, pred_cls)
-            if gt_cls >= pred_cls:
-                fn = gt_cls - pred_cls
-                fp = 0
-            else:
-                fn = 0
-                fp = pred_cls - gt_cls
+            fn = max(0, gt_cls - pred_cls)
+            fp = max(0, pred_cls - gt_cls)
+
             precision = tp / (tp + fp) if (tp + fp) != 0 else 0
             recall = tp / (tp + fn) if (tp + fn) != 0 else 0
+
             cls_metric[cls] = {
                 "precision": precision,
                 "recall": recall,
@@ -120,6 +134,7 @@ class F1Metric(BinaryMetric):
                 "fp": fp,
                 "fn": fn,
             }
+
         return cls_metric
 
     def get_scores(self, row):
@@ -136,7 +151,6 @@ class F1Metric(BinaryMetric):
     def __repr__(self):
         return f"F1_{self.average} on {self.target_key}"
 
-
 @dataclass
 class DistributionMetric(BaseMetric):
 
@@ -146,23 +160,23 @@ class DistributionMetric(BaseMetric):
     def get_scores(self, p): ...
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
-        vals = np.array(list(gen[self.target_key].value_counts()), dtype=float)
-        p = vals / vals.sum()
+        flat = [i for row in gen[self.target_key] for i in row]
+        p = pd.Series(flat).value_counts(normalize=True, sort=False).to_numpy()
         return self.get_scores(p)
 
 
 @dataclass
 class Gini(DistributionMetric):
+    """Indicates how strongly one category dominates over the others"""
 
     def get_scores(self, p):
-
         p_sorted = np.sort(p)
         n = len(p_sorted)
 
         gini = 0
         for k in range(n):
             gini += (2 * (k + 1) - n - 1) * p_sorted[k]
-        gini = gini / (n - 1)
+        gini = gini / (n - 1) if n != 1 else 1.
 
         return gini
 

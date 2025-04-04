@@ -82,7 +82,7 @@ class Batch2TransformedSeq(Batch2Seq):
         if self.batch_transforms is not None:
             for tf in self.batch_transforms:
                 tf(batch)
-        return super().forward(batch) # WARNING: copy=False - ERROR
+        return super().forward(batch, copy=False)
 
 
 @dataclass(frozen=True)

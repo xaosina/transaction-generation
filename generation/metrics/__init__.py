@@ -1,5 +1,5 @@
 from .metrics import (
-    Levenstein,
+    Levenshtein,
     Accuracy,
     F1Metric,
     CardinalityCoverage,
@@ -16,7 +16,7 @@ F1Micro = partial(F1Metric, average="micro")
 
 
 __all__ = [
-    "Levenstein",
+    "Levenshtein",
     "Accuracy",
     "F1Macro",
     "F1Micro",
