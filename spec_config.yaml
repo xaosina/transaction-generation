@@ -38,7 +38,7 @@ data_conf:
     - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transformer_amount.pt"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
     - RescaleTime:
@@ -47,7 +47,7 @@ data_conf:
     - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transformer_amount.pt"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -128,5 +128,10 @@ trainer:
   patience: -1
   profiling: false
 
-devices: 
-  - "cuda:0"
+devices: ["cuda:2"]
+
+vae:
+  num_layers: 2
+  d_token: 6
+  n_head: 2
+  factor: 64

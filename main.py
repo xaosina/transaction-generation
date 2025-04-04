@@ -9,6 +9,7 @@ from generation.data.data_types import DataConfig
 from generation.data.utils import get_dataloaders
 from generation.losses import LossConfig, get_loss
 from generation.metrics.evaluator import EvaluatorConfig, SampleEvaluator
+from generation.data.preprocess.vae.models.vae.model import VaeConfig
 from generation.models.generator import Generator, ModelConfig
 from generation.trainer import Trainer
 from generation.utils import (
@@ -47,6 +48,7 @@ class PipelineConfig:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
+    vae: VaeConfig = field(default_factory=VaeConfig),
 
 
 @pyrallis.wrap("spec_config.yaml")

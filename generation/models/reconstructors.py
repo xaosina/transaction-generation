@@ -25,7 +25,6 @@ class ReconstructorMSE:
 class ReconstructorBase(BaseModel):
     def __init__(self, data_conf: DataConfig, in_features):
         super().__init__()
-        self.time_name = data_conf.time_name
         self.num_names = data_conf.num_names
         self.cat_cardinalities = data_conf.cat_cardinalities
         out_dim = 1  # Time
