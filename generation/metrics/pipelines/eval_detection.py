@@ -9,8 +9,6 @@ from .preprocess.detection import prepare_data
 from .run_model import main as run_model
 from ...data.data_types import DataConfig
 
-DIRPATH = os.path.dirname(__file__) + "/../../.."
-
 
 def run_eval_detection(
     orig: pd.DataFrame,
@@ -18,8 +16,8 @@ def run_eval_detection(
     log_dir: str,
     data_conf: DataConfig,  # dataset config with column names
     dataset: str,  # dataset config path for detection
-    method: str = DIRPATH + "/configs/methods/gru.yaml",
-    experiment: str = DIRPATH + "/configs/experiments/detection.yaml",
+    method: str = "gru",
+    experiment: str = "detection",
     tail_len: int = None,
     devices: List[int] | None = None,
     verbose: bool = False,

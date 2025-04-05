@@ -29,7 +29,7 @@ model:
       scale_hidden: 4
       dropout: 0.1
       pos_dropout: 0.1 
-      pos_enc_type: "base"
+      pos_enc_type: "cat"
       num_heads: 8
   aggregation:
     name: TakeLastHidden

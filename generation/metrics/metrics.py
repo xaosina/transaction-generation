@@ -304,19 +304,20 @@ class Density(BaseMetric):
 
 @dataclass
 class Detection(BaseMetric):
-    dataset_config_path: str
-    conditional: bool = False
+    dataset_config: str
+    method_config: str = "gru"
+    condition_len: int = 0
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         data_conf = deepcopy(self.data_conf)
-        tail_len = None if self.conditional else data_conf.generation_len
+        tail_len = data_conf.generation_len + self.condition_len
         discr_res = run_eval_detection(
             orig=orig,
             gen=gen,
             log_dir=self.log_dir,
             data_conf=data_conf,
-            dataset=self.dataset_config_path,
+            dataset=self.dataset_config,
             tail_len=tail_len,
             devices=self.devices,
             verbose=self.verbose,
@@ -325,4 +326,4 @@ class Detection(BaseMetric):
         return float(discr_score)
 
     def __repr__(self):
-        return self.conditional * "Conditional" + "Detection"
+        return f"Detection ({self.condition_len} hist)"

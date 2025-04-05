@@ -1,11 +1,12 @@
-from copy import deepcopy
-from dataclasses import dataclass, field
+from copy import copy, deepcopy
+from dataclasses import dataclass, field, replace
 
+import numpy as np
 import torch
 from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
 
-from ..data.data_types import DataConfig, GenBatch, PredBatch
+from ..data.data_types import DataConfig, GenBatch, PredBatch, gather
 from .encoders import GenGRU
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
@@ -60,6 +61,49 @@ class BaselineRepeater(BaseGenerator):
             corr = torch.cat((torch.zeros_like(hist.time[:1]), hist.time))
             corr = corr[hist.lengths - gen_len, torch.arange(hist.time.shape[1])]
             gen_batch.time = gen_batch.time + gen_batch.time[-1] - corr
+            # This complicated correction assures same behavior as with timediff
+        if with_hist:
+            return hist.append(gen_batch)
+        else:
+            return gen_batch
+
+
+class BaselineHistSampler(BaseGenerator):
+    def __init__(self, data_conf: DataConfig):
+        super().__init__()
+        self.data_conf = data_conf
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a repeator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
+        assert isinstance(hist.time, torch.Tensor)
+
+        hist = deepcopy(hist)
+        samples = torch.tensor(
+            np.array(
+                [
+                    np.sort(np.random.choice(length, size=gen_len, replace=False))
+                    for length in hist.lengths.numpy(force=True)
+                ]
+            ),
+            device=hist.lengths.device,
+        ).T  # [gen_len, B]
+        gen_batch = replace(
+            hist,
+            lengths=torch.ones_like(hist.lengths) * gen_len,
+            time=gather(hist.time, samples),
+            num_features=gather(hist.num_features, samples),
+            cat_features=gather(hist.cat_features, samples),
+            cat_mask=gather(hist.cat_mask, samples),
+            num_mask=gather(hist.num_mask, samples),
+        )
+        if hist.monotonic_time:  # Time is monotonic.
+            corr = torch.cat((torch.zeros_like(hist.time[:1]), hist.time))
+            pred_first_time = corr[samples[0], torch.arange(hist.time.shape[1])]
+            last_time = hist.time[hist.lengths - 1, torch.arange(hist.time.shape[1])]
+            gen_batch.time = gen_batch.time - pred_first_time + last_time
             # This complicated correction assures same behavior as with timediff
         if with_hist:
             return hist.append(gen_batch)

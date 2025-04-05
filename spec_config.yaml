@@ -23,8 +23,8 @@ data_conf:
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: 16
-  generation_len: &generation_len 16
+  min_history_len: 32
+  generation_len: &generation_len 32
   max_seq_len: 1045
   padding_value: 0
 
@@ -112,10 +112,18 @@ evaluator:
         with_timediff: True
         save_details: True
 
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: transformer
+    #     condition_len: 0
+    #     verbose: True
+
     - Detection:
-        dataset_config_path: configs/datasets/detection/mbd.yaml
-        conditional: False
-        verbose: False
+        dataset_config: detection/mbd
+        method_config: transformer
+        condition_len: *generation_len
+        verbose: True
+
 logging:
   file_lvl: "info"
   cons_lvl: "error"

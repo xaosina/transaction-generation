@@ -2,18 +2,19 @@
 # pyright: reportArgumentType=false
 
 import argparse
+import os
+import pdb
+import signal
 from functools import partialmethod
 from pathlib import Path
 from typing import Any, List
-from collections.abc import Mapping
-import signal
-import pdb
-import pandas as pd
 
+import pandas as pd
+from ebes.pipeline.base_runner import Runner
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-from ebes.pipeline.base_runner import Runner
+DIRPATH = os.path.dirname(__file__) + "/../../../configs/"
 
 
 def start_debugging(_, frame):
@@ -23,9 +24,9 @@ def start_debugging(_, frame):
 def collect_config(
     dataset, method, experiment, specify=None, gpu=None
 ) -> dict[str, Any]:
-    data_config = OmegaConf.load(Path(dataset))
-    method_config = OmegaConf.load(Path(method))
-    exp_config = OmegaConf.load(Path(experiment))
+    data_config = OmegaConf.load(Path(f"{DIRPATH}/datasets/{dataset}.yaml"))
+    method_config = OmegaConf.load(Path(f"{DIRPATH}/methods/{method}.yaml"))
+    exp_config = OmegaConf.load(Path(f"{DIRPATH}/experiments/{experiment}.yaml"))
     configs = [data_config, method_config, exp_config]
 
     if specify is not None:
