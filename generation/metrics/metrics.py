@@ -143,12 +143,31 @@ class DistributionMetric(BaseMetric):
     target_key: str
 
     @abstractmethod
-    def get_scores(self, p): ...
+    def get_scores(self, row) -> pd.Series | float: ...
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
-        vals = np.array(list(gen[self.target_key].value_counts()), dtype=float)
-        p = vals / vals.sum()
-        return self.get_scores(p)
+        df = pd.concat(
+            (orig[self.target_key], gen[self.target_key]),
+            keys=["gt", "pred"],
+            axis=1,
+        ).map(lambda x: x[-self.data_conf.generation_len :])
+        if self.overall:
+            df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
+        max_c = df.map(max).max().max()
+        assert isinstance(max_c, int)
+
+        def get_frequency(arr, max_c):
+            frequency_array = np.zeros(max_c + 1, dtype=float)
+            unique_values, counts = np.unique(arr, return_counts=True)
+            frequency_array[unique_values] = counts
+            return frequency_array / arr.size
+
+        df = df.map(lambda x: get_frequency(x, max_c))
+        df = df.apply(self.get_scores, axis=1).mean()
+        if isinstance(df, pd.Series):
+            return df.to_dict()
+        elif isinstance(df, float):
+            return df
 
 
 @dataclass
@@ -196,7 +215,7 @@ class GenVsHistoryMetric(BaseMetric):
         hist = df[self.target_key].map(lambda x: x[:-gen_len])
         preds = df[self.target_key].map(lambda x: x[-gen_len:])
         df = pd.concat((hist, preds), keys=["hists", "preds"], axis=1)
-        if not self.overall:
+        if self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
         return df.apply(self.get_scores, axis=1).mean()
 
