@@ -139,8 +139,8 @@ class F1Metric(BinaryMetric):
 
 @dataclass
 class DistributionMetric(BaseMetric):
-
     target_key: str
+    overall: bool = False
 
     @abstractmethod
     def get_scores(self, row) -> pd.Series | float: ...
@@ -171,9 +171,20 @@ class DistributionMetric(BaseMetric):
 
 
 @dataclass
-class Gini(DistributionMetric):
+class StatisticMetric(DistributionMetric):
+    def get_scores(self, row) -> pd.Series:
+        orig_score, gen_score = row.map(self.get_statistic)
+        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        return pd.Series({"relative": relative, "orig": orig_score})
 
-    def get_scores(self, p):
+    @abstractmethod
+    def get_statistic(self, p) -> float: ...
+
+
+@dataclass
+class Gini(StatisticMetric):
+
+    def get_statistic(self, p):
 
         p_sorted = np.sort(p)
         n = len(p_sorted)
@@ -186,20 +197,20 @@ class Gini(DistributionMetric):
         return gini
 
     def __repr__(self):
-        return f"Gini on {self.target_key}"
+        return self.overall * "Overall " + f"Gini on {self.target_key}"
 
 
 @dataclass
-class ShannonEntropy(DistributionMetric):
+class ShannonEntropy(StatisticMetric):
 
     def get_scores(self, p):
-
+        p = p[p > 0]
         shannon_entropy = -np.sum(p * np.log2(p))
 
         return shannon_entropy
 
     def __repr__(self):
-        return f"Shannon entropy on {self.target_key}"
+        return self.overall * "Overall " + f"Shannon entropy on {self.target_key}"
 
 
 @dataclass
