@@ -68,7 +68,7 @@ class ShardDataset(IterableDataset):
 
     @classmethod
     def train_val_split(
-        cls, data_path, data_conf: DataConfig
+        cls, data_path, data_conf: DataConfig, split_seed: int = None
     ) -> tuple["ShardDataset", "ShardDataset"]:
         assert isinstance(data_path, str)
         fragments = {
@@ -76,7 +76,7 @@ class ShardDataset(IterableDataset):
         }
         total_rows = sum(fragments.values())
         paths = list(fragments.keys())
-        random.shuffle(paths)
+        random.Random(split_seed).shuffle(paths)
         val_size = int(len(paths) * data_conf.val_ratio)
         val_paths = paths[:val_size]
         train_paths = paths[val_size:]
@@ -104,18 +104,17 @@ class ShardDataset(IterableDataset):
         worker_info = torch.utils.data.get_worker_info()
         worker_id = 0 if worker_info is None else worker_info.id
         num_workers = 1 if worker_info is None else worker_info.num_workers
-        base_seed = (
-            torch.initial_seed()
-            if worker_info is None
-            else worker_info.seed - worker_id
-        ) % (2**32 - 1)
-        shuffle_seed = self.seed if self.seed is not None else base_seed
+        # When we set generator in DataLoader, this seeds will repeat each run.
+        worker_seed = torch.initial_seed() if worker_info is None else worker_info.seed
+        base_seed = (worker_seed - worker_id) % (2**32 - 1)
+        common_rng = np.random.default_rng(self.seed or base_seed)
+        worker_rng = np.random.default_rng(self.seed or worker_seed)
         data_conf = self.data_conf
 
         partitions_copy = list(self.partitions)
         partitions_copy = partitions_copy * self.n_resamples
         if self.shuffle:
-            random.Random(shuffle_seed).shuffle(partitions_copy)
+            common_rng.shuffle(partitions_copy)
 
         # Split shards across workers
         worker_shards = partitions_copy[worker_id::num_workers]
@@ -128,10 +127,10 @@ class ShardDataset(IterableDataset):
                 + data_conf.num_names
                 + list(data_conf.cat_cardinalities.keys()),
             )
-            data = self._preprocess(data)
+            data = self._preprocess(data, worker_rng)
 
             if self.shuffle:
-                data = data.sample(frac=1, random_state=self.seed)
+                data = data.sample(frac=1, random_state=worker_rng)
 
             if remaining_data is not None:
                 data = pd.concat([remaining_data, data], ignore_index=True)
@@ -147,7 +146,7 @@ class ShardDataset(IterableDataset):
         if remaining_data is not None:
             yield remaining_data.reset_index(drop=True)
 
-    def _preprocess(self, data):
+    def _preprocess(self, data, rng):
         data_conf = self.data_conf
         min_seq_len = data_conf.min_history_len + data_conf.generation_len
 
@@ -159,8 +158,6 @@ class ShardDataset(IterableDataset):
         data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
 
         if self.random_end != "none":
-            # Initialize seeded random generator
-            rng = np.random.default_rng(self.seed if self.seed is not None else None)
 
             # Determine slicing strategy
             if self.random_end == "index":
@@ -183,7 +180,7 @@ class ShardDataset(IterableDataset):
             data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
 
         return data
-    
+
     def _slice_rows(self, data, end_indices):
         seq_lens = data["_seq_len"].values
         n_rows = len(data)
@@ -294,6 +291,7 @@ if __name__ == "__main__":
     start = time()
     import numpy as np
     from tqdm import tqdm
+
     # for batch, seqs in tqdm(train_loader):
     #     seqs_r = train_loader.collate_fn.reverse(batch)
 

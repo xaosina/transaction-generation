@@ -2,6 +2,7 @@ import logging
 from typing import Any, Mapping
 
 import numpy as np
+import torch
 from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
@@ -38,10 +39,10 @@ def get_collator(
     )
 
 
-def get_dataloaders(data_conf: DataConfig):
+def get_dataloaders(data_conf: DataConfig, seed: int):
     # Create datasets
     train_dataset, val_dataset = ShardDataset.train_val_split(
-        data_conf.train_path, data_conf
+        data_conf.train_path, data_conf, split_seed=seed
     )
     test_dataset = ShardDataset(
         data_conf.test_path,
@@ -54,10 +55,12 @@ def get_dataloaders(data_conf: DataConfig):
     train_collator = get_collator(data_conf, data_conf.train_transforms)
     val_collator = get_collator(data_conf, data_conf.val_transforms)
     # Create loaders
+    gen = torch.Generator().manual_seed(seed)  # for shard splits between workers
     train_loader = DataLoader(
         train_dataset,
         batch_size=None,
         collate_fn=train_collator,
+        generator=gen,
         num_workers=data_conf.num_workers,
     )
     val_loader = DataLoader(

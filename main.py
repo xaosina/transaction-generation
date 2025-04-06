@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Optional
 
 import pyrallis
-
+from ebes.pipeline import Runner
 from generation.data.data_types import DataConfig
 from generation.data.utils import get_dataloaders
 from generation.losses import LossConfig, get_loss
@@ -12,15 +12,9 @@ from generation.metrics.evaluator import EvaluatorConfig, SampleEvaluator
 from generation.models.autoencoders.vae import VaeConfig
 from generation.models.generator import Generator, ModelConfig
 from generation.trainer import Trainer
-from generation.utils import (
-    LoginConfig,
-    OptimizerConfig,
-    SchedulerConfig,
-    get_optimizer,
-    get_scheduler,
-    get_unique_folder_suffix,
-    log_to_file,
-)
+from generation.utils import (LoginConfig, OptimizerConfig, SchedulerConfig,
+                              get_optimizer, get_scheduler,
+                              get_unique_folder_suffix, log_to_file)
 
 
 @dataclass(frozen=True)
@@ -39,7 +33,7 @@ class TrainConfig:
 class PipelineConfig:
     run_name: str = "debug"
     log_dir: Path = "log/generation"
-    devices: list[str] = field(default_factory=lambda: ["cuda:0"])
+    device: str = "cuda:0"
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
