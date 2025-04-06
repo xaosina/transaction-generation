@@ -76,7 +76,7 @@ loss:
   name: baseline
 
 evaluator:
-  devices: ["cuda:0"]
+  devices: ["cuda:1", "cuda:2"]
   metrics:
     - Levenstein:
         target_key: event_type
@@ -136,10 +136,48 @@ trainer:
   patience: -1
   profiling: false
 
-devices: ["cuda:2"]
-
 vae:
   num_layers: 2
   d_token: 6
   n_head: 2
   factor: 64
+
+# Runner params:
+run_name: debug
+log_dir: log/generation
+device: "cuda:2"
+common_seed: 0
+
+runner:
+  name: GenerationRunner
+  run_type: simple
+  seed_keys:
+    - "common_seed"
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list: ['cuda:0']
+
+
+# optuna:
+#   params:
+#     n_trials: 70
+#     n_startup_trials: 3
+#     request_list: 
+#       - 'optimizer.params.lr': 3.e-4
+#         'model.preprocess.params.num_norm': True
+#     target_metric: ${main_metric}
+#   suggestions:
+#     optimizer.params.weight_decay: [suggest_float, {low: 1.e-15, high: 1.e-3, log: True}]
+#     optimizer.params.lr: [suggest_float, {low: 1.e-5, high: 1.e-1, log: True}]
+
+#     model.encoder.params.hidden_size: [suggest_int, {low: 10, high: 1200, log: True}]
+#     model.encoder.params.num_layers: [suggest_int, {low: 1, high: 3, log: False}]
+#     model.encoder.params.dropout: [suggest_float, {low: 1.e-10, high: 0.3, log: True}]
+
+#     model.preprocess.params.time_process: [suggest_categorical, {choices: ["diff", "cat", "none"]}]
+#     model.preprocess.params.num_norm: [suggest_categorical, {choices: [true, false]}]
+#     model.preprocess.params.cat_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
+#     model.preprocess.params.num_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
+
+#     model.aggregation.name: [suggest_categorical, {choices: ["TakeLastHidden", "ValidHiddenMean"]}]

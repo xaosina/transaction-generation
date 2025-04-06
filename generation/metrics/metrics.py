@@ -263,6 +263,7 @@ class Density(BaseMetric):
     log_cols: list[str] = None
     with_timediff: bool = False
     save_details: bool = False
+    verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         data_conf = deepcopy(self.data_conf)
@@ -311,7 +312,7 @@ class Density(BaseMetric):
         orig = orig[metadata["columns"].keys()]
         # Calculate
         qual_report = QualityReport()
-        qual_report.generate(orig, gen, metadata)
+        qual_report.generate(orig, gen, metadata, verbose=self.verbose)
         quality = qual_report.get_properties()
         Shape = quality["Score"][0]
         Trend = quality["Score"][1]

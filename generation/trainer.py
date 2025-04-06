@@ -4,7 +4,7 @@ from collections.abc import Iterable, Sized
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import torch
@@ -21,10 +21,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class TrainConfig:
-    """Training config for Machine Learning"""
-
-    # The experiment name
-    exp_name: str = "default_exp"
+    total_iters: Optional[int] = 100_000
+    total_epochs: Optional[int] = None
+    patience: int = -1
+    iters_per_epoch: Optional[int] = 10_000
+    ckpt_replace: bool = True
+    ckpt_track_metric: str = "epoch"
+    ckpt_resume: Optional[str | os.PathLike] = None
+    profiling: bool = False
 
 
 class Trainer:
