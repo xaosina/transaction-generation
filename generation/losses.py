@@ -1,7 +1,10 @@
+from dataclasses import dataclass
+from typing import Optional
+
 import torch
 import torch.nn.functional as F
-from dataclasses import dataclass
-from typing import Optional, Dict, Any, Tuple
+
+from generation.data.data_types import Batch, PredBatch
 
 
 @dataclass(frozen=True)
@@ -11,13 +14,13 @@ class LossConfig:
     c_number: Optional[int] = None
 
 
-class BaseLoss:
+class BaselineLoss:
     def __init__(self, ignore_index: int = -100):
         self.ignore_index = ignore_index
 
     def _compute_mse(
-        self, y_true, y_pred, valid_mask: torch.Tensor
-    ) -> Tuple[torch.Tensor, int]:
+        self, y_true: Batch, y_pred: PredBatch, valid_mask: torch.Tensor
+    ) -> torch.Tensor:
         mse_sum = 0.0
         mse_count = 0
 
@@ -46,8 +49,10 @@ class BaseLoss:
 
         return mse_sum / mse_count
 
-    def _compute_ce(self, y_true, y_pred, valid_mask: torch.Tensor) -> torch.Tensor:
-        if y_pred.cat_features is None:
+    def _compute_ce(
+        self, y_true: Batch, y_pred: PredBatch, valid_mask: torch.Tensor
+    ) -> torch.Tensor:
+        if not y_pred.cat_features:
             return torch.tensor(0.0, device=valid_mask.device)
 
         total_ce = 0.0
@@ -65,11 +70,7 @@ class BaseLoss:
             total_ce += ce_loss
             ce_count += 1
 
-        return (
-            total_ce / ce_count
-            if ce_count > 0
-            else torch.tensor(0.0, device=valid_mask.device)
-        )
+        return total_ce / ce_count
 
     def _valid_mask(self, y_true) -> torch.Tensor:
         return (
@@ -77,7 +78,7 @@ class BaseLoss:
             < y_true.lengths
         )
 
-    def forward(self, y_true, y_pred) -> torch.Tensor:
+    def __call__(self, y_true, y_pred) -> torch.Tensor:
         valid_mask = self._valid_mask(y_true)
         mse_loss = self._compute_mse(y_true, y_pred, valid_mask)
 
@@ -86,13 +87,7 @@ class BaseLoss:
         return mse_loss + ce_loss
 
 
-class BaselineLoss(BaseLoss):
-
-    def __call__(self, y_true, y_pred) -> torch.Tensor:
-        return self.forward(y_true, y_pred)
-
-
-class VAELoss(BaseLoss):
+class VAELoss(BaselineLoss):
 
     def __init__(self, beta: float = 1.0, ignore_index: int = -100):
         super().__init__(ignore_index=ignore_index)
@@ -100,9 +95,11 @@ class VAELoss(BaseLoss):
 
     def __call__(self, y_true, data) -> torch.Tensor:
         y_pred, params = data
-        base_loss = self.forward(y_true, y_pred)
+        base_loss = super().__call__(y_true, y_pred)
 
-        assert "mu_z" in params and "std_z" in params, "Params should contains 'mu_z' and 'std_z'"
+        assert (
+            "mu_z" in params and "std_z" in params
+        ), "Params should contains 'mu_z' and 'std_z'"
 
         mu_z = params["mu_z"]
         std_z = params["std_z"]

@@ -1,5 +1,4 @@
 import math
-
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -8,10 +7,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as nn_init
 from ebes.types import Seq
+from generation.data import batch_tfs
 from generation.data.batch_tfs import NewFeatureTransform
 from generation.data.data_types import GenBatch, PredBatch
 from generation.data.utils import create_instances_from_module
-from generation.data import batch_tfs
 
 # class Tokenizer(nn.Module):
 #     def __init__(self, d_numerical, categories, d_token, bias=True):
@@ -91,12 +90,11 @@ class Encoder(nn.Module):
         cat_cardinalities: Mapping[str, int] | None = None,
         num_names: Sequence[str] | None = None,
         batch_transforms: list[Mapping[str, Any] | str] | None = None,
-        pretrained=False,
         bias=True,
     ):
         super(Encoder, self).__init__()
         self.d_token = vae_conf.d_token
-        self.pretrained = pretrained
+        self.pretrained = vae_conf.pretrained
 
         if num_names is not None:
             num_count = len(num_names)
@@ -253,6 +251,9 @@ class Decoder(nn.Module):
             cat_features=cat_features if cat_features else None,
         )
 
+    def generate(self, seq: Seq) -> GenBatch:
+        return self.forward(seq).to_batch()
+
 
 class Tokenizer(nn.Module):
 
@@ -404,7 +405,6 @@ class Transformer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for layer_idx, layer in enumerate(self.layers):
-            is_last_layer = layer_idx + 1 == len(self.layers)
 
             x_residual = self._start_residual(x, layer, 0)
             x_residual = layer["attention"](

@@ -117,6 +117,7 @@ evaluator:
         log_cols: ["amount"]
         with_timediff: True
         save_details: True
+        verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd
@@ -128,7 +129,7 @@ evaluator:
         dataset_config: detection/mbd
         method_config: transformer
         condition_len: *generation_len
-        verbose: True
+        verbose: False
 
 logging:
   file_lvl: "info"

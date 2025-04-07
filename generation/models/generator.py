@@ -1,4 +1,4 @@
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -6,9 +6,9 @@ import torch
 from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
 
-from generation.models.autoencoders.vae import VaeConfig 
-from generation.models.autoencoders.vae import Encoder as VAE_Encoder 
 from generation.models.autoencoders.vae import Decoder as VAE_Decoder
+from generation.models.autoencoders.vae import Encoder as VAE_Encoder
+from generation.models.autoencoders.vae import VaeConfig
 
 from ..data.data_types import DataConfig, GenBatch, PredBatch, gather
 from .encoders import GenGRU
@@ -169,19 +169,17 @@ class VAE(BaseGenerator):
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
         self.encoder = VAE_Encoder(
-            model_config.vae_conf, 
+            model_config.vae,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_names=data_conf.num_names,
             batch_transforms=model_config.preprocessor.batch_transforms,
-            pretrained=False
         )
 
         self.decoder = VAE_Decoder(
-            model_config.vae_conf,
+            model_config.vae,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_names=data_conf.num_names,
         )
-
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
@@ -193,5 +191,3 @@ class VAE(BaseGenerator):
         x, params = self.encoder(x)
         x = self.decoder(x)
         return x, params
-
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
