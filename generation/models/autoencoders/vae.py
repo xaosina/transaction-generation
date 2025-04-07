@@ -46,6 +46,7 @@ class VaeConfig:
     d_token: int = 6
     n_head: int = 2
     factor: int = 64
+    pretrained: bool = False
 
 
 class VAE(nn.Module):
@@ -55,24 +56,16 @@ class VAE(nn.Module):
         cat_cardinalities: Mapping[str, int],
         num_names: Sequence[str] | None = None,
         batch_transforms: list[Mapping[str, Any] | str] | None = None,
-        pretrained=True,
     ):
         super().__init__()
         self.encoder = Encoder(
-            vae_conf.num_layers,
-            vae_conf.d_token,
-            vae_conf.n_head,
-            vae_conf.factor,
+            vae_conf,
             cat_cardinalities=cat_cardinalities,
             num_names=num_names,
             batch_transforms=batch_transforms,
-            pretrained=pretrained,
         )
         self.decoder = Decoder(
-            vae_conf.num_layers,
-            vae_conf.d_token,
-            vae_conf.n_head,
-            vae_conf.factor,
+            vae_conf,
             num_names=num_names,
             cat_cardinalities=cat_cardinalities,
         )
@@ -110,10 +103,9 @@ class Encoder(nn.Module):
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
-
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
-            categories=list(cat_cardinalities) if cat_cardinalities else None,
+            categories=list(cat_cardinalities.values()) if cat_cardinalities is not None else None,
             d_token=vae_conf.d_token,
             bias=bias,
         )
@@ -152,7 +144,6 @@ class Encoder(nn.Module):
         L, B = time.shape
         D_vae = (D_num + D_cat) * self.d_token
         assert L > 0, "No features for VAE training"
-
         valid_mask = (
             torch.arange(L, device=time.device)[:, None] < batch.lengths
         ).ravel()  # L * B
@@ -214,7 +205,6 @@ class Decoder(nn.Module):
         L, B, D_vae = x.shape
         D = D_vae // self.d_token
         assert D * self.d_token == D_vae, "Invalid token dimensions"
-
         # Process sequence mask and reshape inputs
         valid_mask = (
             torch.arange(L, device=x.device)[:, None] < seq.lengths
@@ -227,12 +217,14 @@ class Decoder(nn.Module):
 
         # Prepare numerical features
         num_features = None
+        time = None
         if self.num_names:
-            D_num = len(self.num_names)
-            num_features = recon_num[:, 1 : D_num + 1]
+            D_num = len(self.num_names) + 1
             with_pad = torch.zeros(L * B, D_num, device=x.device)
-            with_pad[valid_mask] = num_features
-            num_features = with_pad.view(L, B, D_num)
+            with_pad[valid_mask] = recon_num
+            recon_num = with_pad.view(L, B, D_num)
+            num_features = recon_num[:, :, 1: D_num]
+            time = recon_num[:, :, 0]
 
         # Prepare categorical features
         cat_features = {}
@@ -245,7 +237,7 @@ class Decoder(nn.Module):
 
         return PredBatch(
             lengths=seq.lengths,
-            time=recon_num[:, 0],
+            time=time,
             num_features=num_features,
             num_features_names=self.num_names,
             cat_features=cat_features if cat_features else None,

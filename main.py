@@ -42,7 +42,7 @@ class RunnerConfig:
 @dataclass
 class PipelineConfig:
     run_name: str = "debug"
-    log_dir: Path = "log/generation"
+    log_dir: Path = Path("log/generation")
     device: str = "cuda:0"
     common_seed: int = 0
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
@@ -62,7 +62,7 @@ class GenerationRunner(Runner):
         train_loader, val_loader, test_loader = get_dataloaders(
             cfg.data_conf, cfg.common_seed
         )
-        model = Generator(cfg.data_conf, cfg.model).to("cuda")
+        model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
         # loss = get_loss(cfg.loss)
