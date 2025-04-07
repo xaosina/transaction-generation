@@ -53,7 +53,6 @@ class PipelineConfig:
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
-    vae: VaeConfig = field(default_factory=VaeConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
 
 

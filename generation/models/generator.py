@@ -19,7 +19,7 @@ from .reconstructors import ReconstructorBase
 @dataclass(frozen=True)
 class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
-    vae_conf: VaeConfig = field(default_factory=VaeConfig)
+    vae: VaeConfig = field(default_factory=VaeConfig)
 
 
 class BaseGenerator(BaseModel):

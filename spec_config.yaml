@@ -88,12 +88,12 @@ evaluator:
         target_key: event_type
     - Accuracy:
         target_key: event_type
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: macro
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: micro
+    - F1Metric:
+        target_key: event_type
+        average: macro
+    - F1Metric:
+        target_key: event_type
+        average: micro
 
     # - Gini:
     #     target_key: event_type

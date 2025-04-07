@@ -14,14 +14,6 @@ from generation.metrics.metrics import (
 from main import PipelineConfig
 
 
-def create_data(
-    y_true: list[int], y_pred: list[int]
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    gt = pd.DataFrame([pd.Series({"client_id": 0, "event_type": np.array(y_true)})])
-    gen = pd.DataFrame([pd.Series({"client_id": 0, "event_type": np.array(y_pred)})])
-    return gt, gen
-
-
 def create_multiple_data(
     y_true_list: list[list[int]], y_pred_list: list[list[int]]
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -54,83 +46,129 @@ def config() -> PipelineConfig:
 
 
 @pytest.mark.parametrize(
-    "event_values, expected_entropy",
+    "y_true, y_pred, expected_est, expected_overall_est",
     [
-        ([[1, 1, 1, 1]], 0.0),
-        ([[1, 2, 1, 2]], 1.0),
-        ([[1, 2, 3, 1, 2, 3]], np.log2(3)),
-        ([[1, 1, 1, 2]], -(0.75 * np.log2(0.75) + 0.25 * np.log2(0.25))),
-        ([[]], 0.0),
+        ([[1, 2]], [[1, 2]], 0.0, 0.0),
+        (
+            [[1, 2]],
+            [[1, 1]],
+            ((-1 * np.log2(1)) - (-0.5 * np.log2(0.5) - 0.5 * np.log2(0.5)))
+            / abs(-0.5 * np.log2(0.5) - 0.5 * np.log2(0.5)),
+            ((-1 * np.log2(1)) - (-0.5 * np.log2(0.5) - 0.5 * np.log2(0.5)))
+            / abs(-0.5 * np.log2(0.5) - 0.5 * np.log2(0.5)),
+        ),
+        (
+            [[0, 1, 1, 1]],
+            [[0, 0, 1, 1]],
+            (
+                -(0.5 * np.log2(0.5) + 0.5 * np.log2(0.5))
+                + (0.25 * np.log2(0.25) + 0.75 * np.log2(0.75))
+            )
+            / abs((0.25 * np.log2(0.25) + 0.75 * np.log2(0.75))),
+            (
+                (-0.5 * np.log2(0.5) - 0.5 * np.log2(0.5))
+                - (-0.25 * np.log2(0.25) - 0.75 * np.log2(0.75))
+            )
+            / abs((-0.25 * np.log2(0.25) - 0.75 * np.log2(0.75))),
+        ),
     ],
     ids=[
-        "single_class",
-        "two_classes_50_50",
-        "three_uniform",
-        "dominant_class",
-        "empty",
+        "perfect",
+        "only_one_pred",
+        "imbalanced",
     ],
 )
-def test_shannon_entropy_metric(event_values, expected_entropy, config: PipelineConfig):
-    gen = pd.DataFrame(
-        [{"client_id": i, "event_type": ev} for i, ev in enumerate(event_values)]
-    )
+def test_shannon_entropy_metric(
+    y_true, y_pred, expected_est, expected_overall_est, config: PipelineConfig
+):
+    log_dir = Path("tests/log")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    gt, gen = create_multiple_data(y_true, y_pred)
+
     metric = ShannonEntropy(
         devices=["cpu"],
         data_conf=config.data_conf,
         log_dir=Path("."),
         target_key="event_type",
+        overall=False,
     )
-    result = metric(orig=None, gen=gen)
+
+    est = metric(gt, gen)
 
     assert np.isclose(
-        result, expected_entropy, atol=1e-5
-    ), f"Expected {expected_entropy}, got {result}"
+        est["relative"], expected_est, atol=1e-5
+    ), f"Expected {expected_est}, got {est}"
+
+    metric = ShannonEntropy(
+        devices=["cuda:0"],
+        data_conf=config.data_conf,
+        log_dir=log_dir,
+        target_key="event_type",
+        overall=True,
+    )
+
+    est = metric(gt, gen)
+
+    assert np.isclose(
+        est["relative"], expected_overall_est, atol=1e-5
+    ), f"Expected {expected_overall_est}, got {est}"
 
 
 @pytest.mark.parametrize(
-    "y_true, y_pred, expected_est",
+    "y_true, y_pred, expected_est, expected_overall_est",
     [
-        # ([[1, 2]], [[1, 2]], 0.0),
-        # ([[1, 2]], [[1, 1]], 1.0),
-        # ([[0, 1, 1, 1]], [[0, 1, 1, 1]], 0.5),
+        ([[1, 2]], [[1, 2]], 0.0, 0.0),
+        ([[1, 2]], [[1, 1]], 1.0, 1.0),
+        ([[0, 1, 1, 1]], [[0, 0, 1, 1]], -1.0, -1.0),
         (
-                        [
-                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
-                [0, 1, 0, 0, 0, 1],
-                [1, 2, 2, 3, 2, 2, 2, 2, 1],
-            ],
             [
                 [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
                 [0, 1, 0, 0, 0, 1],
                 [1, 2, 2, 3, 2, 1, 2, 0, 1],
             ],
-
-            0.707407407,
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
+            0.83333,
+            -3 / 5,
         ),
     ],
-    ids=[
-        # "perfect", 
-        # "only_one_pred", 
-        # "imbalanced", 
-        "tree clients"
-        ],
+    ids=["perfect", "only_one_pred", "imbalanced", "tree clients"],
 )
-def test_gini_metric(y_true, y_pred, expected_est, config: PipelineConfig):
+def test_gini_metric(
+    y_true, y_pred, expected_est, expected_overall_est, config: PipelineConfig
+):
     log_dir = Path("tests/log")
     log_dir.mkdir(parents=True, exist_ok=True)
     gt, gen = create_multiple_data(y_true, y_pred)
 
     gini = Gini(
-        devices=['cuda:0'],
+        devices=["cuda:0"],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",
-        overall=False
+        overall=False,
     )
+    est = gini(gt, gen)
+    print(est)
+    assert np.isclose(
+        est["relative"], expected_est, atol=1e-5
+    ), f"Expected {expected_est}, got {est}"
+
+    gini = Gini(
+        devices=["cuda:0"],
+        data_conf=config.data_conf,
+        log_dir=log_dir,
+        target_key="event_type",
+        overall=True,
+    )
+
     est = gini(gt, gen)
 
     assert np.isclose(
-        est, expected_est, atol=1e-5
+        est["relative"], expected_overall_est, atol=1e-5
     ), f"Expected {expected_est}, got {est}"
 
 
@@ -251,7 +289,7 @@ def test_accuracy_metric(y_true, y_pred, expected_acc, config: PipelineConfig):
     gt, gen = create_multiple_data(y_true, y_pred)
 
     accuracy = Accuracy(
-        config.devices,
+        devices=['cuda:0'],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",
@@ -300,7 +338,7 @@ def test_levenshtein_metric(y_true, y_pred, expected_dist, config: PipelineConfi
     gt, gen = create_multiple_data(y_true, y_pred)
 
     lev = Levenshtein(
-        config.devices,
+        devices=['cuda:0'],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",

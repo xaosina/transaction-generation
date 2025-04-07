@@ -151,6 +151,7 @@ class F1Metric(BinaryMetric):
     def __repr__(self):
         return f"F1_{self.average} on {self.target_key}"
 
+
 @dataclass
 class DistributionMetric(BaseMetric):
     target_key: str
@@ -165,7 +166,6 @@ class DistributionMetric(BaseMetric):
             keys=["gt", "pred"],
             axis=1,
         ).map(lambda x: x[-self.data_conf.generation_len :])
-        breakpoint()
         if self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
         max_c = df.map(max).max().max()
@@ -206,7 +206,7 @@ class Gini(StatisticMetric):
         gini = 0
         for k in range(n):
             gini += (2 * (k + 1) - n - 1) * p_sorted[k]
-        gini = gini / (n - 1) if n != 1 else 1.
+        gini = gini / (n - 1) if n != 1 else 1.0
 
         return gini
 
@@ -217,7 +217,7 @@ class Gini(StatisticMetric):
 @dataclass
 class ShannonEntropy(StatisticMetric):
 
-    def get_scores(self, p):
+    def get_statistic(self, p):
         p = p[p > 0]
         shannon_entropy = -np.sum(p * np.log2(p))
 
