@@ -39,7 +39,7 @@ def run_eval_detection(
             experiment=experiment,
             train_data=temp_dir,
             log_dir=log_dir,
-            use_tqdm=verbose,
+            verbose=verbose,
             devices=devices,
             logging_lvl="info" if verbose else "error",
         )

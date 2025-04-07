@@ -62,7 +62,7 @@ def main(
     test_data: Path = None,
     log_dir: Path = None,
     specify: str = None,
-    use_tqdm: bool = False,
+    verbose: bool = False,
     devices: List[int] | None = None,
     logging_lvl: str = "info",
 ) -> pd.DataFrame:
@@ -82,9 +82,8 @@ def main(
     assert logging_lvl in ["error", "info"]
     signal.signal(signal.SIGUSR1, start_debugging)
 
-    tqdm.__init__ = partialmethod(tqdm.__init__, disable=not use_tqdm)  # type: ignore
     config = collect_config(dataset, method, experiment, specify)
-    config.logging.file_lvl = logging_lvl
+    config["trainer"]["verbose"] = verbose
     config.logging.cons_lvl = logging_lvl
     if devices is not None:
         config.device = devices[0]
@@ -105,7 +104,8 @@ def main(
 
     runner = Runner.get_runner(config["runner"]["name"])
     res = runner.run(config)
-    print(res)
+    if verbose:
+        print(res)
     return res
 
 
