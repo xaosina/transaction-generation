@@ -95,10 +95,10 @@ evaluator:
         target_key: event_type
         average: micro
 
-    # - Gini:
-    #     target_key: event_type
-    # - ShannonEntropy:
-    #     target_key: event_type
+    - Gini:
+        target_key: event_type
+    - ShannonEntropy:
+        target_key: event_type
 
     - CardinalityCoverage:
         target_key: event_type
