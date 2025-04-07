@@ -60,6 +60,12 @@ model:
     batch_transforms:
       - TimeToFeatures:
           process_type: "diff"
+  vae:
+    num_layers: 2
+    d_token: 6
+    n_head: 2
+    factor: 64
+
 
 optimizer:
   name: Adam
@@ -78,21 +84,21 @@ loss:
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
-    - Levenstein:
+    - Levenshtein:
         target_key: event_type
     - Accuracy:
         target_key: event_type
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: macro
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: micro
+    - F1Metric:
+        target_key: event_type
+        average: macro
+    - F1Metric:
+        target_key: event_type
+        average: micro
 
-    # - Gini:
-    #     target_key: event_type
-    # - ShannonEntropy:
-    #     target_key: event_type
+    - Gini:
+        target_key: event_type
+    - ShannonEntropy:
+        target_key: event_type
 
     - CardinalityCoverage:
         target_key: event_type
@@ -137,11 +143,6 @@ trainer:
   patience: -1
   profiling: false
 
-vae:
-  num_layers: 2
-  d_token: 6
-  n_head: 2
-  factor: 64
 
 # Runner params:
 run_name: debug

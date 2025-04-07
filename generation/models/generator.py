@@ -5,6 +5,11 @@ import numpy as np
 import torch
 from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
+from ebes.types import Seq
+
+from generation.models.autoencoders.vae import Decoder as VAE_Decoder
+from generation.models.autoencoders.vae import Encoder as VAE_Encoder
+from generation.models.autoencoders.vae import VaeConfig
 
 from ..data.data_types import DataConfig, GenBatch, PredBatch, gather
 from .encoders import GenGRU
@@ -15,6 +20,7 @@ from .reconstructors import ReconstructorBase
 @dataclass(frozen=True)
 class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
+    vae: VaeConfig = field(default_factory=VaeConfig)
 
 
 class BaseGenerator(BaseModel):
@@ -158,3 +164,31 @@ class Generator(BaseGenerator):
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return hist.tail(gen_len)  # Return GenBatch of size [gen_len, B, D]
+
+
+class VAE(BaseGenerator):
+    def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
+        super().__init__()
+        self.encoder = VAE_Encoder(
+            model_config.vae,
+            cat_cardinalities=data_conf.cat_cardinalities,
+            num_names=data_conf.num_names,
+            batch_transforms=model_config.preprocessor.batch_transforms,
+        )
+
+        self.decoder = VAE_Decoder(
+            model_config.vae,
+            cat_cardinalities=data_conf.cat_cardinalities,
+            num_names=data_conf.num_names,
+        )
+
+    def forward(self, x: GenBatch) -> PredBatch:
+        """
+        Forward pass of the Variational AutoEncoder
+        Args:
+            x (GenBatch): Input sequence [L, B, D]
+
+        """
+        x, params = self.encoder(x)
+        x = self.decoder(x)
+        return x, params
