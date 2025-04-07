@@ -3,14 +3,13 @@ import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as nn_init
 from ebes.types import Seq
 from generation.data.batch_tfs import NewFeatureTransform
-from generation.data.data_types import DataConfig, GenBatch, PredBatch
+from generation.data.data_types import GenBatch, PredBatch
 from generation.data.utils import create_instances_from_module
 from generation.data import batch_tfs
 
@@ -88,10 +87,7 @@ class VAE(nn.Module):
 class Encoder(nn.Module):
     def __init__(
         self,
-        num_layers,
-        d_token,
-        n_head,
-        factor,
+        vae_conf: VaeConfig,
         cat_cardinalities: Mapping[str, int] | None = None,
         num_names: Sequence[str] | None = None,
         batch_transforms: list[Mapping[str, Any] | str] | None = None,
@@ -99,7 +95,7 @@ class Encoder(nn.Module):
         bias=True,
     ):
         super(Encoder, self).__init__()
-        self.d_token = d_token
+        self.d_token = vae_conf.d_token
         self.pretrained = pretrained
 
         if num_names is not None:
@@ -120,14 +116,26 @@ class Encoder(nn.Module):
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
             categories=list(cat_cardinalities) if cat_cardinalities else None,
-            d_token=d_token,
+            d_token=vae_conf.d_token,
             bias=bias,
         )
 
-        self.encoder_mu = Transformer(num_layers, d_token, n_head, d_token, factor)
+        self.encoder_mu = Transformer(
+            vae_conf.num_layers,
+            vae_conf.d_token,
+            vae_conf.n_head,
+            vae_conf.d_token,
+            vae_conf.factor,
+        )
         self.encoder_std = None
         if not self.pretrained:
-            self.encoder_std = Transformer(num_layers, d_token, n_head, d_token, factor)
+            self.encoder_std = Transformer(
+                vae_conf.num_layers,
+                vae_conf.d_token,
+                vae_conf.n_head,
+                vae_conf.d_token,
+                vae_conf.factor,
+            )
 
     def reparametrize(self, mu, logvar) -> torch.Tensor:
         std = torch.exp(0.5 * logvar)
@@ -178,26 +186,29 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        num_layers,
-        d_token,
-        n_head,
-        factor,
+        vae_conf: VaeConfig,
         num_names: Sequence[str] | None = None,
         cat_cardinalities: Mapping[str, int] = None,
     ):
         super(Decoder, self).__init__()
-        self.d_token = d_token
+        self.d_token = vae_conf.d_token
         self.num_names = num_names
         self.cat_cardinalities = cat_cardinalities
         num_counts = 1  # Time
         if self.num_names:
             num_counts += len(self.num_names)
 
-        self.decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
+        self.decoder = Transformer(
+            vae_conf.num_layers,
+            vae_conf.d_token,
+            vae_conf.n_head,
+            vae_conf.d_token,
+            vae_conf.factor,
+        )
         self.reconstructor = Reconstructor(
             num_counts,
             self.cat_cardinalities or {},
-            d_token=d_token,
+            d_token=vae_conf.d_token,
         )
 
     def forward(self, seq: Seq) -> PredBatch:

@@ -165,10 +165,11 @@ class DistributionMetric(BaseMetric):
             keys=["gt", "pred"],
             axis=1,
         ).map(lambda x: x[-self.data_conf.generation_len :])
+        breakpoint()
         if self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
         max_c = df.map(max).max().max()
-        assert isinstance(max_c, int)
+        assert isinstance(max_c, np.int64)
 
         def get_frequency(arr, max_c):
             frequency_array = np.zeros(max_c + 1, dtype=float)
@@ -199,7 +200,6 @@ class StatisticMetric(DistributionMetric):
 class Gini(StatisticMetric):
 
     def get_statistic(self, p):
-
         p_sorted = np.sort(p)
         n = len(p_sorted)
 

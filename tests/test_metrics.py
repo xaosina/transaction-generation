@@ -94,16 +94,17 @@ def test_shannon_entropy_metric(event_values, expected_entropy, config: Pipeline
         # ([[1, 2]], [[1, 1]], 1.0),
         # ([[0, 1, 1, 1]], [[0, 1, 1, 1]], 0.5),
         (
+                        [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
             [
                 [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
                 [0, 1, 0, 0, 0, 1],
                 [1, 2, 2, 3, 2, 1, 2, 0, 1],
             ],
-            [
-                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
-                [0, 1, 0, 0, 0, 1],
-                [1, 2, 2, 3, 2, 2, 2, 2, 1],
-            ],
+
             0.707407407,
         ),
     ],
@@ -120,10 +121,11 @@ def test_gini_metric(y_true, y_pred, expected_est, config: PipelineConfig):
     gt, gen = create_multiple_data(y_true, y_pred)
 
     gini = Gini(
-        config.devices,
+        devices=['cuda:0'],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",
+        overall=False
     )
     est = gini(gt, gen)
 
