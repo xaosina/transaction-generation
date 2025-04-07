@@ -162,6 +162,7 @@ class DistributionMetric(BaseMetric):
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         flat = [i for row in gen[self.target_key] for i in row]
         p = pd.Series(flat).value_counts(normalize=True, sort=False).to_numpy()
+        breakpoint() # TODO: One user, so....
         return self.get_scores(p)
 
 

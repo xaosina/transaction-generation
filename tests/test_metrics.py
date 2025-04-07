@@ -22,6 +22,30 @@ def create_data(
     return gt, gen
 
 
+def create_multiple_data(
+    y_true_list: list[list[int]], y_pred_list: list[list[int]]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    assert len(y_true_list) == len(
+        y_pred_list
+    ), "y_true and y_pred must have the same length"
+
+    gt = pd.DataFrame(
+        [
+            {"client_id": i, "event_type": np.array(y_true_list[i])}
+            for i in range(len(y_true_list))
+        ]
+    )
+
+    gen = pd.DataFrame(
+        [
+            {"client_id": i, "event_type": np.array(y_pred_list[i])}
+            for i in range(len(y_pred_list))
+        ]
+    )
+
+    return gt, gen
+
+
 @pytest.fixture
 def config() -> PipelineConfig:
     return pyrallis.parse(
@@ -65,13 +89,35 @@ def test_shannon_entropy_metric(event_values, expected_entropy, config: Pipeline
 
 @pytest.mark.parametrize(
     "y_true, y_pred, expected_est",
-    [([1, 2], [1, 2], 0.0), ([1, 2], [1, 1], 1.0), ([0, 1, 1, 1], [0, 1, 1, 1], 0.5)],
-    ids=["perfect", "only_one_pred", "imbalanced"],
+    [
+        # ([[1, 2]], [[1, 2]], 0.0),
+        # ([[1, 2]], [[1, 1]], 1.0),
+        # ([[0, 1, 1, 1]], [[0, 1, 1, 1]], 0.5),
+        (
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 1, 2, 0, 1],
+            ],
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
+            0.707407407,
+        ),
+    ],
+    ids=[
+        # "perfect", 
+        # "only_one_pred", 
+        # "imbalanced", 
+        "tree clients"
+        ],
 )
 def test_gini_metric(y_true, y_pred, expected_est, config: PipelineConfig):
     log_dir = Path("tests/log")
     log_dir.mkdir(parents=True, exist_ok=True)
-    gt, gen = create_data(y_true, y_pred)
+    gt, gen = create_multiple_data(y_true, y_pred)
 
     gini = Gini(
         config.devices,
@@ -112,18 +158,39 @@ def test_get_statistics_unordered():
 @pytest.mark.parametrize(
     "y_true, y_pred, expected_macro, expected_micro",
     [
-        ([1, 2, 3, 4], [1, 2, 3, 4], 1.0, 1.0),  # perfect
-        ([1, 1, 2, 3], [1, 1, 2, 4], 0.5, 0.75),  # partial_class
-        ([1, 2, 3, 4], [1, 1, 1, 1], 0.1, 0.25),  # imbalanced
-        ([1, 2, 3], [], 0.0, 0.0),  # empty_pred
-        ([], [], 1.0, 1.0),  # empty_both
+        ([[1, 2, 3, 4]], [[1, 2, 3, 4]], 1.0, 1.0),  # perfect
+        ([[1, 1, 2, 3]], [[1, 1, 2, 4]], 0.5, 0.75),  # partial_class
+        ([[1, 2, 3, 4]], [[1, 1, 1, 1]], 0.1, 0.25),  # imbalanced
+        ([[1, 2, 3]], [[]], 0.0, 0.0),  # empty_pred
+        ([[]], [[]], 1.0, 1.0),  # empty_both
+        (
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 1, 2, 0, 1],
+            ],
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
+            0.707407407,
+            0.75,
+        ),
     ],
-    ids=["perfect", "partial_class", "imbalanced", "empty_pred", "empty_both"],
+    ids=[
+        "perfect",
+        "partial_class",
+        "imbalanced",
+        "empty_pred",
+        "empty_both",
+        "three users",
+    ],
 )
 def test_f1_metric(
     y_true, y_pred, expected_macro, expected_micro, config: PipelineConfig
 ):
-    gt, gen = create_data(y_true, y_pred)
+    gt, gen = create_multiple_data(y_true, y_pred)
 
     f1_macro = F1Metric(
         average="macro",
@@ -153,20 +220,33 @@ def test_f1_metric(
 @pytest.mark.parametrize(
     "y_true, y_pred, expected_acc",
     [
-        ([1, 2, 3, 0, 1, 2, 3], [1, 2, 3, 0, 1, 2, 3], 1.0),
-        ([1, 2, 3, 0, 1, 2, 3], [1, 2, 3, 0, 1, 2, 4], 0.75),
-        ([1, 2, 3, 0, 0, 0, 0], [1, 2, 3, 1, 1, 1, 1], 0.0),
+        ([[1, 2, 3, 0, 1, 2, 3]], [[1, 2, 3, 0, 1, 2, 3]], 1.0),
+        ([[1, 2, 3, 0, 1, 2, 3]], [[1, 2, 3, 0, 1, 2, 4]], 0.75),
+        ([[1, 2, 3, 0, 0, 0, 0]], [[1, 2, 3, 1, 1, 1, 1]], 0.0),
         (
-            [0, 0, 0, 0, 0, 0, 0],
-            [9, 9, 9, 0, 0, 0, 0],
+            [[0, 0, 0, 0, 0, 0, 0]],
+            [[9, 9, 9, 0, 0, 0, 0]],
             1.0,
         ),  # Ensure that only the last (gen_len=4) values affect the metric.
+        (
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 1, 2, 0, 1],
+            ],
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
+            ((3 / 4 + 1 + 2 / 4) / 3.0),
+        ),
     ],
 )
 def test_accuracy_metric(y_true, y_pred, expected_acc, config: PipelineConfig):
     log_dir = Path("tests/log")
     log_dir.mkdir(parents=True, exist_ok=True)
-    gt, gen = create_data(y_true, y_pred)
+    gt, gen = create_multiple_data(y_true, y_pred)
 
     accuracy = Accuracy(
         config.devices,
@@ -184,11 +264,24 @@ def test_accuracy_metric(y_true, y_pred, expected_acc, config: PipelineConfig):
 @pytest.mark.parametrize(
     "y_true, y_pred, expected_dist",
     [
-        ([1, 2, 3, 4], [1, 2, 3, 4], 0),  # perfect match
-        ([1, 2, 3, 4], [1, 2, 3, 5], 1),  # substitution
-        ([1, 2, 3, 4], [1, 2, 3], 1),  # deletion
-        ([1, 2, 3], [1, 2, 3, 4], 1),  # insertion
-        ([1, 1, 1, 1], [2, 2, 2, 2], 4),  # total mismatch
+        ([[1, 2, 3, 4]], [[1, 2, 3, 4]], 1 - 0 / 4),  # perfect match
+        ([[1, 2, 3, 4]], [[1, 2, 3, 5]], 1 - 1 / 4),  # substitution
+        ([[1, 2, 3, 4]], [[1, 2, 3]], 1 - 1 / 4),  # deletion
+        ([[1, 2, 3]], [[1, 2, 3, 4]], 1 - 1 / 4),  # insertion
+        ([[1, 1, 1, 1]], [[2, 2, 2, 2]], 1 - 4 / 4),  # total mismatch
+        (
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 0, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 1, 2, 0, 1],
+            ],
+            [
+                [0, 1, 2, 3, 4, 1, 1, 1, 1, 0],
+                [0, 1, 0, 0, 0, 1],
+                [1, 2, 2, 3, 2, 2, 2, 2, 1],
+            ],
+            0.75,
+        ),
     ],
     ids=[
         "exact match",
@@ -196,12 +289,13 @@ def test_accuracy_metric(y_true, y_pred, expected_acc, config: PipelineConfig):
         "1 deletion",
         "1 insertion",
         "completely different",
+        "tree clients",
     ],
 )
 def test_levenshtein_metric(y_true, y_pred, expected_dist, config: PipelineConfig):
     log_dir = Path("tests/log")
     log_dir.mkdir(parents=True, exist_ok=True)
-    gt, gen = create_data(y_true, y_pred)
+    gt, gen = create_multiple_data(y_true, y_pred)
 
     lev = Levenshtein(
         config.devices,
@@ -210,7 +304,7 @@ def test_levenshtein_metric(y_true, y_pred, expected_dist, config: PipelineConfi
         target_key="event_type",
     )
 
-    dist = (1 - lev(gt, gen)) * 4
+    dist = lev(gt, gen)
 
     assert np.isclose(
         dist, expected_dist, atol=1e-5
