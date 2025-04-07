@@ -153,24 +153,53 @@ class F1Metric(BinaryMetric):
 
 @dataclass
 class DistributionMetric(BaseMetric):
-
     target_key: str
+    overall: bool = False
 
     @abstractmethod
-    def get_scores(self, p): ...
+    def get_scores(self, row) -> pd.Series | float: ...
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
-        flat = [i for row in gen[self.target_key] for i in row]
-        p = pd.Series(flat).value_counts(normalize=True, sort=False).to_numpy()
-        breakpoint() # TODO: One user, so....
-        return self.get_scores(p)
+        df = pd.concat(
+            (orig[self.target_key], gen[self.target_key]),
+            keys=["gt", "pred"],
+            axis=1,
+        ).map(lambda x: x[-self.data_conf.generation_len :])
+        if self.overall:
+            df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
+        max_c = df.map(max).max().max()
+        assert isinstance(max_c, int)
+
+        def get_frequency(arr, max_c):
+            frequency_array = np.zeros(max_c + 1, dtype=float)
+            unique_values, counts = np.unique(arr, return_counts=True)
+            frequency_array[unique_values] = counts
+            return frequency_array / arr.size
+
+        df = df.map(lambda x: get_frequency(x, max_c))
+        df = df.apply(self.get_scores, axis=1).mean()
+        if isinstance(df, pd.Series):
+            return df.to_dict()
+        elif isinstance(df, float):
+            return df
 
 
 @dataclass
-class Gini(DistributionMetric):
-    """Indicates how strongly one category dominates over the others"""
+class StatisticMetric(DistributionMetric):
+    def get_scores(self, row) -> pd.Series:
+        orig_score, gen_score = row.map(self.get_statistic)
+        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        return pd.Series({"relative": relative, "orig": orig_score})
 
-    def get_scores(self, p):
+    @abstractmethod
+    def get_statistic(self, p) -> float: ...
+
+
+@dataclass
+class Gini(StatisticMetric):
+
+    def get_statistic(self, p):
+
         p_sorted = np.sort(p)
         n = len(p_sorted)
 
@@ -182,20 +211,20 @@ class Gini(DistributionMetric):
         return gini
 
     def __repr__(self):
-        return f"Gini on {self.target_key}"
+        return self.overall * "Overall " + f"Gini on {self.target_key}"
 
 
 @dataclass
-class ShannonEntropy(DistributionMetric):
+class ShannonEntropy(StatisticMetric):
 
     def get_scores(self, p):
-
+        p = p[p > 0]
         shannon_entropy = -np.sum(p * np.log2(p))
 
         return shannon_entropy
 
     def __repr__(self):
-        return f"Shannon entropy on {self.target_key}"
+        return self.overall * "Overall " + f"Shannon entropy on {self.target_key}"
 
 
 @dataclass
@@ -211,7 +240,7 @@ class GenVsHistoryMetric(BaseMetric):
         hist = df[self.target_key].map(lambda x: x[:-gen_len])
         preds = df[self.target_key].map(lambda x: x[-gen_len:])
         df = pd.concat((hist, preds), keys=["hists", "preds"], axis=1)
-        if not self.overall:
+        if self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
         return df.apply(self.get_scores, axis=1).mean()
 
@@ -248,6 +277,7 @@ class Density(BaseMetric):
     log_cols: list[str] = None
     with_timediff: bool = False
     save_details: bool = False
+    verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         data_conf = deepcopy(self.data_conf)
@@ -286,8 +316,6 @@ class Density(BaseMetric):
             metadata["columns"][num_name] = {"sdtype": "numerical"}
         for cat_name in cat_names:
             metadata["columns"][cat_name] = {"sdtype": "categorical"}
-        # metadata["sequence_key"] = self.data_conf.index_name  # TODO doesn't matter?
-        # metadata["sequence_index"] = self.data_conf.time_name  # TODO doesn't matter?
 
         if self.log_cols:
             for col in self.log_cols:
@@ -298,7 +326,7 @@ class Density(BaseMetric):
         orig = orig[metadata["columns"].keys()]
         # Calculate
         qual_report = QualityReport()
-        qual_report.generate(orig, gen, metadata)
+        qual_report.generate(orig, gen, metadata, verbose=self.verbose)
         quality = qual_report.get_properties()
         Shape = quality["Score"][0]
         Trend = quality["Score"][1]
@@ -321,19 +349,20 @@ class Density(BaseMetric):
 
 @dataclass
 class Detection(BaseMetric):
-    dataset_config_path: str
-    conditional: bool = False
+    dataset_config: str
+    method_config: str = "gru"
+    condition_len: int = 0
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         data_conf = deepcopy(self.data_conf)
-        tail_len = None if self.conditional else data_conf.generation_len
+        tail_len = data_conf.generation_len + self.condition_len
         discr_res = run_eval_detection(
             orig=orig,
             gen=gen,
             log_dir=self.log_dir,
             data_conf=data_conf,
-            dataset=self.dataset_config_path,
+            dataset=self.dataset_config,
             tail_len=tail_len,
             devices=self.devices,
             verbose=self.verbose,
@@ -342,4 +371,4 @@ class Detection(BaseMetric):
         return float(discr_score)
 
     def __repr__(self):
-        return self.conditional * "Conditional" + "Detection"
+        return f"Detection ({self.condition_len} hist)"

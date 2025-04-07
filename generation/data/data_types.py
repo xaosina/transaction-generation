@@ -99,23 +99,6 @@ class GenBatch(Batch):
 
     def tail(self, tail_len: int):
         """Returns a new batch containing only last tail_len elements of each sequence."""
-
-        def gather(tensor, target_ids):
-            if tensor is None:
-                return None
-            if tensor.ndim == 2:  # time
-                return torch.gather(tensor, 0, target_ids)
-            elif tensor.ndim == 3:  # cat|num
-                return torch.gather(
-                    tensor,
-                    0,
-                    target_ids[:, :, None].expand(
-                        -1, -1, tensor.shape[2]
-                    ),  # [target_len, B, D]
-                )
-            else:
-                raise ValueError
-
         assert self.lengths.min() >= tail_len, "tail_len is too big"
 
         start_index = self.lengths - tail_len  # [1, B]
@@ -168,3 +151,14 @@ class PredBatch:
             cat_features_names=cat_feature_names,
             num_features_names=self.num_features_names,
         )
+
+
+def gather(tensor, target_ids):
+    if tensor is None:
+        return None
+    if 2 <= tensor.ndim <= 3:  # time
+        if tensor.ndim == 3:  # cat|num
+            target_ids = target_ids[:, :, None].expand(-1, -1, tensor.shape[2])
+        return torch.gather(tensor, 0, target_ids)  # [target_len, B, D]
+    else:
+        raise ValueError

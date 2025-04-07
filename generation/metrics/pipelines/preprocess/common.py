@@ -11,7 +11,6 @@ from pyspark.sql.types import FloatType, LongType, StringType
 NA_VALUE = 0
 
 
-# TODO: docs
 class CatMap:
     def __init__(self, map_df: DataFrame):
         if (

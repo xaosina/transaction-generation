@@ -23,7 +23,7 @@ data_conf:
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: 16
+  min_history_len: 32
   generation_len: &generation_len 4
   max_seq_len: 1045
   padding_value: 0
@@ -76,23 +76,23 @@ loss:
   name: baseline
 
 evaluator:
-  devices: ["cuda:0"]
+  devices: ["cuda:1", "cuda:2"]
   metrics:
     - Levenshtein:
         target_key: event_type
     - Accuracy:
         target_key: event_type
-    - F1Metric:
-        target_key: event_type
-        average: macro
-    - F1Metric:
-        target_key: event_type
-        average: micro
+    # - F1Metric:
+    #     target_key: event_type
+    #     average: macro
+    # - F1Metric:
+    #     target_key: event_type
+    #     average: micro
 
-    - Gini:
-        target_key: event_type
-    - ShannonEntropy:
-        target_key: event_type
+    # - Gini:
+    #     target_key: event_type
+    # - ShannonEntropy:
+    #     target_key: event_type
 
     - CardinalityCoverage:
         target_key: event_type
@@ -112,10 +112,18 @@ evaluator:
         with_timediff: True
         save_details: True
 
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: transformer
+    #     condition_len: 0
+    #     verbose: True
+
     - Detection:
-        dataset_config_path: configs/datasets/detection/mbd.yaml
-        conditional: False
-        verbose: False
+        dataset_config: detection/mbd
+        method_config: transformer
+        condition_len: *generation_len
+        verbose: True
+
 logging:
   file_lvl: "info"
   cons_lvl: "error"
@@ -128,10 +136,46 @@ trainer:
   patience: -1
   profiling: false
 
-devices: ["cuda:2"]
-
 vae:
   num_layers: 2
   d_token: 6
   n_head: 2
   factor: 64
+
+# Runner params:
+run_name: debug
+common_seed: 0
+
+runner:
+  name: GenerationRunner
+  run_type: simple
+  seed_keys:
+    - "common_seed"
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list: ['cuda:0']
+
+
+# optuna:
+#   params:
+#     n_trials: 70
+#     n_startup_trials: 3
+#     request_list: 
+#       - 'optimizer.params.lr': 3.e-4
+#         'model.preprocess.params.num_norm': True
+#     target_metric: ${main_metric}
+#   suggestions:
+#     optimizer.params.weight_decay: [suggest_float, {low: 1.e-15, high: 1.e-3, log: True}]
+#     optimizer.params.lr: [suggest_float, {low: 1.e-5, high: 1.e-1, log: True}]
+
+#     model.encoder.params.hidden_size: [suggest_int, {low: 10, high: 1200, log: True}]
+#     model.encoder.params.num_layers: [suggest_int, {low: 1, high: 3, log: False}]
+#     model.encoder.params.dropout: [suggest_float, {low: 1.e-10, high: 0.3, log: True}]
+
+#     model.preprocess.params.time_process: [suggest_categorical, {choices: ["diff", "cat", "none"]}]
+#     model.preprocess.params.num_norm: [suggest_categorical, {choices: [true, false]}]
+#     model.preprocess.params.cat_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
+#     model.preprocess.params.num_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
+
+#     model.aggregation.name: [suggest_categorical, {choices: ["TakeLastHidden", "ValidHiddenMean"]}]

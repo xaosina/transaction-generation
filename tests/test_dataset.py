@@ -17,7 +17,6 @@ from generation.models.generator import (
     BaselineRepeater,
     Generator,
     GroundTruthGenerator,
-    BaselineHistSampler
 )
 
 logger = logging.getLogger(__name__)
@@ -31,15 +30,11 @@ def test_evaluator():
     cfg = pyrallis.parse(config_class=PipelineConfig, config_path="spec_config.yaml")
     logger.info("Config ready")
     train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
-    evaluator = SampleEvaluator("tests/log/evaluation", cfg.data_conf, cfg.evaluator)
-    logger.info(evaluator.metrics)
-    # model = Generator(cfg.data_conf, cfg.model).to("cuda")
-    model = BaselineHistSampler(cfg.data_conf)
-    # model = GroundTruthGenerator()
-    # Setup ready
-    metrics = evaluator.evaluate(model, test_loader, blim=None, buffer_size=None)
-    print(metrics)
-    assert True
+    actual_len = 0
+    for batch in tqdm(test_loader):
+        actual_len += 1
+    print(actual_len)
+    assert actual_len == 284
 
 
 if __name__ == "__main__":

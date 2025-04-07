@@ -29,7 +29,6 @@ class SampleEvaluator:
         self, log_dir: str, data_conf: DataConfig, eval_config: EvaluatorConfig
     ):
         self.log_dir = Path(log_dir)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
         self.data_config = data_conf
         self.metrics = (
             create_instances_from_module(
@@ -53,7 +52,7 @@ class SampleEvaluator:
         results = self.estimate_metrics(gt_dir, gen_dir)
         logger.info("Metrics done.")
         if remove:
-            shutil.rmtree(gt_dir), shutil.rmtree(gen_dir)
+            shutil.rmtree(log_dir)
         return results
 
     def generate_samples(

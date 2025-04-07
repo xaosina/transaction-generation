@@ -15,7 +15,6 @@ class Batch2TransformedSeq(Batch2Seq):
     def __init__(
         self,
         cat_cardinalities: Mapping[str, int],
-        num_count: int | None = None,
         num_features: Sequence[str] | None = None,
         cat_emb_dim: int | None = None,
         num_emb_dim: int | None = None,
@@ -25,11 +24,10 @@ class Batch2TransformedSeq(Batch2Seq):
         super(Batch2Seq, self).__init__()
         # Establish initial features
         cat_cardinalities = cat_cardinalities if cat_cardinalities is not None else {}
-        if num_count is None:
-            if num_features is not None:
-                num_count = len(num_features)
-            else:
-                num_count = 0
+        if num_features is not None:
+            num_count = len(num_features)
+        else:
+            num_count = 0
         # Init batch_transforms. Update initial features.
         self.batch_transforms = create_instances_from_module(batch_tfs, batch_transforms)
         if self.batch_transforms:

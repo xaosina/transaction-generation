@@ -57,7 +57,7 @@ class VAE(nn.Module):
         cat_cardinalities: Mapping[str, int],
         num_names: Sequence[str] | None = None,
         batch_transforms: list[Mapping[str, Any] | str] | None = None,
-        pretrain=True,
+        pretrained=True,
     ):
         super().__init__()
         self.encoder = Encoder(
@@ -68,7 +68,7 @@ class VAE(nn.Module):
             cat_cardinalities=cat_cardinalities,
             num_names=num_names,
             batch_transforms=batch_transforms,
-            pretrain=pretrain,
+            pretrained=pretrained,
         )
         self.decoder = Decoder(
             vae_conf.num_layers,
@@ -92,23 +92,23 @@ class Encoder(nn.Module):
         d_token,
         n_head,
         factor,
-        cat_cardinalities: Mapping[str, int],
-        num_count: int | None = None,
+        cat_cardinalities: Mapping[str, int] | None = None,
         num_names: Sequence[str] | None = None,
         batch_transforms: list[Mapping[str, Any] | str] | None = None,
-        pretrain=False,
+        pretrained=False,
         bias=True,
     ):
         super(Encoder, self).__init__()
         self.d_token = d_token
-        self.pretrain = pretrain
+        self.pretrained = pretrained
 
-        if num_count is None:
-            if num_names is not None:
-                num_count = len(num_names)
-            else:
-                num_count = 0
-        self.batch_transforms = create_instances_from_module(batch_tfs, batch_transforms)
+        if num_names is not None:
+            num_count = len(num_names)
+        else:
+            num_count = 0
+        self.batch_transforms = create_instances_from_module(
+            batch_tfs, batch_transforms
+        )
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
@@ -116,17 +116,17 @@ class Encoder(nn.Module):
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
-        
+
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
-            categories=list(cat_cardinalities.values()) if cat_cardinalities is not None else None,
+            categories=list(cat_cardinalities) if cat_cardinalities else None,
             d_token=d_token,
             bias=bias,
         )
 
         self.encoder_mu = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.encoder_std = None
-        if self.pretrain:
+        if not self.pretrained:
             self.encoder_std = Transformer(num_layers, d_token, n_head, d_token, factor)
 
     def reparametrize(self, mu, logvar) -> torch.Tensor:
@@ -135,65 +135,44 @@ class Encoder(nn.Module):
         return mu + eps * std
 
     def forward(self, batch: GenBatch) -> Seq:
-        if self.batch_transforms is not None:
+        if self.batch_transforms:
             for tf in self.batch_transforms:
                 tf(batch)
 
-        seq_lens = batch.lengths
-        
-        L = 0
-        B = 0
-        D_num = 0
-        D_cat = 0
-        x_num = None
-        if batch.num_features is not None:
-            x_num = batch.num_features
-            L, B, D_num = x_num.shape
-
-        x_cat = None
-        if batch.cat_features is not None:
-            x_cat = batch.cat_features
-            L, B, D_cat = x_cat.shape
-
-        assert L > 0, 'No features to vae train'
-
+        x_num, x_cat = batch.num_features, batch.cat_features
+        D_num = x_num.size(-1) if x_num is not None else 0
+        D_cat = x_cat.size(-1) if x_cat is not None else 0
         time = batch.time
+        L, B = time.shape
+        D_vae = (D_num + D_cat) * self.d_token
+        assert L > 0, "No features for VAE training"
 
         valid_mask = (
-            (torch.arange(L).to(seq_lens) < seq_lens[:, None]).permute(1, 0).ravel()
-        )  # B, L -> L * B
+            torch.arange(L, device=time.device)[:, None] < batch.lengths
+        ).ravel()  # L * B
 
-        if batch.num_features is not None:
-            x_num = x_num.reshape(-1, D_num)  # L*B, D_num
-            x_num = x_num[valid_mask]
-
-        if batch.cat_features is not None:
-            x_cat = x_cat.reshape(-1, D_cat)  # L*B, D_cat
-            x_cat = x_cat[valid_mask]
+        if x_num is not None:
+            x_num = x_num.view(-1, D_num)[valid_mask]  # L*B, D_num
+        if x_cat is not None:
+            x_cat = x_cat.view(-1, D_cat)[valid_mask]  # L*B, D_cat
 
         x = self.tokenizer(x_num, x_cat)  # (L*B)', D_num + D_cat, d_token
-
         mu_z = self.encoder_mu(x)  # (L*B)', D_num + D_cat, d_token
-        if self.pretrain:
-            std_z = self.encoder_std(x)  # (L*B)', D_num + D_cat, d_token
-            z = self.reparametrize(mu_z, std_z)  # (L*B)', D_num + D_cat, d_token
-            D_vae = (D_num + D_cat) * self.d_token
-            z = z.reshape(-1, D_vae)  # (L*B)', D_vae
 
-            with_pad = torch.zeros(L * B, D_vae).to(z)
-            with_pad[valid_mask] = z
-            with_pad = with_pad.reshape(L, B, D_vae)  # L, B, D_vae
-
-            return Seq(tokens=with_pad, lengths=seq_lens, time=time), {  # [L, B, D_vae]
-                "mu_z": mu_z,
-                "std_z": std_z,
-            }
+        # Handle VAE output based on training mode
+        if self.pretrained:
+            output = mu_z
         else:
-            return Seq(
-                tokens=mu_z,
-                lengths=seq_lens,
-                time=time,
-            )
+            std_z = self.encoder_std(x)
+            output = self.reparametrize(mu_z, std_z)
+
+        with_pad = torch.zeros(L * B, D_vae, device=output.device)
+        with_pad[valid_mask] = output.view(-1, D_vae)
+        with_pad = with_pad.view(L, B, D_vae)
+
+        # Prepare return values
+        seq = Seq(tokens=with_pad, lengths=batch.lengths, time=time)
+        return seq if self.pretrained else (seq, {"mu_z": mu_z, "std_z": std_z})
 
 
 class Decoder(nn.Module):
@@ -217,55 +196,50 @@ class Decoder(nn.Module):
         self.decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.reconstructor = Reconstructor(
             num_counts,
-            self.cat_cardinalities if self.cat_cardinalities else {},
+            self.cat_cardinalities or {},
             d_token=d_token,
         )
 
     def forward(self, seq: Seq) -> PredBatch:
         x = seq.tokens
-        seq_lens = seq.lengths
-        time = seq.time
-
         L, B, D_vae = x.shape
         D = D_vae // self.d_token
-        assert D * self.d_token == D_vae
+        assert D * self.d_token == D_vae, "Invalid token dimensions"
 
-        x = x.reshape(L, B, D, self.d_token)
-        x = x.permute(0, 1, 2, 3)  # [B, L, D, d_token]
+        # Process sequence mask and reshape inputs
+        valid_mask = (
+            torch.arange(L, device=x.device)[:, None] < seq.lengths
+        ).ravel()  # L, B
+        x = x.view(L * B, D, self.d_token)[valid_mask]
 
-        valid_mask = (torch.arange(L).to(seq_lens) < seq_lens[:, None]).permute(1, 0).ravel()  # B, L, -> B*L
-        x = x.reshape(-1, D, self.d_token)  # B*L, D
-        x = x[valid_mask]
-
+        # Decode and reconstruct
         h = self.decoder(x)
         recon_num, recon_cat = self.reconstructor(h)
-        
-        time = recon_num[:, 0]
 
+        # Prepare numerical features
         num_features = None
-        if self.num_names is not None:
-            num_features = recon_num[:, 1 : len(self.num_names) + 1]
-            D_num = num_features.shape[-1]
-            with_pad = torch.zeros(L * B, D_num).to(num_features)
+        if self.num_names:
+            D_num = len(self.num_names)
+            num_features = recon_num[:, 1 : D_num + 1]
+            with_pad = torch.zeros(L * B, D_num, device=x.device)
             with_pad[valid_mask] = num_features
-            with_pad = with_pad.reshape(L, B, D_num)  # L, B, D_num
+            num_features = with_pad.view(L, B, D_num)
 
-        cat_features = None
-        if self.cat_cardinalities is not None:
-            cat_features = {}
-            for cat_name in self.cat_cardinalities.keys():
-                cat = recon_cat[cat_name]
+        # Prepare categorical features
+        cat_features = {}
+        if self.cat_cardinalities:
+            for name, cat in recon_cat.items():
                 D_cat = cat.shape[-1]
-                with_pad = torch.zeros(L * B, D_cat).to(cat)
+                with_pad = torch.zeros(L * B, D_cat, device=x.device)
                 with_pad[valid_mask] = cat
-                cat_features[cat_name] = with_pad.reshape(L, B, D_cat)
+                cat_features[name] = with_pad.view(L, B, D_cat)
 
         return PredBatch(
-            lengths=seq_lens,
-            time=time,
+            lengths=seq.lengths,
+            time=recon_num[:, 0],
             num_features=num_features,
             num_features_names=self.num_names,
-            cat_features=cat_features,
+            cat_features=cat_features if cat_features else None,
         )
 
 
@@ -331,7 +305,6 @@ class Reconstructor(nn.Module):
         self.weight = nn.Parameter(torch.Tensor(d_numerical, d_token))
         nn.init.xavier_uniform_(self.weight, gain=1 / math.sqrt(2))
         self.cat_recons = nn.ModuleDict()
-        print(self.cat_cardinalities.items())
         for cat_name, cat_dim in self.cat_cardinalities.items():
             recon = nn.Linear(d_token, cat_dim)
             nn.init.xavier_uniform_(recon.weight, gain=1 / math.sqrt(2))
