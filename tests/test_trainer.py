@@ -17,7 +17,7 @@ from generation.models.generator import VAE
 from generation.trainer import Trainer
 from generation.utils import (
     get_optimizer,
-    get_scheduler,
+    get_schedulers,
 )
 from main import GenerationRunner, PipelineConfig, RunnerConfig
 
@@ -34,7 +34,7 @@ def test_vae_train(config: PipelineConfig):
     )
     model = VAE(cfg.data_conf, cfg.model).to(cfg.device)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-    lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
+    lr_scheduler = get_schedulers(optimizer, cfg.schedulers)
     loss = get_loss(cfg.loss)
     log_dir = Path(cfg.log_dir) / cfg.run_name
 

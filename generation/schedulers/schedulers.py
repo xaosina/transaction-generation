@@ -32,6 +32,12 @@ class CompositeScheduler:
                 scheduler.load_state_dict(state_dict[key])
             else:
                 scheduler.load_state_dict(state_dict[idx])
+    
+    def get_beta(self) -> float:
+        for scheduler in self.schedulers:
+            if isinstance(scheduler, BetaScheduler):
+                return scheduler.get_beta()
+        raise RuntimeError("No scheduler in CompositeScheduler supports get_beta()")
 
 
 class BetaScheduler:

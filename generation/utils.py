@@ -130,7 +130,7 @@ class SchedulerConfig:
 def get_schedulers(
     optimizer: torch.optim.Optimizer,
     configs: list[Mapping[str, Any] | str] | None = None,
-) -> Any:
+) -> Optional[scheds.schedulers.CompositeScheduler]:
     schedulers = create_instances_from_module(
         module=scheds,
         configs=configs,
@@ -140,10 +140,7 @@ def get_schedulers(
     if not schedulers:
         return None
 
-    if len(schedulers) > 1:
-        return scheds.schedulers.CompositeScheduler(schedulers)
-
-    return schedulers[0]
+    return scheds.schedulers.CompositeScheduler(schedulers)
 
 
 @dataclass(frozen=True)
