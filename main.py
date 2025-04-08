@@ -1,6 +1,6 @@
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Any
 
 import pyrallis
 import pyrallis.parsers
@@ -20,7 +20,7 @@ from generation.utils import (
     OptimizerConfig,
     SchedulerConfig,
     get_optimizer,
-    get_scheduler,
+    get_schedulers,
 )
 
 
@@ -50,7 +50,7 @@ class PipelineConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-    scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
+    schedulers: Optional[list[Mapping[str, Any] | str]] = None
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
@@ -64,7 +64,7 @@ class GenerationRunner(Runner):
         )
         model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-        lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
+        # lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
         # loss = get_loss(cfg.loss)
         loss = get_loss(cfg.loss)
         # batch = next(iter(test_loader))

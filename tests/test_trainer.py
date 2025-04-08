@@ -54,3 +54,4 @@ def test_vae_train(config: PipelineConfig):
     )
 
     trainer.run()
+    
