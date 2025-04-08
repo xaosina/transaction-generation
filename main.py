@@ -15,10 +15,10 @@ from generation.metrics.evaluator import EvaluatorConfig, SampleEvaluator
 from generation.models.autoencoders.vae import VaeConfig
 from generation.models.generator import Generator, ModelConfig
 from generation.trainer import TrainConfig, Trainer
+from generation.schedulers import CompositeScheduler
 from generation.utils import (
     LoginConfig,
     OptimizerConfig,
-    SchedulerConfig,
     get_optimizer,
     get_schedulers,
 )
@@ -64,7 +64,7 @@ class GenerationRunner(Runner):
         )
         model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-        # lr_scheduler = get_scheduler(optimizer, cfg.scheduler)
+        # lr_scheduler = CompositeScheduler(optimizer, loss, cfg.scheduler)
         # loss = get_loss(cfg.loss)
         loss = get_loss(cfg.loss)
         # batch = next(iter(test_loader))

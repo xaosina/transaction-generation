@@ -110,6 +110,9 @@ class VAELoss(BaselineLoss):
 
         return base_loss + self._beta * kld_term
 
+    def update_beta(self, value):
+        self._beta = value
+
 
 def get_loss(config: LossConfig):
     name = config.name

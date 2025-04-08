@@ -40,7 +40,7 @@ class Trainer:
         model: nn.Module | None = None,
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
-        lr_scheduler: CompositeScheduler | None = None,
+        scheduler: CompositeScheduler | None = None,
         train_loader: Iterable[GenBatch] | None = None,
         val_loader: Iterable[GenBatch] | None = None,
         evaluator: SampleEvaluator | None = None,
@@ -62,7 +62,7 @@ class Trainer:
             model: model to train or validate.
             loss: loss function
             optimizer: torch optimizer for training.
-            lr_scheduler: torch learning rate scheduler.
+            scheduler: scheduler.
             train_loader: train dataloader.
             val_loader: val dataloader.
             metrics: metrics to compute every epoch
@@ -117,7 +117,7 @@ class Trainer:
         self._profiler = get_profiler()
 
         self._opt = optimizer
-        self._sched = lr_scheduler
+        self._sched = scheduler
         self._train_loader = train_loader
         self._val_loader = val_loader
 
@@ -142,7 +142,7 @@ class Trainer:
         return self._opt
 
     @property
-    def lr_scheduler(self) -> torch.optim.lr_scheduler._LRScheduler | None:
+    def scheduler(self):
         return self._sched
 
     @property

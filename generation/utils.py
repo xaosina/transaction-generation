@@ -122,28 +122,6 @@ def get_optimizer(
 
 
 @dataclass(frozen=True)
-class SchedulerConfig:
-    name: Optional[str] = "StepLR"
-    params: Optional[dict[str, Any]] = None
-
-
-def get_schedulers(
-    optimizer: torch.optim.Optimizer,
-    configs: list[Mapping[str, Any] | str] | None = None,
-) -> Optional[scheds.schedulers.CompositeScheduler]:
-    schedulers = create_instances_from_module(
-        module=scheds,
-        configs=configs,
-        common_kwargs={"optimizer": optimizer},
-    )
-
-    if not schedulers:
-        return None
-
-    return scheds.schedulers.CompositeScheduler(schedulers)
-
-
-@dataclass(frozen=True)
 class LoginConfig:
     file_lvl: str = "info"
     cons_lvl: str = "warning"
