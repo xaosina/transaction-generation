@@ -2,8 +2,6 @@ import os
 import sys
 
 import pyrallis
-import torch
-from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,7 +15,7 @@ from generation.models.generator import (
     BaselineRepeater,
     Generator,
     GroundTruthGenerator,
-    BaselineHistSampler
+    BaselineHistSampler,
 )
 
 logger = logging.getLogger(__name__)

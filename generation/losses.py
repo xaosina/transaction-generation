@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
+
 from generation.data.data_types import Batch, PredBatch
 
 
@@ -30,7 +31,7 @@ class BaselineLoss:
                 valid_mask[1:]
             ]
             mse_sum += mse_time.sum()
-            mse_count += valid_mask[1:].sum().item()
+            mse_count += mse_time.numel()
 
         if y_pred.num_features is not None:
             num_feature_ids = [
@@ -41,8 +42,8 @@ class BaselineLoss:
             true_num = y_true.num_features  # [L, B, totalD]
             mse_num = F.mse_loss(
                 pred_num[:-1], true_num[1:, :, num_feature_ids], reduction="none"
-            )
-            mse_num = mse_num * valid_mask[1:].unsqueeze(-1)
+            )[valid_mask[1:].unsqueeze(-1)]
+
             mse_sum += mse_num.sum()
             mse_count += mse_num.numel()
 
@@ -88,11 +89,11 @@ class BaselineLoss:
 
 class VAELoss(BaselineLoss):
 
-    def __init__(self, beta: float = 1.0, ignore_index: int = -100):
+    def __init__(self, init_beta: float = 1.0, ignore_index: int = -100):
         super().__init__(ignore_index=ignore_index)
-        self._beta = beta
+        self._beta = init_beta
 
-    def __call__(self, y_true, data) -> torch.Tensor:
+    def __call__(self, y_true: Batch, data) -> torch.Tensor:
         y_pred, params = data
         base_loss = super().__call__(y_true, y_pred)
 
@@ -115,6 +116,6 @@ def get_loss(config: LossConfig):
     if name == "baseline":
         return BaselineLoss()
     elif name == "vae":
-        return VAELoss(beta=1.0)
+        return VAELoss(init_beta=1.0)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")

@@ -11,7 +11,7 @@ import torch
 from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
-
+from generation.schedulers.schedulers import CompositeScheduler
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
 from .utils import LoadTime, get_profiler, record_function
@@ -40,7 +40,7 @@ class Trainer:
         model: nn.Module | None = None,
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
-        lr_scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
+        lr_scheduler: CompositeScheduler | None = None,
         train_loader: Iterable[GenBatch] | None = None,
         val_loader: Iterable[GenBatch] | None = None,
         evaluator: SampleEvaluator | None = None,
@@ -279,6 +279,7 @@ class Trainer:
                 np.mean(losses),
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
+        return {"loss": loss, "loss_ema": loss_ema}
 
     @torch.inference_mode()
     def validate(self, loader: Iterable[GenBatch] | None = None) -> dict[str, Any]:
@@ -342,12 +343,13 @@ class Trainer:
                 self._iters_per_epoch,
             )
 
-            self.train(train_iters)
+            metrics = self.train(train_iters)
             if self._sched:
-                self._sched.step()
+                self._sched.step(metrics=metrics["loss_ema"])
 
             self._metric_values = None
-            self.validate()
+            if self._sample_evaluator is not None:
+                self.validate()
 
             self._last_epoch += 1
             self.save_ckpt()

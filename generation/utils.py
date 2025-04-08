@@ -3,14 +3,16 @@ import os
 import sys
 from collections.abc import Iterable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from time import time
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, Mapping, Optional
 
 import torch
 import yaml
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
+
+from generation import schedulers as scheds
 
 
 class DummyProfiler:
@@ -125,12 +127,20 @@ class SchedulerConfig:
     params: Optional[dict[str, Any]] = None
 
 
-def get_scheduler(optimizer: torch.optim.Optimizer, sch_conf: SchedulerConfig):
-    params = sch_conf.params or {}
-    try:
-        return getattr(torch.optim.lr_scheduler, sch_conf.name)(optimizer, **params)
-    except AttributeError:
-        raise ValueError(f"Unknkown LR scheduler: {sch_conf.name}")
+def get_schedulers(
+    optimizer: torch.optim.Optimizer,
+    configs: list[Mapping[str, Any] | str] | None = None,
+) -> Optional[scheds.schedulers.CompositeScheduler]:
+    schedulers = create_instances_from_module(
+        module=scheds,
+        configs=configs,
+        common_kwargs={"optimizer": optimizer},
+    )
+
+    if not schedulers:
+        return None
+
+    return scheds.schedulers.CompositeScheduler(schedulers)
 
 
 @dataclass(frozen=True)

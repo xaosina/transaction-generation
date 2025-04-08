@@ -1,11 +1,10 @@
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 
 import numpy as np
 import torch
 from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
-from ebes.types import Seq
 
 from generation.models.autoencoders.vae import Decoder as VAE_Decoder
 from generation.models.autoencoders.vae import Encoder as VAE_Encoder
@@ -120,6 +119,7 @@ class BaselineHistSampler(BaseGenerator):
 class Generator(BaseGenerator):
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
+        
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
 
         self.encoder = GenGRU(self.preprocess.output_dim, 128, 1)

@@ -1,9 +1,3 @@
-import os
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional
-
-import numpy as np
 import pyrallis
 import pytest
 import torch
@@ -28,20 +22,18 @@ def config() -> PipelineConfig:
 def test_vae_only_categorical(config: PipelineConfig):
     data_conf = config.data_conf
     pre_conf = config.model.preprocessor
-    vae_conf = config.vae
-    device = config.devices[0]
-    train_loader, _, _ = get_dataloaders(config.data_conf)
+    device = config.device
+    train_loader, _, _ = get_dataloaders(config.data_conf, config.common_seed)
     batch: GenBatch = next(iter(train_loader)).to(device)
 
     batch.num_features = None
     batch.num_features_names = None
 
     vae = VAE(
-        vae_conf=vae_conf,
+        vae_conf=config.model.vae,
         cat_cardinalities=data_conf.cat_cardinalities,
         num_names=None,
         batch_transforms=pre_conf.batch_transforms,
-        pretrain=True,
     ).to(device=device)
 
     predbatch, loss_params = vae(batch)
@@ -51,20 +43,18 @@ def test_vae_only_categorical(config: PipelineConfig):
 def test_vae_only_numerical(config: PipelineConfig):
     data_conf = config.data_conf
     pre_conf = config.model.preprocessor
-    vae_conf = config.vae
-    device = config.devices[0]
-    train_loader, _, _ = get_dataloaders(config.data_conf)
+    device = config.device
+    train_loader, _, _ = get_dataloaders(config.data_conf, config.common_seed)
     batch: GenBatch = next(iter(train_loader)).to(device)
 
     batch.cat_features = None
     batch.cat_features_names = None
 
     vae = VAE(
-        vae_conf=vae_conf,
+        vae_conf=config.model.vae,
         cat_cardinalities=None,
         num_names=data_conf.num_names,
         batch_transforms=pre_conf.batch_transforms,
-        pretrain=True,
     ).to(device=device)
 
     predbatch, loss_params = vae(batch)
@@ -74,16 +64,14 @@ def test_vae_only_numerical(config: PipelineConfig):
 def test_vae(config: PipelineConfig):
     data_conf = config.data_conf
     pre_conf = config.model.preprocessor
-    vae_conf = config.vae
-    device = config.devices[0]
-    train_loader, _, _ = get_dataloaders(config.data_conf)
+    device = config.device
+    train_loader, _, _ = get_dataloaders(config.data_conf, config.common_seed)
     batch: GenBatch = next(iter(train_loader)).to(device)
     vae = VAE(
-        vae_conf=vae_conf,
+        vae_conf=config.model.vae,
         cat_cardinalities=data_conf.cat_cardinalities,
         num_names=data_conf.num_names,
         batch_transforms=pre_conf.batch_transforms,
-        pretrain=True,
     ).to(device=device)
 
     predbatch, loss_params = vae(batch)
@@ -91,12 +79,9 @@ def test_vae(config: PipelineConfig):
 
 
 def test_decoder(config: PipelineConfig):
-    device = config.devices[0]
+    device = config.device
     decoder = Decoder(
-        config.vae.num_layers,
-        config.vae.d_token,
-        config.vae.n_head,
-        config.vae.factor,
+        config.model.vae,
         num_names=config.data_conf.num_names,
         cat_cardinalities=config.data_conf.cat_cardinalities,
     ).to(device)
@@ -120,54 +105,36 @@ def test_decoder(config: PipelineConfig):
             size=[
                 32,
             ],
-        ),
+        ).to(device),
         time=None,
     )
 
-    predbatch = decoder(x)
-    assert predbatch.num_features.shape[-1] == config.data_conf.num_names.__len__()
+    predbatch: PredBatch = decoder(x)
+    assert (
+        predbatch.num_features.shape[-1] == config.data_conf.num_names.__len__()
+        and predbatch.num_features.shape[0] == predbatch.time.shape[0]
+    )
 
 
 def test_encoder(config: PipelineConfig):
     data_conf = config.data_conf
     pre_conf = config.model.preprocessor
-    device = config.devices[0]
-    train_loader, _, _ = get_dataloaders(config.data_conf)
+    device = config.device
+    train_loader, _, _ = get_dataloaders(config.data_conf, config.common_seed)
     batch = next(iter(train_loader)).to(device)
     encoder = Encoder(
-        config.vae.num_layers,
-        config.vae.d_token,
-        config.vae.n_head,
-        config.vae.factor,
+        config.model.vae,
         cat_cardinalities=data_conf.cat_cardinalities,
         num_names=data_conf.num_names,
         batch_transforms=pre_conf.batch_transforms,
     ).to(device=device)
 
     seq = encoder(batch)
-    assert isinstance(seq, Seq)
-
-
-def test_encoder_pretrain(config: PipelineConfig):
-    data_conf = config.data_conf
-    pre_conf = config.model.preprocessor
-    train_loader, _, _ = get_dataloaders(config.data_conf)
-    device = config.devices[0]
-    batch: GenBatch = next(iter(train_loader)).to(device)
-    encoder = Encoder(
-        config.vae.num_layers,
-        config.vae.d_token,
-        config.vae.n_head,
-        config.vae.factor,
-        cat_cardinalities=data_conf.cat_cardinalities,
-        num_names=data_conf.num_names,
-        batch_transforms=pre_conf.batch_transforms,
-        pretrain=True,
-    ).to(device=device)
-
-    seq = encoder(batch)
-    assert (
-        isinstance(seq[0], Seq)
-        and seq[1]["mu_z"].shape[1]
-        == batch.num_features.shape[-1] + batch.cat_features.shape[-1]
-    )
+    if config.model.vae.pretrained:
+        assert isinstance(seq, Seq)
+    else:
+        assert (
+            isinstance(seq[0], Seq)
+            and seq[1]["mu_z"].shape[1]
+            == batch.num_features.shape[-1] + batch.cat_features.shape[-1]
+        )

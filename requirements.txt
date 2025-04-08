@@ -5,6 +5,6 @@ optuna==3.5.0
 torcheval==0.0.7
 omegaconf==2.3.0
 lightgbm==4.3.0
-ebes==0.0.7
+ebes==0.0.8
 sdmetrics==0.19.0
 Levenshtein==0.26.1
