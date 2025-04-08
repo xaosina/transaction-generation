@@ -235,7 +235,7 @@ class Trainer:
 
         loss_ema = 0.0
         losses: list[float] = []
-
+        
         total_iters = iters
         if (
             hasattr(self._train_loader, "dataset")
@@ -254,7 +254,7 @@ class Trainer:
 
                 with record_function("forward"):
                     pred = self._model(batch)
-
+                    
                 loss = self._loss(batch, pred)
 
                 if torch.isnan(loss).any():
@@ -347,7 +347,8 @@ class Trainer:
                 self._sched.step()
 
             self._metric_values = None
-            self.validate()
+            if self._sample_evaluator is not None:
+                self.validate()
 
             self._last_epoch += 1
             self.save_ckpt()

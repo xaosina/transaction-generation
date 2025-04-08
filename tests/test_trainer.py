@@ -54,4 +54,3 @@ def test_vae_train(config: PipelineConfig):
     )
 
     trainer.run()
-    trainer.load_best_model()
