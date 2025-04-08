@@ -119,6 +119,7 @@ class BaselineHistSampler(BaseGenerator):
 class Generator(BaseGenerator):
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
+        
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
 
         self.encoder = GenGRU(self.preprocess.output_dim, 128, 1)
@@ -148,7 +149,8 @@ class Generator(BaseGenerator):
             x (Seq): Input sequence [L, B, D]
 
         """
-        hist = deepcopy(hist)
+
+        hist = deepcopy(hist).to('cuda:1') # TODO: Принести сюда device надо походу иначе ломается.
 
         with torch.no_grad():
             for _ in range(gen_len):

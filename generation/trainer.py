@@ -256,6 +256,8 @@ class Trainer:
                     pred = self._model(batch)
                 if self._loss.name == 'vae':
                     loss = self._loss(batch, pred, self._sched.get_beta())
+                else:
+                    loss = self._loss(batch, pred)
 
                 if torch.isnan(loss).any():
                     raise ValueError("None detected in loss. Terminating training.")
