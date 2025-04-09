@@ -92,15 +92,15 @@ class BetaScheduler(BaseScheduler):
         self._min_beta = min_beta
         self._verbose = verbose
 
-        self._best_metric = float("-inf")
+        self._best_loss = float("inf")
         self._num_bad_epochs = 0
 
     def get_beta(self) -> float:
         return self._beta
 
-    def step(self, metric: float) -> None:
-        if metric > self._best_metric:
-            self._best_metric = metric
+    def step(self, loss: float) -> None:
+        if loss < self._best_loss:
+            self._best_loss = loss
             self._num_bad_epochs = 0
         else:
             self._num_bad_epochs += 1
@@ -119,12 +119,12 @@ class BetaScheduler(BaseScheduler):
     def state_dict(self) -> dict:
         return {
             "beta": self._beta,
-            "best_metric": self._best_metric,
+            "best_loss": self._best_loss,
             "num_bad_epochs": self._num_bad_epochs,
         }
 
     def load_state_dict(self, state_dict: dict) -> None:
         self._beta = state_dict["beta"]
-        self._best_metric = state_dict["best_metric"]
+        self._best_loss = state_dict["best_loss"]
         self._num_bad_epochs = state_dict["num_bad_epochs"]
         self._loss.update_beta(self._beta)

@@ -55,6 +55,7 @@ class Trainer:
         ckpt_resume: str | os.PathLike | None = None,
         device: str = "cpu",
         profiling: bool = False,
+        verbose: bool = True,
     ):
         """Initialize trainer.
 
@@ -105,14 +106,15 @@ class Trainer:
         self._ckpt_track_metric = ckpt_track_metric
         self._ckpt_resume = ckpt_resume
         self._device = device
+        self._verbose = verbose
 
         self._model = None
         if model is not None:
             self._model = model.to(device)
 
         self._loss = None
-        if loss is not None:  # TODO: Мы хотим loss is nn.Module?
-            self._loss = loss.to(device) if isinstance(loss, nn.Module) else loss
+        if loss is not None:
+            self._loss = loss.to(device)
 
         self._profiler = get_profiler()
 
@@ -153,6 +155,19 @@ class Trainer:
     def device(self) -> str:
         return self._device
 
+    def _make_key_extractor(self, key):
+        def key_extractor(p: Path) -> float:
+            metrics = {}
+            for it in p.stem.split("_-_"):
+                kv = it.split("__")
+                assert len(kv) == 2, f"Failed to parse filename: {p.name}"
+                k = kv[0]
+                v = -float(kv[1]) if ("loss" in k) or ("mse" in k) else float(kv[1])
+                metrics[k] = v
+            return metrics[key]
+
+        return key_extractor
+
     def save_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
         """Save model, optimizer and scheduler states.
 
@@ -164,6 +179,7 @@ class Trainer:
                 saved exectly there. If `None` `ckpt_dir` from construct is used with
                 subfolder named `run_name` from Trainer's constructor.
         """
+
         if ckpt_path is None and self._ckpt_dir is None:
             logger.warning(
                 "`ckpt_path` was not passned to `save_ckpt` and `ckpt_dir` "
@@ -189,8 +205,33 @@ class Trainer:
         if self._sched:
             ckpt["sched"] = self._sched.state_dict()
 
-        if ckpt_path.is_dir():
-            torch.save(ckpt, ckpt_path / "model.pt")
+        if not ckpt_path.is_dir():
+            torch.save(ckpt, ckpt_path)
+            return
+
+        assert self._metric_values
+
+        metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
+
+        fname = f"epoch__{self._last_epoch:04d}"
+        metrics_str = "_-_".join(
+            f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
+        )
+
+        if len(metrics_str) > 0:
+            fname = "_-_".join((fname, metrics_str))
+        fname += ".ckpt"
+
+        torch.save(ckpt, ckpt_path / Path(fname))
+
+        if not self._ckpt_replace:
+            return
+
+        all_ckpt = list(ckpt_path.glob("*.ckpt"))
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
+        for p in all_ckpt:
+            if p != best_ckpt:
+                p.unlink()
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
         """Load model, optimizer and scheduler states.
@@ -243,14 +284,17 @@ class Trainer:
             and (total_iters > len(self._train_loader))  # type: ignore
         ):
             total_iters = len(self._train_loader)  # type: ignore
-        pbar = tqdm(zip(self._train_loader, range(total_iters)), total=total_iters)
+        pbar = tqdm(
+            zip(self._train_loader, range(total_iters)),
+            total=total_iters,
+            disable=not self._verbose,
+        )
 
         pbar.set_description_str(f"Epoch {self._last_epoch + 1: 3}")
 
         with self._profiler as prof:
             for batch, i in LoadTime(pbar, disable=pbar.disable):
                 batch.to(self._device)
-                batch
 
                 with record_function("forward"):
                     pred = self._model(batch)
@@ -282,7 +326,9 @@ class Trainer:
         return {"loss": loss, "loss_ema": loss_ema}
 
     @torch.inference_mode()
-    def validate(self, loader: Iterable[GenBatch] | None = None) -> dict[str, Any]:
+    def validate(
+        self, loader: Iterable[GenBatch] | None = None, remove=True
+    ) -> dict[str, Any]:
         assert self._model is not None
         if loader is None:
             if self._val_loader is None:
@@ -293,14 +339,16 @@ class Trainer:
 
         self._model.eval()
 
-        self._metric_values = self._sample_evaluator.evaluate(self._model, loader)
+        self._metric_values = self._sample_evaluator.evaluate(
+            self._model, loader, remove=remove
+        )
         logger.info(
             "Epoch %04d: metrics: %s",
             self._last_epoch + 1,
             str(self._metric_values),
         )
 
-        return None
+        return self._metric_values
 
     def run(self) -> None:
         """Train and validate model."""
@@ -337,15 +385,18 @@ class Trainer:
             assert self._total_epochs is not None, "Set `total_iters` or `total_epochs`"
             self._total_iters = self._total_epochs * self._iters_per_epoch
 
+        best_metric = float("-inf")
+        patience = self._patience
+
         while self._last_iter < self._total_iters:
             train_iters = min(
                 self._total_iters - self._last_iter,
                 self._iters_per_epoch,
             )
 
-            metrics = self.train(train_iters)
+            losses = self.train(train_iters)
             if self._sched:
-                self._sched.step(metrics=metrics["loss_ema"])
+                self._sched.step(loss=losses["loss_ema"])
 
             self._metric_values = None
             if self._sample_evaluator is not None:
@@ -354,4 +405,40 @@ class Trainer:
             self._last_epoch += 1
             self.save_ckpt()
 
+            assert (
+                self._metric_values is not None
+                and self._ckpt_track_metric in self._metric_values
+            )
+            target_metric = self._metric_values[self._ckpt_track_metric]
+            if target_metric > best_metric:
+                best_metric = target_metric
+                patience = self._patience
+            else:
+                patience -= 1
+            if patience == 0:
+                logger.info(
+                    f"Patience has run out. Early stopping at {self._last_epoch} epoch"
+                )
+                break
+
         logger.info("run '%s' finished successfully", self._run_name)
+
+    def best_checkpoint(self) -> Path:
+        """
+        Return the path to the best checkpoint
+        """
+        assert self._ckpt_dir is not None
+        ckpt_path = Path(self._ckpt_dir)
+
+        all_ckpt = list(ckpt_path.glob("*.ckpt"))
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
+
+        return best_ckpt
+
+    def load_best_model(self) -> None:
+        """
+        Loads the best model to self._model according to the track metric.
+        """
+
+        best_ckpt = self.best_checkpoint()
+        self.load_ckpt(best_ckpt)
