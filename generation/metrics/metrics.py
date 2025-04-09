@@ -190,7 +190,8 @@ class StatisticMetric(DistributionMetric):
     def get_scores(self, row) -> pd.Series:
         orig_score, gen_score = row.map(self.get_statistic)
         relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
-        return pd.Series({"relative": relative, "orig": orig_score})
+        score = 1 - (1 + abs(gen_score - orig_score))
+        return pd.Series({"score": score, "relative": relative, "orig": orig_score})
 
     @abstractmethod
     def get_statistic(self, p) -> float: ...
@@ -248,7 +249,8 @@ class GenVsHistoryMetric(BaseMetric):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
         relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
-        return {"relative": relative, "orig": orig_score}
+        score = 1 - (1 + abs(gen_score - orig_score))
+        return {"score": score, "relative": relative, "orig": orig_score}
 
 
 @dataclass
@@ -367,8 +369,9 @@ class Detection(BaseMetric):
             devices=self.devices,
             verbose=self.verbose,
         )
-        discr_score = discr_res.loc["MulticlassAUROC"].loc["mean"]
-        return float(discr_score)
+        acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
+        err = (1 - acc)
+        return float(err)
 
     def __repr__(self):
         return f"Detection ({self.condition_len} hist)"
