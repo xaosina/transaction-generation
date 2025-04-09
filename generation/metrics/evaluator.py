@@ -72,7 +72,7 @@ class SampleEvaluator:
             if blim and batch_idx >= blim:
                 break
 
-            batch_input = batch_input.to("cuda")
+            batch_input = batch_input.to(model.device)
             with torch.no_grad():
                 batch_pred = model.generate(
                     batch_input, self.data_config.generation_len

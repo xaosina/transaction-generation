@@ -149,8 +149,7 @@ class Generator(BaseGenerator):
             x (Seq): Input sequence [L, B, D]
 
         """
-
-        hist = deepcopy(hist).to('cuda:1') # TODO: Принести сюда device надо походу иначе ломается.
+        hist = deepcopy(hist)
 
         with torch.no_grad():
             for _ in range(gen_len):

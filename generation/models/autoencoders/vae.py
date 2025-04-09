@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as nn_init
 from ebes.types import Seq
+
 from generation.data import batch_tfs
 from generation.data.batch_tfs import NewFeatureTransform
 from generation.data.data_types import GenBatch, PredBatch
@@ -105,7 +106,7 @@ class Encoder(nn.Module):
                     cat_cardinalities[cat_name] = card
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
-            categories=list(cat_cardinalities.values()) if cat_cardinalities is not None else None,
+            categories=list(cat_cardinalities) if cat_cardinalities else None,
             d_token=vae_conf.d_token,
             bias=bias,
         )
@@ -217,14 +218,13 @@ class Decoder(nn.Module):
 
         # Prepare numerical features
         num_features = None
-        time = None
+        with_pad = torch.zeros(L * B, recon_num.shape[2], device=x.device)
+        with_pad[valid_mask] = recon_num
+        recon_num = with_pad.view(L, B, -1)
+        time = recon_num[:, :, 0]
         if self.num_names:
-            D_num = len(self.num_names) + 1
-            with_pad = torch.zeros(L * B, D_num, device=x.device)
-            with_pad[valid_mask] = recon_num
-            recon_num = with_pad.view(L, B, D_num)
-            num_features = recon_num[:, :, 1: D_num]
-            time = recon_num[:, :, 0]
+            D_num = len(self.num_names)
+            num_features = recon_num[:, :, 1 : D_num + 1]
 
         # Prepare categorical features
         cat_features = {}

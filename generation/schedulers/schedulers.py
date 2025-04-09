@@ -1,10 +1,50 @@
 import inspect
-from typing import Any, List, SupportsFloat
+import logging
+from abc import ABC, abstractmethod
+from typing import Any, Mapping
+
+from ..losses import VAELoss
+from . import schedulers
+
+logger = logging.getLogger(__name__)
 
 
-class CompositeScheduler:
-    def __init__(self, schedulers: List[Any]):
-        self.schedulers = schedulers
+class BaseScheduler(ABC):
+    @abstractmethod
+    def __init__(self, *args, **kwargs): ...
+
+    @abstractmethod
+    def state_dict(self) -> dict: ...
+
+    @abstractmethod
+    def load_state_dict(self, state_dict):
+        self.__dict__.update(state_dict)
+
+    @abstractmethod
+    def step(self, epoch=None, loss=None, metrics=None): ...
+
+
+class CompositeScheduler(BaseScheduler):
+    def __init__(self, optimizer, loss, configs: list[Mapping[str, Any] | str]):
+        self.schedulers = []
+        for config in configs:
+            kwargs = {}
+            if isinstance(config, str):
+                klass = getattr(schedulers, config)
+            else:
+                for class_name, params in config.items():
+                    klass = getattr(schedulers, class_name)
+                    if isinstance(params, Mapping):
+                        kwargs = params | kwargs
+                    else:
+                        raise TypeError("Class config has to be mapping")
+                    break  # Only process first key-value pair in dict
+            sig = inspect.signature(klass.__init__)
+            if "optimizer" in sig.parameters:
+                kwargs["optimizer"] = optimizer
+            if "loss" in sig.parameters:
+                kwargs["loss"] = loss
+            self.schedulers.append(klass(**kwargs))
 
     def step(self, epoch=None, loss=None, metrics=None):
         for scheduler in self.schedulers:
@@ -32,62 +72,59 @@ class CompositeScheduler:
                 scheduler.load_state_dict(state_dict[key])
             else:
                 scheduler.load_state_dict(state_dict[idx])
-    
-    def get_beta(self) -> float:
-        for scheduler in self.schedulers:
-            if isinstance(scheduler, BetaScheduler):
-                return scheduler.get_beta()
-        raise RuntimeError("No scheduler in CompositeScheduler supports get_beta()")
 
 
-class BetaScheduler:
+class BetaScheduler(BaseScheduler):
     def __init__(
         self,
+        loss: VAELoss,
         init_beta: float = 1e-2,
-        factor=0.7,
-        patience=10,
-        min_beta=1e-5,
-        verbose=True,
-        optimizer=None,
+        factor: float = 0.7,
+        patience: int = 10,
+        min_beta: float = 1e-5,
+        verbose: bool = True,
     ):
-        self.init_beta = init_beta
-        self.beta = init_beta
-        self.factor = factor
-        self.patience = patience
-        self.min_beta = min_beta
-        self.verbose = verbose
+        self._loss = loss
+        self._beta = init_beta
+        self._loss.update_beta(self._beta)
+        self._factor = factor
+        self._patience = patience
+        self._min_beta = min_beta
+        self._verbose = verbose
 
-        self.best_metric = float("inf")
-        self.num_bad_epochs = 0
+        self._best_metric = float("-inf")
+        self._num_bad_epochs = 0
 
     def get_beta(self) -> float:
-        return self.beta
+        return self._beta
 
-    def step(self, metrics: SupportsFloat):
-        if metrics < self.best_metric:
-            self.best_metric = metrics
-            self.num_bad_epochs = 0
+    def step(self, metric: float) -> None:
+        if metric > self._best_metric:
+            self._best_metric = metric
+            self._num_bad_epochs = 0
         else:
-            self.num_bad_epochs += 1
-            if self.num_bad_epochs >= self.patience:
+            self._num_bad_epochs += 1
+            if self._num_bad_epochs >= self._patience:
                 self._reduce_beta()
-                self.num_bad_epochs = 0
+                self._num_bad_epochs = 0
 
-    def _reduce_beta(self):
-        old_beta = self.beta
-        new_beta = max(old_beta * self.factor, self.min_beta)
-        self.beta = new_beta
-        if self.verbose:
-            print(f"BetaScheduler {old_beta} -> {new_beta}")
+    def _reduce_beta(self) -> None:
+        old_beta = self._beta
+        self._beta = max(old_beta * self._factor, self._min_beta)
+        self._loss.update_beta(self._beta)
+
+        if self._verbose:
+            logger.info(f"BetaScheduler: Beta reduced from {old_beta} to {self._beta}")
 
     def state_dict(self) -> dict:
         return {
-            "beta": self.beta,
-            "best_metric": self.best_metric,
-            "num_bad_epochs": self.num_bad_epochs,
+            "beta": self._beta,
+            "best_metric": self._best_metric,
+            "num_bad_epochs": self._num_bad_epochs,
         }
 
-    def load_state_dict(self, state_dict: dict):
-        self.beta = state_dict["beta"]
-        self.best_metric = state_dict["best_metric"]
-        self.num_bad_epochs = state_dict["num_bad_epochs"]
+    def load_state_dict(self, state_dict: dict) -> None:
+        self._beta = state_dict["beta"]
+        self._best_metric = state_dict["best_metric"]
+        self._num_bad_epochs = state_dict["num_bad_epochs"]
+        self._loss.update_beta(self._beta)

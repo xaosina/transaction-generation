@@ -15,9 +15,8 @@ class LossConfig:
 
 
 class BaselineLoss:
-    def __init__(self, name, ignore_index: int = -100):
+    def __init__(self, ignore_index: int = -100):
         self.ignore_index = ignore_index
-        self.name = name
 
     def _compute_mse(
         self, y_true: Batch, y_pred: PredBatch, valid_mask: torch.Tensor
@@ -90,10 +89,11 @@ class BaselineLoss:
 
 class VAELoss(BaselineLoss):
 
-    def __init__(self, name, ignore_index: int = -100):
-        super().__init__(name=name, ignore_index=ignore_index)
+    def __init__(self, init_beta: float = 1.0, ignore_index: int = -100):
+        super().__init__(ignore_index=ignore_index)
+        self._beta = init_beta
 
-    def __call__(self, y_true: Batch, data, beta: float = 1) -> torch.Tensor:
+    def __call__(self, y_true: Batch, data) -> torch.Tensor:
         y_pred, params = data
         base_loss = super().__call__(y_true, y_pred)
 
@@ -108,14 +108,17 @@ class VAELoss(BaselineLoss):
             (1 + std_z - mu_z.pow(2) - std_z.exp()).mean(-1).mean()
         )
 
-        return base_loss + beta * kld_term
+        return base_loss + self._beta * kld_term
+
+    def update_beta(self, value):
+        self._beta = value
 
 
 def get_loss(config: LossConfig):
     name = config.name
     if name == "baseline":
-        return BaselineLoss(name)
+        return BaselineLoss()
     elif name == "vae":
-        return VAELoss(name)
+        return VAELoss(init_beta=1.0)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")

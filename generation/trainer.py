@@ -40,7 +40,7 @@ class Trainer:
         model: nn.Module | None = None,
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
-        lr_scheduler: CompositeScheduler | None = None,
+        scheduler: CompositeScheduler | None = None,
         train_loader: Iterable[GenBatch] | None = None,
         val_loader: Iterable[GenBatch] | None = None,
         evaluator: SampleEvaluator | None = None,
@@ -62,7 +62,7 @@ class Trainer:
             model: model to train or validate.
             loss: loss function
             optimizer: torch optimizer for training.
-            lr_scheduler: torch learning rate scheduler.
+            scheduler: scheduler.
             train_loader: train dataloader.
             val_loader: val dataloader.
             metrics: metrics to compute every epoch
@@ -117,7 +117,7 @@ class Trainer:
         self._profiler = get_profiler()
 
         self._opt = optimizer
-        self._sched = lr_scheduler
+        self._sched = scheduler
         self._train_loader = train_loader
         self._val_loader = val_loader
 
@@ -142,7 +142,7 @@ class Trainer:
         return self._opt
 
     @property
-    def lr_scheduler(self) -> torch.optim.lr_scheduler._LRScheduler | None:
+    def scheduler(self):
         return self._sched
 
     @property
@@ -235,7 +235,7 @@ class Trainer:
 
         loss_ema = 0.0
         losses: list[float] = []
-        
+
         total_iters = iters
         if (
             hasattr(self._train_loader, "dataset")
@@ -254,10 +254,8 @@ class Trainer:
 
                 with record_function("forward"):
                     pred = self._model(batch)
-                if self._loss.name == 'vae':
-                    loss = self._loss(batch, pred, self._sched.get_beta())
-                else:
-                    loss = self._loss(batch, pred)
+
+                loss = self._loss(batch, pred)
 
                 if torch.isnan(loss).any():
                     raise ValueError("None detected in loss. Terminating training.")
@@ -281,10 +279,7 @@ class Trainer:
                 np.mean(losses),
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
-        return {
-            "loss": loss,
-            "loss_ema": loss_ema
-        }
+        return {"loss": loss, "loss_ema": loss_ema}
 
     @torch.inference_mode()
     def validate(self, loader: Iterable[GenBatch] | None = None) -> dict[str, Any]:
@@ -350,7 +345,7 @@ class Trainer:
 
             metrics = self.train(train_iters)
             if self._sched:
-                self._sched.step(metrics=metrics['loss_ema'])
+                self._sched.step(metrics=metrics["loss_ema"])
 
             self._metric_values = None
             if self._sample_evaluator is not None:

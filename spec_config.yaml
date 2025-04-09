@@ -151,6 +151,8 @@ trainer:
 
 # Runner params:
 run_name: debug
+log_dir: log/generation
+device: "cuda:2"
 common_seed: 0
 
 runner:
@@ -161,9 +163,7 @@ runner:
   params:
     n_runs: 1
     n_workers: 1
-  device_list: ['cuda:1']
-
-device: 'cuda:1'
+  device_list: ['cuda:0']
 
 
 # optuna:
