@@ -3,6 +3,7 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
+from torch.nn import Module
 
 from generation.data.data_types import Batch, PredBatch
 
@@ -14,8 +15,9 @@ class LossConfig:
     c_number: Optional[int] = None
 
 
-class BaselineLoss:
+class BaselineLoss(Module):
     def __init__(self, ignore_index: int = -100):
+        super().__init__()
         self.ignore_index = ignore_index
 
     def _compute_mse(
