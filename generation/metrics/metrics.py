@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from Levenshtein import distance as lev_score
 from sdmetrics.reports.single_table import QualityReport
+from sklearn.metrics import mean_squared_error as mse_score
 from sklearn.metrics import accuracy_score
 
 from ..data.data_types import DataConfig
@@ -32,6 +33,43 @@ class BaseMetric(ABC):
 
     @abstractmethod
     def __repr__(self): ...
+
+
+@dataclass
+class Reconstruction(BaseMetric):
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+        results = {}
+
+        cat_columns = (
+            []
+            if not self.data_conf.cat_cardinalities
+            else list(self.data_conf.cat_cardinalities.keys())
+        )   
+
+        num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or None)
+
+        for col in cat_columns + num_columns:
+            if col not in orig.columns:
+                continue
+
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            )
+        
+            results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
+
+        return results
+
+    def _compute_mse(self, row):
+        gt, pred = row["gt"], row["pred"]
+        return mse_score(gt, pred)
+
+    def _compute_accuracy(self, row):
+        gt, pred = row["gt"], row["pred"]
+        return accuracy_score(gt, pred)
 
 
 @dataclass
