@@ -70,7 +70,6 @@ class GenerationRunner(Runner):
         sample_evaluator = SampleEvaluator(
             log_dir / "evaluation", cfg.data_conf, cfg.evaluator, device=cfg.device
         )
-
         trainer = Trainer(
             model=model,
             loss=loss,
@@ -88,7 +87,6 @@ class GenerationRunner(Runner):
         trainer.run()
         trainer.load_best_model()
 
-        # train_metrics = trainer.validate(loaders["full_train"])
         # train_val_metrics = trainer.validate(loaders["train_val"])
         # hpo_metrics = trainer.validate(loaders["hpo_val"])
         # test_metrics = trainer.validate(test_loaders["test"])

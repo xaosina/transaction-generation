@@ -170,7 +170,7 @@ def save_quantile_statistic(spark_df, temp_path: Path | str, features_to_transfo
         qt = QuantileTransformerTorch(n_quantiles=1000, output_distribution='normal')
         qt.fit(amount_tensor)
 
-        qt.save((temp_path  / f"quantile_transformer_{feature_name}.pt").as_posix())
+        qt.save((temp_path  / f"quantile_transform_{feature_name}.pt").as_posix())
 
 
 
@@ -197,6 +197,11 @@ def main(dataset_name="mbd-50k", clients_number=1_000):
         overwrite=True,
     )
 
+    for file in temp_path.glob("quantile_transform_*.pt"):
+        target = dataset_path / file.name
+        shutil.move(file, target)
+        print(f"Moved: {file} -> {target}")
+        
     if temp_path.exists() and temp_path.is_dir():
         shutil.rmtree(temp_path)
         print(f"Temp directory was removed: {temp_path}")
@@ -208,7 +213,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Preprocess and convert MBD dataset to Parquet")
     parser.add_argument("--dataname", type=str, default="mbd-50k", help="Dataset name")
-    parser.add_argument("--remove-temp", type=bool, default=True, help='Cleanup temp files')
+    parser.add_argument("--remove-temp", type=bool, default=False, help='Cleanup temp files')
     parser.add_argument("--nc", type=int, default=1_000, help='Number of clients')
     args = parser.parse_args()
 

@@ -124,8 +124,8 @@ class ShardDataset(IterableDataset):
             data = pd.read_parquet(
                 shard_path,
                 columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
-                + data_conf.num_names
-                + list(data_conf.cat_cardinalities.keys()),
+                + (data_conf.num_names or [])
+                + (list(data_conf.cat_cardinalities.keys()) if data_conf.cat_cardinalities is not None else []),
             )
             data = self._preprocess(data, worker_rng)
 

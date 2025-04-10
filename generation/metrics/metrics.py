@@ -14,6 +14,7 @@ import pandas as pd
 from Levenshtein import distance as lev_score
 from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
+from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
 
 from ..data.data_types import DataConfig
@@ -68,7 +69,7 @@ class Reconstruction(BaseMetric):
 
     def _compute_mse(self, row):
         gt, pred = row["gt"], row["pred"]
-        return -mse_score(gt, pred)
+        return r2_score(gt, pred)
 
     def _compute_accuracy(self, row):
         gt, pred = row["gt"], row["pred"]
