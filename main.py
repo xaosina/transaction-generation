@@ -77,13 +77,15 @@ class GenerationRunner(Runner):
             scheduler=scheduler,
             evaluator=sample_evaluator,
             train_loader=train_loader,
-            val_loader=train_loader,
+            val_loader=val_loader,
             run_name=cfg.run_name,
             ckpt_dir= log_dir / "ckpt",
             device=cfg.device,
             **asdict(cfg.trainer),
         )
-        # train_metrics = trainer.validate(train_loader)
+        _ = trainer.validate(train_loader)
+        _ = trainer.validate(val_loader)
+        _ = trainer.validate(test_loader)
 
         trainer.run()
         trainer.load_best_model()

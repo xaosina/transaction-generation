@@ -136,6 +136,7 @@ class Encoder(nn.Module):
         if self.batch_transforms:
             for tf in self.batch_transforms:
                 tf(batch)
+
         x_num, x_cat = batch.num_features, batch.cat_features
         D_num = x_num.size(-1) if x_num is not None else 0
         D_cat = x_cat.size(-1) if x_cat is not None else 0

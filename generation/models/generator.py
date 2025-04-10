@@ -199,7 +199,7 @@ class VAE(BaseGenerator):
     
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
         hist = deepcopy(hist)
-        assert hist.target_time.shape[0] == gen_len
+        assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
         x = self.encoder(hist.get_target_batch())
         if not self.encoder.pretrained:
             x = x[0]

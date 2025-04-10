@@ -1,18 +1,18 @@
 data_conf:
   cat_cardinalities:
-    # src_type32: 87
-    # src_type11: 45
-    # event_subtype: 60
-    # dst_type11: 55
-    # event_type: 54
-    # currency: 2 # Initially 12
-    # dst_type12: 253
-    # src_type22: 84
-    # src_type12: 184
+    src_type32: 87
+    src_type11: 45
+    event_subtype: 60
+    dst_type11: 55
+    event_type: 54
+    currency: 2 # Initially 12
+    dst_type12: 253
+    src_type22: 84
+    src_type12: 184
     # src_type31: 1455
     # src_type21: 8000
   num_names:
-    # - amount
+    - amount
   index_name: client_id
   time_name: days_since_first_tx
 
@@ -24,7 +24,7 @@ data_conf:
   batch_size: 128
 
   min_history_len: 32
-  generation_len: &generation_len 64
+  generation_len: &generation_len 32
   max_seq_len: 1045
   padding_value: 0
 
@@ -36,18 +36,20 @@ data_conf:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
-    # - QuantileTransform:
-    #     feature_name: "amount"
-    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - CutTargetSequence:
+        target_len: *generation_len
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
-    # - QuantileTransform:
-    #     feature_name: "amount"
-    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -59,7 +61,7 @@ model:
     num_norm: True
     batch_transforms:
       - TimeToFeatures:
-          process_type: "diff"
+          process_type: "cat"
   vae:
     num_layers: 2
     d_token: 6
@@ -79,7 +81,7 @@ schedulers:
   - BetaScheduler:
       init_beta: 0.01
       factor: 0.7
-      patience: 2
+      patience: 4
       min_beta: 0.00001
       verbose: True
 
@@ -153,7 +155,7 @@ trainer:
 # Runner params:
 run_name: debug
 log_dir: log/generation
-device: "cuda:2"
+device: "cuda:1"
 common_seed: 0
 
 runner:
@@ -164,7 +166,7 @@ runner:
   params:
     n_runs: 1
     n_workers: 1
-  device_list: ['cuda:0']
+  device_list: ['cuda:1']
 
 
 # optuna:
