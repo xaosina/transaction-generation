@@ -26,10 +26,15 @@ class EvaluatorConfig:
 
 class SampleEvaluator:
     def __init__(
-        self, log_dir: str, data_conf: DataConfig, eval_config: EvaluatorConfig
+        self,
+        log_dir: str,
+        data_conf: DataConfig,
+        eval_config: EvaluatorConfig,
+        device: str = "cpu",
     ):
         self.log_dir = Path(log_dir)
         self.data_config = data_conf
+        self.device = device
         self.metrics = (
             create_instances_from_module(
                 m,
@@ -47,7 +52,9 @@ class SampleEvaluator:
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
         for metric in self.metrics:
             metric.log_dir = log_dir
-        gt_dir, gen_dir = self.generate_samples(model, loader, log_dir, blim, buffer_size)
+        gt_dir, gen_dir = self.generate_samples(
+            model, loader, log_dir, blim, buffer_size
+        )
         logger.info("Sampling done.")
         results = self.estimate_metrics(gt_dir, gen_dir)
         logger.info("Metrics done.")
@@ -72,10 +79,10 @@ class SampleEvaluator:
             if blim and batch_idx >= blim:
                 break
 
-            batch_input = batch_input.to(model.device)
+            batch_input = batch_input.to(self.device)
             with torch.no_grad():
                 batch_pred = model.generate(
-                    batch_input, self.data_config.generation_len
+                    deepcopy(batch_input), self.data_config.generation_len
                 )
             gt, gen = _concat_samples(batch_input, batch_pred)
             gt = data_loader.collate_fn.reverse(gt.to("cpu"))

@@ -44,9 +44,9 @@ class GroundTruthGenerator(BaseGenerator):
         gen_batch.target_cat_features = None
 
         if with_hist:
-            return hist  # Return GenBatch of size [L + gen_len, B, D]
+            return gen_batch  # Return GenBatch of size [L + gen_len, B, D]
         else:
-            return hist.tail(gen_len)
+            return gen_batch.tail(gen_len)
 
 
 class BaselineRepeater(BaseGenerator):
@@ -68,7 +68,8 @@ class BaselineRepeater(BaseGenerator):
             gen_batch.time = gen_batch.time + gen_batch.time[-1] - corr
             # This complicated correction assures same behavior as with timediff
         if with_hist:
-            return hist.append(gen_batch)
+            hist.append(gen_batch)
+            return hist
         else:
             return gen_batch
 
@@ -111,7 +112,8 @@ class BaselineHistSampler(BaseGenerator):
             gen_batch.time = gen_batch.time - pred_first_time + last_time
             # This complicated correction assures same behavior as with timediff
         if with_hist:
-            return hist.append(gen_batch)
+            hist.append(gen_batch)
+            return hist
         else:
             return gen_batch
 
@@ -189,6 +191,21 @@ class VAE(BaseGenerator):
             x (GenBatch): Input sequence [L, B, D]
 
         """
+
+        assert not self.encoder.pretrained
         x, params = self.encoder(x)
         x = self.decoder(x)
         return x, params
+    
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        hist = deepcopy(hist)
+        assert hist.target_time.shape[0] == gen_len
+        x = self.encoder(hist.get_target_batch())
+        if not self.encoder.pretrained:
+            x = x[0]
+        x = self.decoder.generate(x)
+        if with_hist:
+            hist.append(x)
+            return hist
+        else:
+            return x

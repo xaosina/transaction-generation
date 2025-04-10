@@ -8,9 +8,9 @@ from generation.losses import get_loss
 from generation.metrics.evaluator import SampleEvaluator
 from generation.models.generator import VAE, Generator
 from generation.trainer import Trainer
+from generation.schedulers import CompositeScheduler
 from generation.utils import (
     get_optimizer,
-    get_schedulers,
 )
 from main import PipelineConfig
 
@@ -21,6 +21,7 @@ def config() -> PipelineConfig:
         args=["--config", "spec_config.yaml"], config_class=PipelineConfig
     )
 
+
 def test_generator_train(config: PipelineConfig):
     cfg = config
     train_loader, val_loader, test_loader = get_dataloaders(
@@ -28,18 +29,18 @@ def test_generator_train(config: PipelineConfig):
     )
     model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-    lr_scheduler = get_schedulers(optimizer, cfg.schedulers)
+    scheduler = CompositeScheduler(optimizer, cfg.schedulers)
     loss = get_loss(cfg.loss)
     log_dir = Path(cfg.log_dir) / cfg.run_name
     sample_evaluator = SampleEvaluator(
-        log_dir / "evaluation", cfg.data_conf, cfg.evaluator
+        log_dir / "evaluation", cfg.data_conf, cfg.evaluator, device=cfg.device
     )
     # batch = next(iter(test_loader))
     trainer = Trainer(
         model=model,
         loss=loss,
         optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
+        scheduler=scheduler,
         evaluator=sample_evaluator,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -52,7 +53,6 @@ def test_generator_train(config: PipelineConfig):
     trainer.run()
 
 
-
 def test_vae_train(config: PipelineConfig):
     cfg = config
     train_loader, val_loader, test_loader = get_dataloaders(
@@ -60,17 +60,19 @@ def test_vae_train(config: PipelineConfig):
     )
     model = VAE(cfg.data_conf, cfg.model).to(cfg.device)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-    lr_scheduler = get_schedulers(optimizer, cfg.schedulers)
     loss = get_loss(cfg.loss)
+    scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
     log_dir = Path(cfg.log_dir) / cfg.run_name
-
+    sample_evaluator = SampleEvaluator(
+        log_dir / "evaluation", cfg.data_conf, cfg.evaluator, device=cfg.device
+    )
     # batch = next(iter(test_loader))
     trainer = Trainer(
         model=model,
         loss=loss,
         optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        evaluator=None,
+        scheduler=scheduler,
+        evaluator=sample_evaluator,
         train_loader=train_loader,
         val_loader=val_loader,
         run_name=cfg.run_name,
@@ -80,5 +82,3 @@ def test_vae_train(config: PipelineConfig):
     )
 
     trainer.run()
-
-

@@ -208,7 +208,6 @@ class Trainer:
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
-
         assert self._metric_values
 
         metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}

@@ -9,6 +9,7 @@ from generation.metrics.metrics import (
     Levenshtein,
     F1Metric,
     Gini,
+    Reconstruction,
     ShannonEntropy,
 )
 from main import PipelineConfig
@@ -38,11 +39,131 @@ def create_multiple_data(
     return gt, gen
 
 
+def create_multiple_features_data(
+    y_true_list: list[dict], y_pred_list: list[dict]
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    assert len(y_true_list) == len(
+        y_pred_list
+    ), "y_true and y_pred must have the same length"
+    gt = pd.DataFrame([{"client_id": i, **el} for i, el in enumerate(y_true_list)])
+
+    gen = pd.DataFrame([{"client_id": i, **el} for i, el in enumerate(y_pred_list)])
+
+    return gt, gen
+
+
 @pytest.fixture
 def config() -> PipelineConfig:
     return pyrallis.parse(
         args=["--config", "spec_config.yaml"], config_class=PipelineConfig
     )
+
+
+@pytest.mark.parametrize(
+    "y_true, y_pred, expected_est, overall_est",
+    [
+        [
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+                {
+                    "event_type": [0, 1, 1, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+            ],
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+                {
+                    "event_type": [0, 1, 1, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+            ],
+            (1 + 1 + 0) / 3, 2,
+        ],
+        [
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [0, 0, 0, 0],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+                {
+                    "event_type": [0, 1, 1, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+            ],
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+                {
+                    "event_type": [0, 1, 1, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1122, 1313, 13121, 100],
+                },
+            ],
+            (1 + 0.5 + 0) / 3, 1.5,
+        ],
+        [
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [0, 0, 0, 0],
+                    "amount": [0, 1, 2, 3],
+                },
+                {
+                    "event_type": [0, 1, 1, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1, 3, 5, 1],
+                },
+            ],
+            [
+                {
+                    "event_type": [0, 0, 0, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1, 1, 2, 3],
+                },
+                {
+                    "event_type": [0, 1, 0, 0],
+                    "src_type32": [1, 2, 3, 1],
+                    "amount": [1, 3, 5, 1],
+                },
+            ],
+            ((1 + 0.75) / 2 + 0.5 + (0.25 + 0) / 2) / 3, (1 + 0.75) / 2 + 0.5 + (0.25 + 0) / 2,
+        ],
+    ],
+    ids=["perfect", "src_type_fail", "all_features_fail"],
+)
+def test_reconstruction_metric(
+    y_true, y_pred, expected_est, overall_est, config: PipelineConfig
+):
+    log_dir = Path("tests/log")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    gt, gen = create_multiple_features_data(y_true, y_pred)
+
+    metric = Reconstruction(
+        devices=["cpu"],
+        data_conf=config.data_conf,
+        log_dir=Path("."),
+    )
+
+    est = metric(gt, gen)
+
+    assert np.isclose(
+        est["overall"], overall_est, atol=1e-5
+    ), f"Expected {overall_est}, got {est}"
 
 
 @pytest.mark.parametrize(
@@ -289,7 +410,7 @@ def test_accuracy_metric(y_true, y_pred, expected_acc, config: PipelineConfig):
     gt, gen = create_multiple_data(y_true, y_pred)
 
     accuracy = Accuracy(
-        devices=['cuda:0'],
+        devices=["cuda:0"],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",
@@ -338,7 +459,7 @@ def test_levenshtein_metric(y_true, y_pred, expected_dist, config: PipelineConfi
     gt, gen = create_multiple_data(y_true, y_pred)
 
     lev = Levenshtein(
-        devices=['cuda:0'],
+        devices=["cuda:0"],
         data_conf=config.data_conf,
         log_dir=log_dir,
         target_key="event_type",
