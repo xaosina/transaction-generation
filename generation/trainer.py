@@ -403,6 +403,7 @@ class Trainer:
 
             self._last_epoch += 1
             self.save_ckpt()
+
             assert (
                 self._metric_values is not None
                 and self._ckpt_track_metric in self._metric_values

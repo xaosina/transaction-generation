@@ -82,7 +82,7 @@ class SampleEvaluator:
             batch_input = batch_input.to(self.device)
             with torch.no_grad():
                 batch_pred = model.generate(
-                    batch_input, self.data_config.generation_len
+                    deepcopy(batch_input), self.data_config.generation_len
                 )
             gt, gen = _concat_samples(batch_input, batch_pred)
             gt = data_loader.collate_fn.reverse(gt.to("cpu"))

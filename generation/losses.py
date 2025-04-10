@@ -98,7 +98,7 @@ class VAELoss(Module):
 
     def __call__(self, y_true: Batch, data) -> torch.Tensor:
         y_pred, params = data
-        
+
         valid_mask = self._valid_mask(y_true)
 
         mse_loss = self._compute_mse(y_true, y_pred, valid_mask)
@@ -117,7 +117,6 @@ class VAELoss(Module):
         )
 
         return mse_loss + ce_loss + self._beta * kld_term
-    
 
     def _compute_mse(
         self, y_true: Batch, y_pred: PredBatch, valid_mask: torch.Tensor
@@ -128,9 +127,7 @@ class VAELoss(Module):
         if y_pred.time is not None:
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
-            mse_time = F.mse_loss(pred_time, true_time, reduction="none")[
-                valid_mask
-            ]
+            mse_time = F.mse_loss(pred_time, true_time, reduction="none")[valid_mask]
             mse_sum += mse_time.sum()
             mse_count += mse_time.numel()
 

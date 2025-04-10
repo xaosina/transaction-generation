@@ -125,7 +125,7 @@ class ShardDataset(IterableDataset):
                 shard_path,
                 columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
                 + (data_conf.num_names or [])
-                + (list(data_conf.cat_cardinalities.keys()) if data_conf.cat_cardinalities is not None else []),
+                + (list(data_conf.cat_cardinalities) if data_conf.cat_cardinalities else []),
             )
             data = self._preprocess(data, worker_rng)
 
