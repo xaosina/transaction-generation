@@ -133,7 +133,7 @@ METADATA = {
 }
 
 
-def prepocess_full_mbd(temp_path: Path):
+def prepocess_full_mbd(temp_path: Path, clients_number: int):
 
     spark = spark_connection()
     spark_df = spark.read.parquet("/home/dev/sb-proj/data/mbd-dataset/detail/trx")
@@ -141,12 +141,11 @@ def prepocess_full_mbd(temp_path: Path):
 
     spark_df = choose_years(spark_df, [2021, 2022])
     spark_df = filter_by_trx_in_month(spark_df, 2, 100)
-    spark_df = select_clients(spark_df, 50_000)
+    spark_df = select_clients(spark_df, clients_number)
 
     spark_df.write.parquet((temp_path / ".temp.parquet").as_posix())
 
     spark_df = spark.read.parquet((temp_path / ".temp.parquet").as_posix())
-    breakpoint()
     save_quantile_statistic(spark_df, temp_path, features_to_transform=['amount'])
 
     train_dataset, test_dataset = split_train_test(spark_df)
@@ -165,7 +164,6 @@ def save_quantile_statistic(spark_df, temp_path: Path | str, features_to_transfo
     for feature_name in features_to_transform:
         amount_list = spark_df.select(feature_name).rdd.map(lambda row, name=feature_name: row[name]).collect()
 
-        breakpoint()
         amount_np = np.array(amount_list, dtype=np.float64)
         amount_tensor = torch.tensor(amount_np, dtype=torch.float64)
         
@@ -176,11 +174,11 @@ def save_quantile_statistic(spark_df, temp_path: Path | str, features_to_transfo
 
 
 
-def main(dataset_name="mbd-50k"):
+def main(dataset_name="mbd-50k", clients_number=1_000):
     temp_path = Path("data/temp")
     dataset_path = Path(f"data/{dataset_name}")
 
-    prepocess_full_mbd(temp_path)
+    prepocess_full_mbd(temp_path, clients_number)
 
     csv_to_parquet(
         temp_path / ".train.csv",
@@ -211,6 +209,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Preprocess and convert MBD dataset to Parquet")
     parser.add_argument("--dataname", type=str, default="mbd-50k", help="Dataset name")
     parser.add_argument("--remove-temp", type=bool, default=True, help='Cleanup temp files')
+    parser.add_argument("--nc", type=int, default=1_000, help='Number of clients')
     args = parser.parse_args()
 
-    main(dataset_name=args.dataname)
+    main(dataset_name=args.dataname, clients_number=args.nc)
