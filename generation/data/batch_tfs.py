@@ -153,6 +153,7 @@ class TimeToFeatures(NewFeatureTransform):
             return
         t = batch.time[..., None].clone()
         if self.process_type == "diff":
+            assert batch.monotonic_time
             t = t.diff(dim=0, prepend=t[[0]])
 
         if batch.num_features_names is None:
