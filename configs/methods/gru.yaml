@@ -4,12 +4,6 @@ runner_name: SupervisedRunner
 loss:
   name: CrossEntropy
 
-trainer:
-  ckpt_track_metric: ${main_metric}
-  metrics_on_train: true
-  patience: ${patience}
-  total_iters: 100_000
-
 model:
   preprocess:
     name: Batch2Seq
