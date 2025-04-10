@@ -69,8 +69,10 @@ class CutTargetSequence(BatchTransform):
         new_max_len = batch.lengths.max()
 
         batch.time = (batch.time * mask)[:new_max_len]
-        batch.num_features = (batch.num_features * mask.unsqueeze(-1))[:new_max_len]
-        batch.cat_features = (batch.cat_features * mask.unsqueeze(-1))[:new_max_len]
+        if batch.num_features:
+            batch.num_features = (batch.num_features * mask.unsqueeze(-1))[:new_max_len]
+        if batch.cat_features:
+            batch.cat_features = (batch.cat_features * mask.unsqueeze(-1))[:new_max_len]
 
     def reverse(self, batch: GenBatch):
         batch.append(batch.get_target_batch())

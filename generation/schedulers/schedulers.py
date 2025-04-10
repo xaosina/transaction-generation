@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Mapping
 
 from ..losses import VAELoss
-from . import schedulers
+from .. import schedulers
 
 logger = logging.getLogger(__name__)
 

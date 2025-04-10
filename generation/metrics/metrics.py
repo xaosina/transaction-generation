@@ -48,7 +48,7 @@ class Reconstruction(BaseMetric):
             else list(self.data_conf.cat_cardinalities)
         )   
 
-        num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or None)
+        num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or [])
 
         for col in cat_columns + num_columns:
 
