@@ -33,7 +33,6 @@ from generation.data.utils import create_instances_from_module
 #             tokens_cat = []
 #             for i, emb in enumerate(self.category_embeddings):
 #                 tokens_cat.append(emb(x_cat[:, i]).unsqueeze(1))
-#             breakpoint()
 #             tokens_cat = torch.cat(tokens_cat, dim=1)
 #             tokens = torch.cat([token_num, tokens_cat], dim=1)
 #         else:
@@ -106,7 +105,7 @@ class Encoder(nn.Module):
                     cat_cardinalities[cat_name] = card
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
-            categories=list(cat_cardinalities) if cat_cardinalities else None,
+            categories=list(cat_cardinalities.values()) if cat_cardinalities else None,
             d_token=vae_conf.d_token,
             bias=bias,
         )
@@ -218,7 +217,7 @@ class Decoder(nn.Module):
 
         # Prepare numerical features
         num_features = None
-        with_pad = torch.zeros(L * B, recon_num.shape[2], device=x.device)
+        with_pad = torch.zeros(L * B, recon_num.shape[1], device=x.device)
         with_pad[valid_mask] = recon_num
         recon_num = with_pad.view(L, B, -1)
         time = recon_num[:, :, 0]
@@ -234,7 +233,6 @@ class Decoder(nn.Module):
                 with_pad = torch.zeros(L * B, D_cat, device=x.device)
                 with_pad[valid_mask] = cat
                 cat_features[name] = with_pad.view(L, B, D_cat)
-
         return PredBatch(
             lengths=seq.lengths,
             time=time,
@@ -261,7 +259,6 @@ class Tokenizer(nn.Module):
             self.register_buffer("category_offsets", category_offsets)
             self.category_embeddings = nn.Embedding(sum(categories), d_token)
             nn_init.kaiming_uniform_(self.category_embeddings.weight, a=math.sqrt(5))
-            print(f"{self.category_embeddings.weight.shape=}")
 
         self.weight = nn.Parameter(torch.Tensor(d_numerical, d_token))
         self.bias = nn.Parameter(torch.Tensor(d_bias, d_token)) if bias else None
@@ -323,7 +320,6 @@ class Reconstructor(nn.Module):
 
         recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
         recon_x_cat = {}
-        print(self.cat_cardinalities.keys())
         for i, cat_name in enumerate(self.cat_cardinalities.keys()):
             recon_x_cat[cat_name] = self.cat_recons[cat_name](h_cat[:, i])
 

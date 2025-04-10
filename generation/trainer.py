@@ -208,7 +208,6 @@ class Trainer:
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
-
         assert self._metric_values
 
         metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
@@ -404,7 +403,6 @@ class Trainer:
 
             self._last_epoch += 1
             self.save_ckpt()
-
             assert (
                 self._metric_values is not None
                 and self._ckpt_track_metric in self._metric_values

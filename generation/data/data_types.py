@@ -1,5 +1,5 @@
 import logging
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Optional
 
@@ -52,9 +52,9 @@ class GenBatch(Batch):
 
     def get_target_batch(self):
         assert self.target_time is not None
-        return replace(
+        return deepcopy(replace(
             self,
-            lengths=torch.full((self.target_time.shape[1],), self.target_time.shape[0]),
+            lengths=torch.full_like(self.lengths, self.target_time.shape[0]),
             time=self.target_time,
             num_features=self.target_num_features,
             cat_features=self.target_cat_features,
@@ -63,7 +63,7 @@ class GenBatch(Batch):
             target_time=None,
             cat_mask=None,
             num_mask=None,
-        )
+        ))
 
     def append(self, other):
         def append_tensor(tensor, other_tensor):

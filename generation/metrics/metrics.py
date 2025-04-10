@@ -57,19 +57,25 @@ class Reconstruction(BaseMetric):
                 (orig[col], gen[col]),
                 keys=["gt", "pred"],
                 axis=1,
-            )
+            ).apply(lambda x: x[-self.data_conf.generation_len:])
         
             results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
 
-        return results
+        return {
+            "overall": np.sum(list(results.values())),
+            **results,
+        }
 
     def _compute_mse(self, row):
         gt, pred = row["gt"], row["pred"]
-        return mse_score(gt, pred)
+        return -mse_score(gt, pred)
 
     def _compute_accuracy(self, row):
         gt, pred = row["gt"], row["pred"]
         return accuracy_score(gt, pred)
+    
+    def __repr__(self):
+        return "Reconstruction"
 
 
 @dataclass

@@ -5,6 +5,7 @@ from typing import Any, Mapping
 
 from ..losses import VAELoss
 from . import schedulers
+from torch.optim.lr_scheduler import StepLR
 
 logger = logging.getLogger(__name__)
 
