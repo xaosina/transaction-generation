@@ -9,8 +9,8 @@ data_conf:
     dst_type12: 253
     src_type22: 84
     src_type12: 184
-    src_type31: 1455
-    src_type21: 8000
+    # src_type31: 1455
+    # src_type21: 8000
   num_names:
     - amount
   index_name: client_id
@@ -36,18 +36,18 @@ data_conf:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
-    # - QuantileTransform:
-    #     feature_name: "amount"
-    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
     - TimeToDiff
-    # - QuantileTransform:
-    #     feature_name: "amount"
-    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - QuantileTransform:
+        feature_name: "amount"
+        model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -79,7 +79,7 @@ schedulers:
   - BetaScheduler:
       init_beta: 0.01
       factor: 0.7
-      patience: 2
+      patience: 4
       min_beta: 0.00001
       verbose: True
 
@@ -153,7 +153,7 @@ trainer:
 # Runner params:
 run_name: debug
 log_dir: log/generation
-device: "cuda:0"
+device: "cuda:1"
 common_seed: 0
 
 runner:
@@ -164,7 +164,7 @@ runner:
   params:
     n_runs: 1
     n_workers: 1
-  device_list: ['cuda:0']
+  device_list: ['cuda:1']
 
 
 # optuna:

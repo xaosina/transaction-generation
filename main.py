@@ -83,14 +83,19 @@ class GenerationRunner(Runner):
             device=cfg.device,
             **asdict(cfg.trainer),
         )
+        train_loader.collate_fn = val_loader.collate_fn
+        train_metrics = trainer.validate(train_loader)
+        val_metrics = trainer.validate(val_loader)
+        test_metrics = trainer.validate(test_loader)
 
         trainer.run()
         trainer.load_best_model()
 
-        # train_val_metrics = trainer.validate(loaders["train_val"])
-        # hpo_metrics = trainer.validate(loaders["hpo_val"])
-        # test_metrics = trainer.validate(test_loaders["test"])
-        return {}
+        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        val_metrics = {"val_" + k: v for k, v in val_metrics.items()}
+        test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
+
+        return dict(**train_metrics, **val_metrics, **test_metrics)
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)
