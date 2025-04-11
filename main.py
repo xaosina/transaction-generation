@@ -40,7 +40,7 @@ class RunnerConfig:
 @dataclass
 class PipelineConfig:
     run_name: str = "debug"
-    log_dir: Path = Path("log/generation")
+    log_dir: str = "log/generation"
     device: str = "cuda:0"
     common_seed: int = 0
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
@@ -83,13 +83,15 @@ class GenerationRunner(Runner):
             device=cfg.device,
             **asdict(cfg.trainer),
         )
+        trainer.run()
+        trainer.load_best_model()
+
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
         train_metrics = trainer.validate(train_loader)
         val_metrics = trainer.validate(val_loader)
         test_metrics = trainer.validate(test_loader)
-
 
         train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         val_metrics = {"val_" + k: v for k, v in val_metrics.items()}
