@@ -84,6 +84,8 @@ class GenerationRunner(Runner):
             **asdict(cfg.trainer),
         )
         train_loader.collate_fn = val_loader.collate_fn
+        train_loader.dataset.random_end = val_loader.dataset.random_end
+
         train_metrics = trainer.validate(train_loader)
         val_metrics = trainer.validate(val_loader)
         test_metrics = trainer.validate(test_loader)
