@@ -83,12 +83,14 @@ class GenerationRunner(Runner):
             device=cfg.device,
             **asdict(cfg.trainer),
         )
+
+        trainer.run()
+        trainer.load_best_model()
+
         _ = trainer.validate(train_loader)
         _ = trainer.validate(val_loader)
         _ = trainer.validate(test_loader)
 
-        trainer.run()
-        trainer.load_best_model()
 
         # train_val_metrics = trainer.validate(loaders["train_val"])
         # hpo_metrics = trainer.validate(loaders["hpo_val"])
