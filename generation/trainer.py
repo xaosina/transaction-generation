@@ -27,7 +27,7 @@ class TrainConfig:
     iters_per_epoch: Optional[int] = 10_000
     ckpt_replace: bool = True
     ckpt_track_metric: str = "epoch"
-    ckpt_resume: Optional[str | os.PathLike] = None
+    ckpt_resume: Optional[str] = None
     profiling: bool = False
 
 
