@@ -4,6 +4,12 @@ main_metric: MulticlassAccuracy
 main_loss: 
   name: nn.CrossEntropyLoss
 
+trainer:
+  ckpt_track_metric: ${main_metric}
+  metrics_on_train: true
+  patience: ${patience}
+  total_iters: 10_000 # About 25 epoch
+
 cc:
   src_type32: 87
   src_type11: 45

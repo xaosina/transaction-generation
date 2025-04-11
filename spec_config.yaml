@@ -39,8 +39,6 @@ data_conf:
     - QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
-    - CutTargetSequence:
-        target_len: *generation_len
 
   val_transforms:
     - RescaleTime:
@@ -135,9 +133,9 @@ evaluator:
 
     # - Detection:
     #     dataset_config: detection/mbd
-    #     method_config: transformer
+    #     method_config: gru
     #     condition_len: *generation_len
-    #     verbose: False
+    #     verbose: True
 
 logging:
   file_lvl: "info"
