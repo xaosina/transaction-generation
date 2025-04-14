@@ -164,7 +164,7 @@ runner:
   params:
     n_runs: 1
     n_workers: 1
-  device_list: ['cuda:1']
+  device_list:
 
 
 # optuna:

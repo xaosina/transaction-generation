@@ -61,7 +61,7 @@ class Reconstruction(BaseMetric):
             results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
 
         return {
-            "overall": np.sum(list(results.values())),
+            "overall": np.mean(list(results.values())),
             **results,
         }
 

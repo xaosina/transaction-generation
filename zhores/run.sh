@@ -1,18 +1,19 @@
 #!/bin/bash
 
 # Input arguments
-dataset=${1:-m}
-method=$2
-script_name=$3
+# dataset=${1:-m}
+# method=$2
+# script_name=$3
 login=${4:-d.osin}
 n_days=${5:-6}
 n_gpus=${6:-1}
 
 # Job name
-job_name="${dataset}/${method}/${script_name}"
+# job_name="${dataset}/${method}/${script_name}"
+job_name=${1:-debug}
 
 # Generate the sbatch script dynamically
-cat <<EOT
+sbatch <<EOT
 #!/bin/bash
 
 #SBATCH --job-name=${job_name}
@@ -35,10 +36,10 @@ cat <<EOT
 
 #SBATCH --gpus=${n_gpus}
 
-srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv gen-bench.sif bash -c '
+srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
     cd /home/transaction-generation;
     nvidia-smi;
-    (sleep 0; python main.py -d '${dataset}' -m '${method}' -e 'optuna' -g 'cuda:0') &
+    (sleep 0; python main.py --device 'cuda:0') &
     wait
 '
 EOT
