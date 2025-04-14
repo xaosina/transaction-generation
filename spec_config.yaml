@@ -60,6 +60,13 @@ model:
     batch_transforms:
       - TimeToFeatures:
           process_type: "cat"
+  encoder:
+    name: GRU
+    params:
+      hidden_size: 256
+      num_layers: 1
+      
+    
   vae:
     num_layers: 2
     d_token: 6
@@ -148,6 +155,8 @@ trainer:
   iters_per_epoch: null
   patience: 10
   profiling: false
+  verbose: True
+  ckpt_resume: null
 
 
 # Runner params:

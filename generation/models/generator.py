@@ -11,7 +11,7 @@ from generation.models.autoencoders.vae import Encoder as VAE_Encoder
 from generation.models.autoencoders.vae import VaeConfig
 
 from ..data.data_types import DataConfig, GenBatch, PredBatch, gather
-from .encoders import GenGRU
+from .encoders import AutoregressiveEncoder, EncoderConfig
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
 
@@ -19,6 +19,7 @@ from .reconstructors import ReconstructorBase
 @dataclass(frozen=True)
 class ModelConfig:
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
+    encoder: EncoderConfig = field(default_factory=EncoderConfig)
     vae: VaeConfig = field(default_factory=VaeConfig)
 
 
@@ -121,10 +122,12 @@ class BaselineHistSampler(BaseGenerator):
 class Generator(BaseGenerator):
     def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
         super().__init__()
-        
+
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
 
-        self.encoder = GenGRU(self.preprocess.output_dim, 128, 1)
+        encoder_params = model_config.encoder.params or {}
+        encoder_params["input_size"] = self.preprocess.output_dim
+        self.encoder = AutoregressiveEncoder(model_config.encoder.name, encoder_params)
 
         self.projector = Projection(self.encoder.output_dim, self.encoder.output_dim)
 
@@ -196,7 +199,7 @@ class VAE(BaseGenerator):
         x, params = self.encoder(x)
         x = self.decoder(x)
         return x, params
-    
+
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
         hist = deepcopy(hist)
         assert hist.target_time.shape[0] == gen_len, hist.target_time.shape

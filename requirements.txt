@@ -8,3 +8,5 @@ lightgbm==4.3.0
 ebes==0.0.8
 sdmetrics==0.19.0
 Levenshtein==0.26.1
+pyrallis==0.3.1
+dacite==1.9.2

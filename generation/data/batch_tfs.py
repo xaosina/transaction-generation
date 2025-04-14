@@ -13,9 +13,11 @@ from generation.data.preprocess.quantile_transformer import (
     QuantileTransformerTorch,
 )
 
+from ..utils import RateLimitFilter
 from .data_types import GenBatch
 
 logger = logging.getLogger(__name__)
+logger.addFilter(RateLimitFilter(60))
 
 MISSING_CAT_VAL = 0
 

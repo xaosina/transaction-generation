@@ -1,12 +1,21 @@
-import torch
-from torch import nn
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional
 
+import torch
+
+# from .transformer.ar import AR
+from ebes.model import BaseModel
 from ebes.model.seq2seq import BaseSeq2Seq
 from ebes.types import Seq
+from torch import nn
 
 # from .transformer.ar import AR
-from ebes.model import GRU
-# from .transformer.ar import AR
+
+
+@dataclass(frozen=True)
+class EncoderConfig:
+    name: str
+    params: Optional[Mapping[str, Any]] = None
 
 
 class ARTransformer(BaseSeq2Seq):
@@ -59,8 +68,17 @@ class ARTransformer(BaseSeq2Seq):
         return generated
 
 
-class GenGRU(GRU):
-    def generate(self, seq: Seq) -> Seq: # returns a sequence of shape [1, B, D]
+class AutoregressiveEncoder(BaseSeq2Seq):
+    def __init__(self, name: str, params: dict = None):
+        super().__init__()
+        params = params or {}
+        self.model = BaseModel.get_model(name, **params)
+
+    def generate(self, seq: Seq) -> Seq:  # returns a sequence of shape [1, B, D]
         seq = self.forward(seq)
-        last_valid = seq.tokens[seq.lengths - 1, torch.arange(seq.tokens.shape[1])].unsqueeze(0)
-        return Seq(tokens=last_valid, lengths=torch.ones(last_valid.shape[1]), time=None)
+        last_valid = seq.tokens[
+            seq.lengths - 1, torch.arange(seq.tokens.shape[1])
+        ].unsqueeze(0)
+        return Seq(
+            tokens=last_valid, lengths=torch.ones(last_valid.shape[1]), time=None
+        )

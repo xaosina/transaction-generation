@@ -12,7 +12,20 @@ import torch
 import yaml
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
-from generation import schedulers as scheds
+
+class RateLimitFilter(logging.Filter):
+    def __init__(self, cooldown=60):
+        super().__init__()
+        self.cooldown = cooldown
+        self.last_log = {}
+        self.counter = {}
+
+    def filter(self, r):
+        t = time()
+        if t - self.last_log.get((m := r.getMessage()), 0) < self.cooldown:
+            return False
+        self.last_log[m] = t
+        return True
 
 
 class DummyProfiler:

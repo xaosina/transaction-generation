@@ -7,7 +7,10 @@ import numpy as np
 import torch
 from ebes.types import Batch
 
+from ..utils import RateLimitFilter
+
 logger = logging.getLogger(__name__)  # noqa: F821
+logger.addFilter(RateLimitFilter(60))
 
 
 @dataclass(frozen=True)
@@ -52,18 +55,20 @@ class GenBatch(Batch):
 
     def get_target_batch(self):
         assert self.target_time is not None
-        return deepcopy(replace(
-            self,
-            lengths=torch.full_like(self.lengths, self.target_time.shape[0]),
-            time=self.target_time,
-            num_features=self.target_num_features,
-            cat_features=self.target_cat_features,
-            target_cat_features=None,
-            target_num_features=None,
-            target_time=None,
-            cat_mask=None,
-            num_mask=None,
-        ))
+        return deepcopy(
+            replace(
+                self,
+                lengths=torch.full_like(self.lengths, self.target_time.shape[0]),
+                time=self.target_time,
+                num_features=self.target_num_features,
+                cat_features=self.target_cat_features,
+                target_cat_features=None,
+                target_num_features=None,
+                target_time=None,
+                cat_mask=None,
+                num_mask=None,
+            )
+        )
 
     def append(self, other):
         def append_tensor(tensor, other_tensor):
