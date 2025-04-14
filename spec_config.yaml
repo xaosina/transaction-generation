@@ -35,7 +35,7 @@ data_conf:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
-    - TimeToDiff
+    # - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
@@ -44,7 +44,7 @@ data_conf:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
-    - TimeToDiff
+    # - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
@@ -83,15 +83,15 @@ optimizer:
 schedulers:
   - StepLR:
       step_size: 30
-  - BetaScheduler:
-      init_beta: 0.01
-      factor: 0.7
-      patience: 4
-      min_beta: 0.00001
-      verbose: True
+  # - BetaScheduler:
+  #     init_beta: 0.01
+  #     factor: 0.7
+  #     patience: 4
+  #     min_beta: 0.00001
+  #     verbose: True
 
 loss:
-  name: vae
+  name: baseline
 
 evaluator:
   devices: ["cuda:1", "cuda:2"]
@@ -151,7 +151,7 @@ logging:
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: &main_metric 'Reconstruction overall'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -167,7 +167,7 @@ common_seed: 0
 
 runner:
   name: GenerationRunner
-  run_type: simple
+  run_type: optuna
   seed_keys:
     - "common_seed"
   params:
@@ -176,25 +176,25 @@ runner:
   device_list:
 
 
-# optuna:
-#   params:
-#     n_trials: 70
-#     n_startup_trials: 3
-#     request_list: 
-#       - 'optimizer.params.lr': 3.e-4
-#         'model.preprocess.params.num_norm': True
-#     target_metric: ${main_metric}
-#   suggestions:
-#     optimizer.params.weight_decay: [suggest_float, {low: 1.e-15, high: 1.e-3, log: True}]
-#     optimizer.params.lr: [suggest_float, {low: 1.e-5, high: 1.e-1, log: True}]
+optuna:
+  params:
+    n_trials: 70
+    n_startup_trials: 3
+    request_list: 
+      - 'optimizer.params.lr': 3.e-4
+        'model.preprocessor.params.num_norm': False
+        'model.encoder.params.num_layers': 1
+        "model.preprocessor.batch_transforms.0.TimeToFeatures.process_type": none
+    target_metric: *main_metric
+  suggestions:
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
-#     model.encoder.params.hidden_size: [suggest_int, {low: 10, high: 1200, log: True}]
-#     model.encoder.params.num_layers: [suggest_int, {low: 1, high: 3, log: False}]
-#     model.encoder.params.dropout: [suggest_float, {low: 1.e-10, high: 0.3, log: True}]
+    - ["model.encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
+    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 5, log: False}]]
+    - ["model.encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
 
-#     model.preprocess.params.time_process: [suggest_categorical, {choices: ["diff", "cat", "none"]}]
-#     model.preprocess.params.num_norm: [suggest_categorical, {choices: [true, false]}]
-#     model.preprocess.params.cat_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
-#     model.preprocess.params.num_emb_dim: [suggest_int, {low: 1, high: 128, log: False}]
-
-#     model.aggregation.name: [suggest_categorical, {choices: ["TakeLastHidden", "ValidHiddenMean"]}]
+    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]

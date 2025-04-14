@@ -31,6 +31,7 @@ class SampleEvaluator:
         data_conf: DataConfig,
         eval_config: EvaluatorConfig,
         device: str = "cpu",
+        verbose: bool = True,
     ):
         self.log_dir = Path(log_dir)
         self.data_config = data_conf
@@ -47,6 +48,7 @@ class SampleEvaluator:
             )
             or []
         )
+        self.verbose = verbose
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
@@ -75,7 +77,9 @@ class SampleEvaluator:
         buffer_gt, buffer_gen = [], []
         part_counter = 0
 
-        for batch_idx, batch_input in enumerate(tqdm(data_loader)):
+        for batch_idx, batch_input in enumerate(
+            tqdm(data_loader, disable=not self.verbose)
+        ):
             if blim and batch_idx >= blim:
                 break
 

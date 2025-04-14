@@ -74,6 +74,13 @@ class AutoregressiveEncoder(BaseSeq2Seq):
         params = params or {}
         self.model = BaseModel.get_model(name, **params)
 
+    @property
+    def output_dim(self):
+        return self.model.output_dim
+
+    def forward(self, seq: Seq) -> Seq:
+        return self.model(seq)
+
     def generate(self, seq: Seq) -> Seq:  # returns a sequence of shape [1, B, D]
         seq = self.forward(seq)
         last_valid = seq.tokens[

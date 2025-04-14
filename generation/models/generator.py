@@ -129,7 +129,7 @@ class Generator(BaseGenerator):
         encoder_params["input_size"] = self.preprocess.output_dim
         self.encoder = AutoregressiveEncoder(model_config.encoder.name, encoder_params)
 
-        self.projector = Projection(self.encoder.output_dim, self.encoder.output_dim)
+        self.projector = Projection(self.encoder.output_dim, 2 * self.encoder.output_dim)
 
         self.reconstructor = ReconstructorBase(data_conf, self.projector.output_dim)
 

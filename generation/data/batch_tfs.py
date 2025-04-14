@@ -142,7 +142,7 @@ class TimeToFeatures(NewFeatureTransform):
 
     @property
     def num_names(self):
-        return [self.time_name]
+        return [self.time_name] if self.process_type != "none" else []
 
     def __call__(self, batch: GenBatch):
         assert self.process_type in [

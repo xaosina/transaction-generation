@@ -10,6 +10,8 @@ from typing import Any, Dict, Mapping, Optional
 
 import torch
 import yaml
+from omegaconf import DictConfig
+from optuna import Trial
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
 
@@ -204,3 +206,19 @@ def create_instances_from_module(
                     raise TypeError("Class config has to be mapping")
                 break  # Only process first key-value pair in dict
     return instances
+
+
+def assign_by_name(config: dict | DictConfig, name: str, value: Any):
+    field = config
+    for k in name.split(".")[:-1]:
+        if isinstance(field, Mapping):
+            field = field[k]
+        else:
+            field = field[int(k)]
+    field[name.split(".")[-1]] = value
+
+
+def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
+    for name, suggestion in suggestions:
+        value = getattr(trial, suggestion[0])(name, **suggestion[1])
+        assign_by_name(config, name, value)
