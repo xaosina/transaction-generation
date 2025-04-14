@@ -35,7 +35,7 @@ data_conf:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
-    # - TimeToDiff
+    - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
@@ -44,7 +44,7 @@ data_conf:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
-    # - TimeToDiff
+    - TimeToDiff
     - QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
@@ -164,7 +164,7 @@ runner:
   params:
     n_runs: 1
     n_workers: 1
-  device_list: ['cuda:2']
+  device_list:
 
 
 # optuna:

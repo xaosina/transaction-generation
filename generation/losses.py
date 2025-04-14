@@ -25,7 +25,7 @@ def rse_valid(pred, true, valid_mask):
     tot = (true - userwise_mean) ** 2  # L, B, [D]
     userwise_tot = torch.where(valid_mask, tot, torch.nan).nansum(dim=0)  # B, [D]
     rse = userwise_res / userwise_tot
-    return rse, rse.numel()
+    return rse.sum(), rse.numel()
 
 
 class BaselineLoss(Module):
@@ -138,8 +138,7 @@ class VAELoss(Module):
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
             loss, count = rse_valid(pred_time, true_time, valid_mask)
-
-            mse_sum += loss.sum()
+            mse_sum += loss
             mse_count += count
 
         if y_pred.num_features is not None:
@@ -153,7 +152,7 @@ class VAELoss(Module):
                 pred_num, true_num[:, :, num_feature_ids], valid_mask
             )
 
-            mse_sum += loss.sum()
+            mse_sum += loss
             mse_count += count
 
         return mse_sum / mse_count
