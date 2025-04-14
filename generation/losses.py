@@ -19,10 +19,10 @@ def rse_valid(pred, true, valid_mask):
     # For inspiration: https://lightning.ai/docs/torchmetrics/stable/regression/r2_score.html
     if true.ndim == 3:
         valid_mask = valid_mask.unsqueeze(-1)
-    res = ((pred - true) ** 2) # L, B, [D]
+    res = (pred - true) ** 2  # L, B, [D]
     userwise_res = torch.where(valid_mask, res, torch.nan).nansum(dim=0)  # B, [D]
     userwise_mean = torch.where(valid_mask, true, torch.nan).nanmean(dim=0)  # B, [D]
-    tot = ((true - userwise_mean) ** 2) # L, B, [D]
+    tot = (true - userwise_mean) ** 2  # L, B, [D]
     userwise_tot = torch.where(valid_mask, tot, torch.nan).nansum(dim=0)  # B, [D]
     rse = userwise_res / userwise_tot
     return rse, rse.numel()
@@ -43,7 +43,7 @@ class BaselineLoss(Module):
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
             loss, count = rse_valid(pred_time[:-1], true_time[1:], valid_mask[1:])
-            mse_sum += loss
+            mse_sum += loss.sum()
             mse_count += count
 
         if y_pred.num_features is not None:
@@ -57,7 +57,7 @@ class BaselineLoss(Module):
                 pred_num[:-1], true_num[1:, :, num_feature_ids], valid_mask[1:]
             )
 
-            mse_sum += loss
+            mse_sum += loss.sum()
             mse_count += count
 
         return mse_sum / mse_count
@@ -134,13 +134,13 @@ class VAELoss(Module):
     ) -> torch.Tensor:
         mse_sum = 0.0
         mse_count = 0
-
         if y_pred.time is not None:
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
-            mse_time = F.mse_loss(pred_time, true_time, reduction="none")[valid_mask]
-            mse_sum += mse_time.sum()
-            mse_count += mse_time.numel()
+            loss, count = rse_valid(pred_time, true_time, valid_mask)
+
+            mse_sum += loss.sum()
+            mse_count += count
 
         if y_pred.num_features is not None:
             num_feature_ids = [
@@ -149,12 +149,12 @@ class VAELoss(Module):
             ]
             pred_num = y_pred.num_features  # [L, B, D]
             true_num = y_true.num_features  # [L, B, totalD]
-            mse_num = F.mse_loss(
-                pred_num, true_num[:, :, num_feature_ids], reduction="none"
-            )[valid_mask.unsqueeze(-1)]
+            loss, count = rse_valid(
+                pred_num, true_num[:, :, num_feature_ids], valid_mask
+            )
 
-            mse_sum += mse_num.sum()
-            mse_count += mse_num.numel()
+            mse_sum += loss.sum()
+            mse_count += count
 
         return mse_sum / mse_count
 
