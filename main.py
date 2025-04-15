@@ -115,8 +115,8 @@ class GenerationRunner(Runner):
         val_metrics = trainer.validate(val_loader, remove=True)
         test_metrics = trainer.validate(test_loader, remove=True)
 
+        val_metrics = {k: v for k, v in val_metrics.items()}
         train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
-        val_metrics = {"val_" + k: v for k, v in val_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
         return dict(**train_metrics, **val_metrics, **test_metrics)
