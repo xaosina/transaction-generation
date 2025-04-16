@@ -39,9 +39,9 @@ sbatch <<EOT
 srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
     cd /home/transaction-generation;
     nvidia-smi;
-    (sleep 0; python main.py --device 'cuda:0' --trainer.verbose False --run_name optuna_gru --run_type.runner optuna) &
-    (sleep 5; python main.py --device 'cuda:1' --trainer.verbose False --run_name optuna_gru --run_type.runner optuna) &
-    (sleep 10; python main.py --device 'cuda:2' --trainer.verbose False --run_name optuna_gru --run_type.runner optuna) &
+    (sleep 0; python main.py --device 'cuda:0' --trainer.verbose False --run_name optuna_gru --runner.run_type optuna) &
+    (sleep 5; python main.py --device 'cuda:1' --trainer.verbose False --run_name optuna_gru --runner.run_type optuna) &
+    (sleep 10; python main.py --device 'cuda:2' --trainer.verbose False --run_name optuna_gru --runner.run_type optuna) &
     wait
 '
 EOT
