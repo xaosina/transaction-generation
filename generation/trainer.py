@@ -29,6 +29,7 @@ class TrainConfig:
     ckpt_track_metric: str = "epoch"
     ckpt_resume: Optional[str] = None
     profiling: bool = False
+    verbose: bool = True
 
 
 class Trainer:

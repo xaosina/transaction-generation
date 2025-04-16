@@ -13,9 +13,11 @@ from generation.data.preprocess.quantile_transformer import (
     QuantileTransformerTorch,
 )
 
+from ..utils import RateLimitFilter
 from .data_types import GenBatch
 
 logger = logging.getLogger(__name__)
+logger.addFilter(RateLimitFilter(60))
 
 MISSING_CAT_VAL = 0
 
@@ -140,7 +142,7 @@ class TimeToFeatures(NewFeatureTransform):
 
     @property
     def num_names(self):
-        return [self.time_name]
+        return [self.time_name] if self.process_type != "none" else []
 
     def __call__(self, batch: GenBatch):
         assert self.process_type in [
