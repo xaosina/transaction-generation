@@ -12,7 +12,7 @@ from generation.data.data_types import DataConfig
 from generation.data.utils import get_dataloaders
 from generation.losses import LossConfig, get_loss
 from generation.metrics.evaluator import EvaluatorConfig, SampleEvaluator
-from generation.models.generator import VAE, Generator, ModelConfig
+from generation.models.generator import VAE, Generator, ModelConfig, BaselineRepeater
 from generation.schedulers import CompositeScheduler
 from generation.trainer import TrainConfig, Trainer
 from generation.utils import (
@@ -111,8 +111,8 @@ class GenerationRunner(Runner):
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
-        train_metrics = trainer.validate(train_loader, remove=True)
         val_metrics = trainer.validate(val_loader, remove=True)
+        train_metrics = trainer.validate(train_loader, remove=True)
         test_metrics = trainer.validate(test_loader, remove=True)
 
         val_metrics = {k: v for k, v in val_metrics.items()}

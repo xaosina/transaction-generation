@@ -56,7 +56,7 @@ class Reconstruction(BaseMetric):
                 (orig[col], gen[col]),
                 keys=["gt", "pred"],
                 axis=1,
-            ).apply(lambda x: x[-self.data_conf.generation_len:])
+            ).map(lambda x: x[-self.data_conf.generation_len:])
         
             results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
 
@@ -413,8 +413,8 @@ class Detection(BaseMetric):
             verbose=self.verbose,
         )
         acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
-        err = (1 - acc)
+        err = (1 - acc) * 2
         return float(err)
 
     def __repr__(self):
-        return f"Detection ({self.condition_len} hist)"
+        return f"Detection score ({self.condition_len} hist)"

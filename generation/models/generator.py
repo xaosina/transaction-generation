@@ -51,7 +51,7 @@ class GroundTruthGenerator(BaseGenerator):
 
 
 class BaselineRepeater(BaseGenerator):
-    def __init__(self, data_conf: DataConfig):
+    def __init__(self, data_conf: DataConfig, *args, **kwargs):
         super().__init__()
         self.data_conf = data_conf
 
