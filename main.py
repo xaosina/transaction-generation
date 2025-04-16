@@ -79,7 +79,7 @@ class GenerationRunner(Runner):
         train_loader, val_loader, test_loader = get_dataloaders(
             cfg.data_conf, cfg.common_seed
         )
-        model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
+        model = VAE(cfg.data_conf, cfg.model).to(cfg.device)
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         loss = get_loss(cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)

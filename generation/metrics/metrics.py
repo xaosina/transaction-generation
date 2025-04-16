@@ -51,12 +51,11 @@ class Reconstruction(BaseMetric):
         num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or [])
 
         for col in cat_columns + num_columns:
-
             df = pd.concat(
                 (orig[col], gen[col]),
                 keys=["gt", "pred"],
                 axis=1,
-            ).apply(lambda x: x[-self.data_conf.generation_len:])
+            ).map(lambda x: x[-self.data_conf.generation_len:])
         
             results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
 

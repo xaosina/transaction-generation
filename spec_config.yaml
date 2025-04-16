@@ -24,7 +24,7 @@ data_conf:
   batch_size: 128
 
   min_history_len: 32
-  generation_len: &generation_len 32
+  generation_len: &generation_len 64
   max_seq_len: 1045
   padding_value: 0
 
@@ -60,13 +60,13 @@ model:
     batch_transforms:
       - TimeToFeatures:
           process_type: "cat"
+  
   encoder:
     name: GRU
     params:
       hidden_size: 256
       num_layers: 1
-      
-    
+
   vae:
     num_layers: 2
     d_token: 6
@@ -81,17 +81,17 @@ optimizer:
     weight_decay: 1.e-4
 
 schedulers:
-  - StepLR:
-      step_size: 30
-  # - BetaScheduler:
-  #     init_beta: 0.01
-  #     factor: 0.7
-  #     patience: 4
-  #     min_beta: 0.00001
-  #     verbose: True
+  # - StepLR:
+  #     step_size: 30
+  - BetaScheduler:
+      init_beta: 0.01
+      factor: 0.7
+      patience: 4
+      min_beta: 0.00001
+      verbose: True
 
 loss:
-  name: baseline
+  name: vae
 
 evaluator:
   devices: ["cuda:1", "cuda:2"]
