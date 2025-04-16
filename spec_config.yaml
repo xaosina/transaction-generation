@@ -58,7 +58,8 @@ model:
     num_emb_dim: 4
     num_norm: True
     batch_transforms:
-      - TimeToFeatures:
+      '0':
+        TimeToFeatures:
           process_type: "cat"
   encoder:
     name: GRU
@@ -167,7 +168,7 @@ common_seed: 0
 
 runner:
   name: GenerationRunner
-  run_type: optuna
+  run_type: simple
   seed_keys:
     - "common_seed"
   params:

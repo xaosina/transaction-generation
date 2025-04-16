@@ -55,7 +55,7 @@ class VAE(nn.Module):
         vae_conf: VaeConfig,
         cat_cardinalities: Mapping[str, int],
         num_names: Sequence[str] | None = None,
-        batch_transforms: list[Mapping[str, Any] | str] | None = None,
+        batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
     ):
         super().__init__()
         self.encoder = Encoder(
@@ -82,7 +82,7 @@ class Encoder(nn.Module):
         vae_conf: VaeConfig,
         cat_cardinalities: Mapping[str, int] | None = None,
         num_names: Sequence[str] | None = None,
-        batch_transforms: list[Mapping[str, Any] | str] | None = None,
+        batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
         bias=True,
     ):
         super(Encoder, self).__init__()
