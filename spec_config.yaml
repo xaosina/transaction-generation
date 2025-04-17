@@ -1,3 +1,4 @@
+# DATA
 data_conf:
   cat_cardinalities:
     src_type32: 87
@@ -5,7 +6,7 @@ data_conf:
     event_subtype: 60
     dst_type11: 55
     event_type: 54
-    currency: 2 # Initially 12
+    currency: 12
     dst_type12: 253
     src_type22: 84
     src_type12: 184
@@ -32,26 +33,36 @@ data_conf:
   val_random_end: time
   
   train_transforms:
-    - RescaleTime:
+    "0":
+      RescaleTime:
         loc: 0.0
         scale: 365.0
-    # - TimeToDiff
-    - QuantileTransform:
+    "1":
+      TimeToDiff:
+        disable: True
+    "2":
+      QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
-    - RescaleTime:
+    "0":
+      RescaleTime:
         loc: 0.0
         scale: 365.0
-    # - TimeToDiff
-    - QuantileTransform:
+    "1":
+      TimeToDiff:
+        disable: True
+    "2":
+      QuantileTransform:
         feature_name: "amount"
         model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
-    - CutTargetSequence:
+    "3":
+      CutTargetSequence:
         target_len: *generation_len
 
+# MODEL
 model:
   preprocessor:
     cat_emb_dim: 4
@@ -102,12 +113,12 @@ evaluator:
     #     target_key: event_type
     # - Accuracy:
     #     target_key: event_type
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: macro
-    # - F1Metric:
-    #     target_key: event_type
-    #     average: micro
+    - F1Metric:
+        target_key: event_type
+        average: macro
+    - F1Metric:
+        target_key: event_type
+        average: micro
 
     # - Gini:
     #     target_key: event_type
@@ -127,11 +138,11 @@ evaluator:
     #     target_key: event_type
     #     overall: True
 
-    # - Density:
-    #     log_cols: ["amount"]
-    #     with_timediff: True
-    #     save_details: True
-    #     verbose: False
+    - Density:
+        log_cols: ["amount"]
+        with_timediff: True
+        save_details: True
+        verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd
@@ -182,20 +193,28 @@ optuna:
     n_trials: 70
     n_startup_trials: 3
     request_list: 
-      - 'optimizer.params.lr': 3.e-4
-        'model.preprocessor.params.num_norm': False
-        'model.encoder.params.num_layers': 1
-        "model.preprocessor.batch_transforms.0.TimeToFeatures.process_type": none
+      - 'optimizer.params.weight_decay': 1.5429769361370426e-13
+        'optimizer.params.lr': 0.00016912601015410544
+        'model.encoder.params.hidden_size': 164
+        'model.encoder.params.num_layers': 3
+        'model.encoder.params.dropout': 0.1831228989111418
+        "model.preprocessor.batch_transforms.'0'.TimeToFeatures.process_type": cat
+        'model.preprocessor.num_norm': false
+        'model.preprocessor.cat_emb_dim': 41
+        'model.preprocessor.num_emb_dim': 60
     target_metric: *main_metric
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
     - ["model.encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
-    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 5, log: False}]]
+    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 7, log: False}]]
     - ["model.encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
 
     - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - 
+      - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
+      - ["suggest_categorical", {choices: [True, False]}]
     - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
     - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
     - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]

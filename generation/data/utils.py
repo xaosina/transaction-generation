@@ -25,7 +25,10 @@ def save_partitioned_parquet(df, save_path, num_shards=20):
 
 
 def get_collator(
-    data_conf: DataConfig, batch_transforms: list[Mapping[str, Any] | str] | None = None
+    data_conf: DataConfig,
+    batch_transforms: (
+        Mapping[str, Mapping[str, Any] | str] | list[Mapping[str, Any] | str] | None
+    ) = None,
 ) -> SequenceCollator:
     tfs = create_instances_from_module(batch_tfs, batch_transforms)
     return SequenceCollator(

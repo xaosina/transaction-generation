@@ -223,6 +223,10 @@ def assign_by_name(config: dict | DictConfig, name: str, value: Any):
 
 
 def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
-    for name, suggestion in suggestions:
-        value = getattr(trial, suggestion[0])(name, **suggestion[1])
-        assign_by_name(config, name, value)
+    for names, suggestion in suggestions:
+        if not isinstance(names, list):
+            names = [names]
+        first_name = names[0]
+        value = getattr(trial, suggestion[0])(first_name, **suggestion[1])
+        for name in names:
+            assign_by_name(config, name, value)

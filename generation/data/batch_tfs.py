@@ -106,13 +106,19 @@ class RescaleTime(BatchTransform):
 class TimeToDiff(BatchTransform):
     """Applies diff transform to time."""
 
+    disable: bool = False
+
     def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
         assert isinstance(batch.time, torch.Tensor)
         _, B = batch.time.shape
         batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
         batch.monotonic_time = False
 
     def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
         if (batch.time < 0).any():
             logger.warning("Incorrect diffed time. Result will be non monotonic.")
         batch.time = batch.time.cumsum(0)

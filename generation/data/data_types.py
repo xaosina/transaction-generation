@@ -32,8 +32,8 @@ class DataConfig:
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
-    train_transforms: Optional[list[Mapping[str, Any] | str]] = None
-    val_transforms: Optional[list[Mapping[str, Any] | str]] = None
+    train_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
+    val_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     padding_value: float = 0
 
     @property
