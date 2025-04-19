@@ -104,6 +104,8 @@ schedulers:
 
 loss:
   name: baseline
+  params:
+    mse_weight: 0.5
 
 evaluator:
   devices: ["cuda:1", "cuda:2"]
@@ -202,6 +204,8 @@ optuna:
         'model.preprocessor.num_norm': false
         'model.preprocessor.cat_emb_dim': 41
         'model.preprocessor.num_emb_dim': 60
+        'loss.params.mse_weight': 0.5
+        'data_conf.train_transforms.1.TimeToDiff.disable': True
     target_metric: *main_metric
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
@@ -218,3 +222,5 @@ optuna:
     - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
     - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
     - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+
+    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

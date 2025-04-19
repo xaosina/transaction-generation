@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import torch
@@ -11,8 +11,7 @@ from generation.data.data_types import Batch, PredBatch
 @dataclass(frozen=True)
 class LossConfig:
     name: Optional[str] = "baseline"
-    c_dim: Optional[int] = None
-    c_number: Optional[int] = None
+    params: dict = field(default_factory=dict)
 
 
 def rse_valid(pred, true, valid_mask):
@@ -29,8 +28,10 @@ def rse_valid(pred, true, valid_mask):
 
 
 class BaselineLoss(Module):
-    def __init__(self, ignore_index: int = -100):
+    def __init__(self, mse_weight: float = 0.5, ignore_index: int = -100):
         super().__init__()
+        assert 0 <= mse_weight <= 1
+        self.mse_weight = mse_weight
         self._ignore_index = ignore_index
 
     def _compute_mse(
@@ -97,13 +98,17 @@ class BaselineLoss(Module):
 
         ce_loss = self._compute_ce(y_true, y_pred, valid_mask)
 
-        return mse_loss + ce_loss
+        return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
 
 
 class VAELoss(Module):
 
-    def __init__(self, init_beta: float = 1.0, ignore_index: int = -100):
+    def __init__(
+        self, mse_weight: float = 0.5, init_beta: float = 1.0, ignore_index: int = -100
+    ):
         super().__init__()
+        assert 0 <= mse_weight <= 1
+        self.mse_weight = mse_weight
         self._ignore_index = ignore_index
         self._beta = init_beta
 
@@ -127,7 +132,10 @@ class VAELoss(Module):
             (1 + std_z - mu_z.pow(2) - std_z.exp()).mean(-1).mean()
         )
 
-        return mse_loss + ce_loss + self._beta * kld_term
+        return (
+            2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
+            + self._beta * kld_term
+        )
 
     def _compute_mse(
         self, y_true: Batch, y_pred: PredBatch, valid_mask: torch.Tensor
@@ -194,8 +202,8 @@ class VAELoss(Module):
 def get_loss(config: LossConfig):
     name = config.name
     if name == "baseline":
-        return BaselineLoss()
+        return BaselineLoss(**config.params)
     elif name == "vae":
-        return VAELoss(init_beta=1.0)
+        return VAELoss(init_beta=1.0, **config.params)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")

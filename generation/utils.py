@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from time import time
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
 import yaml
@@ -224,7 +224,7 @@ def assign_by_name(config: dict | DictConfig, name: str, value: Any):
 
 def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
     for names, suggestion in suggestions:
-        if not isinstance(names, list):
+        if not isinstance(names, Sequence):
             names = [names]
         first_name = names[0]
         value = getattr(trial, suggestion[0])(first_name, **suggestion[1])
