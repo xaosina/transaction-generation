@@ -115,8 +115,8 @@ evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
     - Reconstruction
-    # - Levenshtein:
-    #     target_key: event_type
+    - Levenshtein:
+        target_key: event_type
     # - Accuracy:
     #     target_key: event_type
     - F1Metric:
