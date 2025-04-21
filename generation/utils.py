@@ -10,7 +10,7 @@ from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
 import yaml
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 from optuna import Trial
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
@@ -224,7 +224,7 @@ def assign_by_name(config: dict | DictConfig, name: str, value: Any):
 
 def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
     for names, suggestion in suggestions:
-        if not isinstance(names, Sequence):
+        if not isinstance(names, (list, ListConfig)):
             names = [names]
         first_name = names[0]
         value = getattr(trial, suggestion[0])(first_name, **suggestion[1])
