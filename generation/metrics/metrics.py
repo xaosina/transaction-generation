@@ -46,7 +46,7 @@ class Reconstruction(BaseMetric):
             []
             if not self.data_conf.cat_cardinalities
             else list(self.data_conf.cat_cardinalities)
-        )   
+        )
 
         num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or [])
 
@@ -55,10 +55,12 @@ class Reconstruction(BaseMetric):
                 (orig[col], gen[col]),
                 keys=["gt", "pred"],
                 axis=1,
-            ).map(lambda x: x[-self.data_conf.generation_len:])
-        
-            results[col] = df.apply(self._compute_accuracy if col in cat_columns else self._compute_mse, axis=1).mean()
+            ).map(lambda x: x[-self.data_conf.generation_len :])
 
+            results[col] = df.apply(
+                self._compute_accuracy if col in cat_columns else self._compute_mse,
+                axis=1,
+            ).mean()
         return {
             "overall": np.mean(list(results.values())),
             **results,
@@ -71,7 +73,7 @@ class Reconstruction(BaseMetric):
     def _compute_accuracy(self, row):
         gt, pred = row["gt"], row["pred"]
         return accuracy_score(gt, pred)
-    
+
     def __repr__(self):
         return "Reconstruction"
 
@@ -412,7 +414,7 @@ class Detection(BaseMetric):
             verbose=self.verbose,
         )
         acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
-        err = (1 - acc)
+        err = 1 - acc
         return float(err)
 
     def __repr__(self):

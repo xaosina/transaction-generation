@@ -5,7 +5,7 @@ data_conf:
     event_subtype: 60
     dst_type11: 55
     event_type: 54
-    currency: 2 # Initially 12
+    currency: 12 # Initially 12
     dst_type12: 253
     src_type22: 84
     src_type12: 184
@@ -36,18 +36,30 @@ data_conf:
         loc: 0.0
         scale: 365.0
     # - TimeToDiff
-    - QuantileTransform:
-        feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    - Logarithm:
+        names: ["amount"]
+    # - Rescale:
+    #     name: "amount"
+    #     loc: 0.0
+    #     scale: 1000000.0
+    # - QuantileTransform:
+    #     feature_name: "amount"
+    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
   val_transforms:
     - RescaleTime:
         loc: 0.0
         scale: 365.0
+    - Logarithm:
+        names: ["amount"]
+    # - Rescale:
+    #     name: "amount"
+    #     loc: 0.0
+    #     scale: 1000000.0
     # - TimeToDiff
-    - QuantileTransform:
-        feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    # - QuantileTransform:
+    #     feature_name: "amount"
+    #     model_path: "data/mbd-50k/quantile_transform_amount.pt"
 
     - CutTargetSequence:
         target_len: *generation_len
@@ -167,7 +179,7 @@ common_seed: 0
 
 runner:
   name: GenerationRunner
-  run_type: optuna
+  run_type: simple
   seed_keys:
     - "common_seed"
   params:
