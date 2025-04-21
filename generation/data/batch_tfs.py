@@ -237,6 +237,10 @@ class Logarithm(BatchTransform):
         for name in self.names:
             batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
 
+    def reverse(self, batch: GenBatch):
+        for name in self.names:
+            batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
+
 
 @dataclass
 class Rescale(BatchTransform):
@@ -251,6 +255,9 @@ class Rescale(BatchTransform):
 
     def __call__(self, batch: GenBatch):
         batch[self.name].sub_(self.loc).div_(self.scale)
+
+    def reverse(self, batch: GenBatch):
+        batch[self.name].mul_(self.scale).add_(self.loc)
 
 
 @dataclass

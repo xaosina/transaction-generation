@@ -41,9 +41,12 @@ data_conf:
       TimeToDiff:
         disable: True
     "2":
-      QuantileTransform:
-        feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
+      Logarithm:
+        names: ["amount"]
+      # QuantileTransform:
+      #   feature_name: "amount"
+      #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
+
 
   val_transforms:
     "0":
@@ -54,10 +57,11 @@ data_conf:
       TimeToDiff:
         disable: True
     "2":
-      QuantileTransform:
-        feature_name: "amount"
-        model_path: "data/mbd-50k/quantile_transform_amount.pt"
-
+      Logarithm:
+        names: ["amount"]
+      # QuantileTransform:
+      #   feature_name: "amount"
+      #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
     "3":
       CutTargetSequence:
         target_len: *generation_len
