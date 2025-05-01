@@ -4,7 +4,7 @@
 # dataset=${1:-m}
 # method=$2
 # script_name=$3
-n_gpus= 1
+n_gpus=1
 
 job_name=${1:-optuna_gru}
 n_days=${2:-6}
