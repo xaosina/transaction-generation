@@ -161,7 +161,8 @@ class TimeToFeatures(NewFeatureTransform):
             return
         t = batch.time[..., None].clone()
         if self.process_type == "diff":
-            assert batch.monotonic_time
+            if not batch.monotonic_time:
+                raise ValueError("Cannot apply diff to diffed time")
             t = t.diff(dim=0, prepend=torch.zeros_like(t[[0]]))
 
         if batch.num_features_names is None:

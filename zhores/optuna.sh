@@ -4,13 +4,11 @@
 # dataset=${1:-m}
 # method=$2
 # script_name=$3
-login=${4:-d.osin}
-n_days=${5:-6}
-n_gpus=${6:-3}
+n_gpus= 1
 
-# Job name
-# job_name="${dataset}/${method}/${script_name}"
 job_name=${1:-optuna_gru}
+n_days=${2:-6}
+login=${3:-d.osin}
 
 # Generate the sbatch script dynamically
 sbatch <<EOT
@@ -24,7 +22,7 @@ sbatch <<EOT
 
 #SBATCH --mail-user=${login}@skoltech.ru
 
-#SBATCH --output=outputs/${job_name}.txt
+#SBATCH --output=outputs/${job_name}/%j.txt
 
 #SBATCH --time=${n_days}-00
 
@@ -40,8 +38,6 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     cd /home/transaction-generation;
     nvidia-smi;
     (sleep 0; python main.py --device 'cuda:0' --trainer.verbose False --run_name ${job_name} --runner.run_type optuna) &
-    (sleep 5; python main.py --device 'cuda:1' --trainer.verbose False --run_name ${job_name} --runner.run_type optuna) &
-    (sleep 10; python main.py --device 'cuda:2' --trainer.verbose False --run_name ${job_name} --runner.run_type optuna) &
     wait
 '
 EOT

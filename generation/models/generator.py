@@ -18,6 +18,7 @@ from .reconstructors import ReconstructorBase
 
 @dataclass(frozen=True)
 class ModelConfig:
+    name: str
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     vae: VaeConfig = field(default_factory=VaeConfig)
