@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Module
 
-from generation.data.data_types import Batch, PredBatch
+from generation.data.data_types import Batch, PredBatch, DataConfig
 
 
 @dataclass(frozen=True)
@@ -28,9 +28,15 @@ def rse_valid(pred, true, valid_mask):
 
 
 class BaselineLoss(Module):
-    def __init__(self, mse_weight: float = 0.5, ignore_index: int = -100):
+    def __init__(
+        self,
+        data_conf: DataConfig,
+        mse_weight: float = 0.5,
+        ignore_index: int = -100,
+    ):
         super().__init__()
         assert 0 <= mse_weight <= 1
+        self.data_conf = data_conf
         self.mse_weight = mse_weight
         self._ignore_index = ignore_index
 
@@ -40,22 +46,30 @@ class BaselineLoss(Module):
         mse_sum = 0.0
         mse_count = 0
 
-        if y_pred.time is not None:
+        data_conf = self.data_conf
+        num_names = data_conf.num_names or []
+        num_names = list(set(data_conf.focus_on) & set(num_names))
+
+        if data_conf.time_name in data_conf.focus_on:
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
             loss, count = rse_valid(pred_time[:-1], true_time[1:], valid_mask[1:])
             mse_sum += loss
             mse_count += count
 
-        if y_pred.num_features is not None:
-            num_feature_ids = [
-                y_true.num_features_names.index(name)
-                for name in y_pred.num_features_names
+        if num_names:
+            true_feature_ids = [
+                y_true.num_features_names.index(name) for name in num_names
+            ]
+            pred_feature_ids = [
+                y_pred.num_features_names.index(name) for name in num_names
             ]
             pred_num = y_pred.num_features  # [L, B, D]
             true_num = y_true.num_features  # [L, B, totalD]
             loss, count = rse_valid(
-                pred_num[:-1], true_num[1:, :, num_feature_ids], valid_mask[1:]
+                pred_num[:-1, :, pred_feature_ids],
+                true_num[1:, :, true_feature_ids],
+                valid_mask[1:],
             )
 
             mse_sum += loss
@@ -68,10 +82,13 @@ class BaselineLoss(Module):
     ) -> torch.Tensor:
         if not y_pred.cat_features:
             return torch.tensor(0.0, device=valid_mask.device)
+        data_conf = self.data_conf
+        cat_names = data_conf.cat_cardinalities or {}
+        cat_names = list(set(data_conf.focus_on) & set(cat_names))
 
         total_ce = 0.0
         ce_count = 0
-        for key in y_pred.cat_features:
+        for key in cat_names:
             # [L, B]
             true_cat = y_true[key].clone()
             true_cat[~valid_mask] = self._ignore_index
@@ -104,10 +121,15 @@ class BaselineLoss(Module):
 class VAELoss(Module):
 
     def __init__(
-        self, mse_weight: float = 0.5, init_beta: float = 1.0, ignore_index: int = -100
+        self,
+        data_conf: DataConfig,
+        mse_weight: float = 0.5,
+        init_beta: float = 1.0,
+        ignore_index: int = -100,
     ):
         super().__init__()
         assert 0 <= mse_weight <= 1
+        self.data_conf = data_conf
         self.mse_weight = mse_weight
         self._ignore_index = ignore_index
         self._beta = init_beta
@@ -143,22 +165,30 @@ class VAELoss(Module):
         mse_sum = 0.0
         mse_count = 0
 
-        if y_pred.time is not None:
+        data_conf = self.data_conf
+        num_names = data_conf.num_names or []
+        num_names = list(set(data_conf.focus_on) & set(num_names))
+
+        if data_conf.time_name in data_conf.focus_on:
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.time  # [L, B]
             loss, count = rse_valid(pred_time, true_time, valid_mask)
             mse_sum += loss
             mse_count += count
 
-        if y_pred.num_features is not None:
-            num_feature_ids = [
-                y_true.num_features_names.index(name)
-                for name in y_pred.num_features_names
+        if num_names:
+            true_feature_ids = [
+                y_true.num_features_names.index(name) for name in num_names
+            ]
+            pred_feature_ids = [
+                y_pred.num_features_names.index(name) for name in num_names
             ]
             pred_num = y_pred.num_features  # [L, B, D]
             true_num = y_true.num_features  # [L, B, totalD]
             loss, count = rse_valid(
-                pred_num, true_num[:, :, num_feature_ids], valid_mask
+                pred_num[:, :, pred_feature_ids],
+                true_num[:, :, true_feature_ids],
+                valid_mask,
             )
 
             mse_sum += loss
@@ -171,10 +201,13 @@ class VAELoss(Module):
     ) -> torch.Tensor:
         if not y_pred.cat_features:
             return torch.tensor(0.0, device=valid_mask.device)
+        data_conf = self.data_conf
+        cat_names = data_conf.cat_cardinalities or {}
+        cat_names = list(set(data_conf.focus_on) & set(cat_names))
 
         total_ce = 0.0
         ce_count = 0
-        for key in y_pred.cat_features:
+        for key in cat_names:
             # [L, B]
             true_cat = y_true[key].clone()
             true_cat[~valid_mask] = self._ignore_index
@@ -199,11 +232,11 @@ class VAELoss(Module):
         self._beta = value
 
 
-def get_loss(config: LossConfig):
+def get_loss(data_conf: DataConfig, config: LossConfig):
     name = config.name
     if name == "baseline":
-        return BaselineLoss(**config.params)
+        return BaselineLoss(data_conf, **config.params)
     elif name == "vae":
-        return VAELoss(init_beta=1.0, **config.params)
+        return VAELoss(data_conf, init_beta=1.0, **config.params)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")

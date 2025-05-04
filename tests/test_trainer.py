@@ -30,7 +30,7 @@ def test_generator_train(config: PipelineConfig):
     model = Generator(cfg.data_conf, cfg.model).to(cfg.device)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
     scheduler = CompositeScheduler(optimizer, cfg.schedulers)
-    loss = get_loss(cfg.loss)
+    loss = get_loss(cfg.data_conf, cfg.loss)
     log_dir = Path(cfg.log_dir) / cfg.run_name
     sample_evaluator = SampleEvaluator(
         log_dir / "evaluation", cfg.data_conf, cfg.evaluator, device=cfg.device
@@ -60,7 +60,7 @@ def test_vae_train(config: PipelineConfig):
     )
     model = VAE(cfg.data_conf, cfg.model).to(cfg.device)
     optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-    loss = get_loss(cfg.loss)
+    loss = get_loss(cfg.data_conf, cfg.loss)
     scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
     log_dir = Path(cfg.log_dir) / cfg.run_name
     sample_evaluator = SampleEvaluator(

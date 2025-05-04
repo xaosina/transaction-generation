@@ -49,6 +49,7 @@ class PipelineConfig:
     log_dir: str = "log/generation"
     device: str = "cuda:0"
     common_seed: int = 0
+    # Config from this yaml path will override any field.
     spec_config: str = None
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)

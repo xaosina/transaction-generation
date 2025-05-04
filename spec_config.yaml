@@ -185,7 +185,7 @@ device: "cuda:1"
 common_seed: 0
 
 runner:
-  name: GenerationRunner
+  name: GenerationTrainer
   run_type: simple
   seed_keys:
     - "common_seed"

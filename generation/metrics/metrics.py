@@ -42,15 +42,8 @@ class Reconstruction(BaseMetric):
         assert (orig.columns == gen.columns).all()
         results = {}
 
-        cat_columns = (
-            []
-            if not self.data_conf.cat_cardinalities
-            else list(self.data_conf.cat_cardinalities)
-        )
-
-        num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or [])
-
-        for col in cat_columns + num_columns:
+        cat_cards = (self.data_conf.cat_cardinalities or {})
+        for col in self.data_conf.focus_on:
 
             df = pd.concat(
                 (orig[col], gen[col]),
@@ -59,7 +52,7 @@ class Reconstruction(BaseMetric):
             ).map(lambda x: x[-self.data_conf.generation_len :])
 
             results[col] = df.apply(
-                self._compute_accuracy if col in cat_columns else self._compute_mse,
+                self._compute_accuracy if col in cat_cards else self._compute_mse,
                 axis=1,
             ).mean()
         return {

@@ -31,7 +31,7 @@ class GenerationTrainer(Runner):
             cfg.device
         )
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
-        loss = get_loss(cfg.loss)
+        loss = get_loss(cfg.data_conf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
         log_dir = Path(cfg.log_dir) / cfg.run_name
         sample_evaluator = SampleEvaluator(
