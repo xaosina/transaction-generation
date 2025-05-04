@@ -14,7 +14,7 @@ from ebes.pipeline.base_runner import Runner
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
-DIRPATH = os.path.dirname(__file__) + "/../../../configs/"
+DIRPATH = os.path.dirname(__file__) + "/configs/"
 
 
 def start_debugging(_, frame):
