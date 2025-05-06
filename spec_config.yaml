@@ -16,6 +16,7 @@ data_conf:
     - amount
   index_name: client_id
   time_name: days_since_first_tx
+  focus_on:
 
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
@@ -39,7 +40,7 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: True
+        disable: false
     "2":
       Logarithm:
         names: ["amount"]
@@ -55,7 +56,7 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: True
+        disable: False
     "2":
       Logarithm:
         names: ["amount"]
@@ -70,8 +71,8 @@ data_conf:
 model:
   name: Generator
   preprocessor:
-    cat_emb_dim: 4
-    num_emb_dim: 4
+    cat_emb_dim: 16
+    num_emb_dim: 16
     num_norm: True
     batch_transforms:
       '0':
@@ -81,9 +82,8 @@ model:
     name: GRU
     params:
       hidden_size: 256
-      num_layers: 1
+      num_layers: 4
       
-    
   vae:
     num_layers: 2
     d_token: 6
@@ -95,12 +95,14 @@ optimizer:
   name: Adam
   params:
     lr: 3.e-4
-    weight_decay: 1.e-4
+    weight_decay: 1.e-9
 
 schedulers:
-  - StepLR:
+  "step":
+    StepLR:
       step_size: 30
-  # - BetaScheduler:
+  # "beta":
+  #   BetaScheduler:
   #     init_beta: 0.01
   #     factor: 0.7
   #     patience: 4

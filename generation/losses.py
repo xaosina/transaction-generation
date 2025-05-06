@@ -75,6 +75,8 @@ class BaselineLoss(Module):
             mse_sum += loss
             mse_count += count
 
+        if mse_sum == 0:
+            return mse_sum
         return mse_sum / mse_count
 
     def _compute_ce(

@@ -1,0 +1,53 @@
+model:
+  name: VAE
+  preprocessor:
+    batch_transforms:
+      '0':
+        TimeToFeatures:
+          process_type: "cat"
+  vae:
+    num_layers: 2
+    d_token: 6
+    n_head: 2
+    factor: 64
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 30
+  "beta":
+    BetaScheduler:
+      init_beta: 0.01
+      factor: 0.7
+      patience: 4
+      min_beta: 0.00001
+      verbose: True
+
+loss:
+  name: vae
+  params:
+    mse_weight: 0.5
+
+optuna:
+  params:
+    request_list: []
+  suggestions:
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
+
+    - ["model.vae.d_token", ["suggest_int", {low: 8, high: 128, step: 8}]]
+    - ["model.vae.num_layers", ["suggest_int", {low: 1, high: 10, log: False}]]
+    - ["model.vae.n_head", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
+    - ["model.vae.factor", [suggest_int, {low: 1, high: 512, log: True}]]
+
+    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - 
+      - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
+      - ["suggest_categorical", {choices: [True, False]}]
+
+    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
+
+    - ["schedulers.step.StepLR.step_size", ["suggest_int", {low: 10, high: 50, step: 10, log: False}]]
+    - ["schedulers.beta.BetaScheduler.init_beta", ["suggest_float", {low: 0.001, high: 1, log: True}]]
+    - ["schedulers.beta.BetaScheduler.factor", ["suggest_float", {low: 0.1, high: 0.9, step: 0.1}]] 
+    - ["schedulers.beta.BetaScheduler.patience", ["suggest_int", {low: 2, high: 10}]] 

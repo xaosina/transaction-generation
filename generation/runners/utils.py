@@ -50,13 +50,13 @@ class PipelineConfig:
     device: str = "cuda:0"
     common_seed: int = 0
     # Config from this yaml path will override any field.
-    spec_config: str = None
+    spec_config: Optional[str] = None
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     trainer: TrainConfig = field(default_factory=TrainConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
-    schedulers: Optional[list[Mapping[str, Any] | str]] = None
+    schedulers: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)

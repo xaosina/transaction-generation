@@ -25,6 +25,9 @@ class ModelConfig:
 
 
 class BaseGenerator(BaseModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
     def forward(self, x: GenBatch) -> PredBatch: ...
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
@@ -77,7 +80,7 @@ class BaselineRepeater(BaseGenerator):
 
 
 class BaselineHistSampler(BaseGenerator):
-    def __init__(self, data_conf: DataConfig):
+    def __init__(self, data_conf: DataConfig, *args, **kwargs):
         super().__init__()
         self.data_conf = data_conf
 

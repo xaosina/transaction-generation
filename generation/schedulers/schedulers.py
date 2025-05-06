@@ -25,8 +25,9 @@ class BaseScheduler(ABC):
 
 
 class CompositeScheduler(BaseScheduler):
-    def __init__(self, optimizer, loss, configs: list[Mapping[str, Any] | str]):
+    def __init__(self, optimizer, loss, configs: Mapping[str, Mapping[str, Any] | str]):
         self.schedulers = []
+        configs = configs.values()
         for config in configs:
             kwargs = {}
             if isinstance(config, str):

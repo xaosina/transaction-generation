@@ -57,7 +57,7 @@ class DataConfig:
 
         if self.focus_on and not set(self.focus_on).issubset(self.seq_cols):
             raise ValueError("focus_on must be a subset of seq_cols")
-        else:
+        elif self.focus_on is None:
             object.__setattr__(self, "focus_on", self.seq_cols)
 
 
