@@ -40,7 +40,7 @@ optuna:
     - ["model.vae.n_head", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
     - ["model.vae.factor", [suggest_int, {low: 1, high: 512, log: True}]]
 
-    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat"]}]]
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
