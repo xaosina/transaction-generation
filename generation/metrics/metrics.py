@@ -42,15 +42,9 @@ class Reconstruction(BaseMetric):
         assert (orig.columns == gen.columns).all()
         results = {}
 
-        cat_columns = (
-            []
-            if not self.data_conf.cat_cardinalities
-            else list(self.data_conf.cat_cardinalities)
-        )
+        cat_cards = (self.data_conf.cat_cardinalities or {})
+        for col in self.data_conf.focus_on:
 
-        num_columns = [self.data_conf.time_name] + (self.data_conf.num_names or [])
-
-        for col in cat_columns + num_columns:
             df = pd.concat(
                 (orig[col], gen[col]),
                 keys=["gt", "pred"],
@@ -58,7 +52,7 @@ class Reconstruction(BaseMetric):
             ).map(lambda x: x[-self.data_conf.generation_len :])
 
             results[col] = df.apply(
-                self._compute_accuracy if col in cat_columns else self._compute_mse,
+                self._compute_accuracy if col in cat_cards else self._compute_mse,
                 axis=1,
             ).mean()
         return {
@@ -292,9 +286,8 @@ class GenVsHistoryMetric(BaseMetric):
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
-        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
         score = 1 - (1 + abs(gen_score - orig_score))
-        return {"score": score, "relative": relative, "orig": orig_score}
+        return {"score": score, "gen": gen_score, "orig": orig_score}
 
 
 @dataclass
@@ -414,8 +407,8 @@ class Detection(BaseMetric):
             verbose=self.verbose,
         )
         acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
-        err = 1 - acc
+        err = (1 - acc) * 2
         return float(err)
 
     def __repr__(self):
-        return f"Detection ({self.condition_len} hist)"
+        return f"Detection score ({self.condition_len} hist)"

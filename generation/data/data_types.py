@@ -32,9 +32,11 @@ class DataConfig:
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
-    train_transforms: Optional[list[Mapping[str, Any] | str]] = None
-    val_transforms: Optional[list[Mapping[str, Any] | str]] = None
+    train_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
+    val_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     padding_value: float = 0
+    # List of features to focus on in loss and metrics. If None->focus on all
+    focus_on: Optional[list[str]] = None
 
     @property
     def seq_cols(self):
@@ -44,6 +46,19 @@ class DataConfig:
         if self.num_names is not None:
             seq_cols += self.num_names
         return seq_cols
+
+    def __post_init__(self):
+        time_name = self.time_name
+        num_names = set(self.num_names or [])
+        cat_names = set(self.cat_cardinalities or {})
+
+        if (time_name in cat_names | num_names) or (cat_names & num_names):
+            raise ValueError("Conflict. time_name, num_names and cat_names intersect.")
+
+        if self.focus_on and not set(self.focus_on).issubset(self.seq_cols):
+            raise ValueError("focus_on must be a subset of seq_cols")
+        elif self.focus_on is None:
+            object.__setattr__(self, "focus_on", self.seq_cols)
 
 
 @dataclass(kw_only=True)

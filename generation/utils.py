@@ -6,11 +6,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from time import time
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
 import yaml
-from omegaconf import DictConfig
+from omegaconf import DictConfig, ListConfig
 from optuna import Trial
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
 
@@ -186,12 +186,16 @@ def get_unique_folder_suffix(folder_path):
 
 def create_instances_from_module(
     module,
-    configs: list[Mapping[str, Any] | str] | None = None,
+    configs: (
+        list[Mapping[str, Any] | str] | Mapping[str, Mapping[str, Any] | str] | None
+    ) = None,
     common_kwargs: dict = None,
 ) -> list[Any] | None:
     common_kwargs = common_kwargs or dict()
     instances = None
     if configs is not None:
+        if isinstance(configs, Mapping):
+            configs = configs.values()
         instances = []
         for config in configs:
             if isinstance(config, str):
@@ -219,6 +223,10 @@ def assign_by_name(config: dict | DictConfig, name: str, value: Any):
 
 
 def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
-    for name, suggestion in suggestions:
-        value = getattr(trial, suggestion[0])(name, **suggestion[1])
-        assign_by_name(config, name, value)
+    for names, suggestion in suggestions:
+        if not isinstance(names, (list, ListConfig)):
+            names = [names]
+        first_name = names[0]
+        value = getattr(trial, suggestion[0])(first_name, **suggestion[1])
+        for name in names:
+            assign_by_name(config, name, value)

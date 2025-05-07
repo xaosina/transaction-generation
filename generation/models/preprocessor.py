@@ -19,7 +19,7 @@ class Batch2TransformedSeq(Batch2Seq):
         cat_emb_dim: int | None = None,
         num_emb_dim: int | None = None,
         num_norm: bool = False,
-        batch_transforms: list[Mapping[str, Any] | str] | None = None,
+        batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
     ):
         super(Batch2Seq, self).__init__()
         # Establish initial features
@@ -88,7 +88,7 @@ class PreprocessorConfig:
     cat_emb_dim: Optional[int] = None
     num_emb_dim: Optional[int] = None
     num_norm: bool = (True,)
-    batch_transforms: Optional[list[Mapping[str, Any] | str]] = None
+    batch_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
 
 
 def create_preprocessor(data_conf: DataConfig, pre_conf: PreprocessorConfig):

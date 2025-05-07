@@ -27,6 +27,7 @@ class TPPConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
+    name: str
     preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     vae: VaeConfig = field(default_factory=VaeConfig)
@@ -34,6 +35,9 @@ class ModelConfig:
 
 
 class BaseGenerator(BaseModel):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
     def forward(self, x: GenBatch) -> PredBatch: ...
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
@@ -276,7 +280,7 @@ class BaselineHMM(BaseGenerator):
 
 
 class BaselineRepeater(BaseGenerator):
-    def __init__(self, data_conf: DataConfig):
+    def __init__(self, data_conf: DataConfig, *args, **kwargs):
         super().__init__()
         self.data_conf = data_conf
 
@@ -301,7 +305,7 @@ class BaselineRepeater(BaseGenerator):
 
 
 class BaselineHistSampler(BaseGenerator):
-    def __init__(self, data_conf: DataConfig):
+    def __init__(self, data_conf: DataConfig, *args, **kwargs):
         super().__init__()
         self.data_conf = data_conf
 
