@@ -85,6 +85,9 @@ model:
     n_head: 2
     factor: 64
 
+  tpp:
+    feature_name: "event_type"
+
 
 optimizer:
   name: Adam
