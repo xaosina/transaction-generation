@@ -316,7 +316,7 @@ class Reconstructor(nn.Module):
         h_cat = h[:, self.d_numerical :]
         assert (h_num.shape[-2] + h_cat.shape[-2]) == (
             self.d_numerical + len(self.cat_cardinalities.values())
-        )
+        ), f"{h_num.shape[-2], h_cat.shape[-2], self.d_numerical, self.cat_cardinalities.values()}"
 
         recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
         recon_x_cat = {}
