@@ -30,7 +30,20 @@ loss:
 
 optuna:
   params:
-    request_list: []
+    request_list:
+      - 'optimizer.params.weight_decay': 3.3877620537887494e-05
+        'optimizer.params.lr': 0.00039567329703204835
+        'model.vae.d_token': 56
+        'model.vae.num_layers': 9
+        'model.vae.n_head': 1
+        'model.vae.factor': 2
+        "model.preprocessor.batch_transforms.'0'.TimeToFeatures.process_type": cat
+        "data_conf.train_transforms.'1'.TimeToDiff.disable": true
+        'loss.params.mse_weight': 0.7697298065363241
+        'schedulers.step.StepLR.step_size': 40
+        'schedulers.beta.BetaScheduler.init_beta': 0.012598672589584338
+        'schedulers.beta.BetaScheduler.factor': 0.4
+        'schedulers.beta.BetaScheduler.patience': 2
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
