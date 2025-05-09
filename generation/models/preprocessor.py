@@ -6,7 +6,7 @@ import torch.nn as nn
 from ebes.model.preprocess import Batch2Seq, SeqBatchNorm
 from ebes.types import Seq
 
-from ..data.data_types import DataConfig, GenBatch
+from ..data.data_types import LatentDataConfig, GenBatch
 from ..data.batch_tfs import NewFeatureTransform
 from ..utils import create_instances_from_module
 from ..data import batch_tfs
@@ -91,7 +91,7 @@ class PreprocessorConfig:
     batch_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
 
 
-def create_preprocessor(data_conf: DataConfig, pre_conf: PreprocessorConfig):
+def create_preprocessor(data_conf: LatentDataConfig, pre_conf: PreprocessorConfig):
     return Batch2TransformedSeq(
         cat_cardinalities=data_conf.cat_cardinalities,
         num_features=data_conf.num_names,

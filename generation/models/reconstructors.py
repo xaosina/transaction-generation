@@ -2,7 +2,7 @@ from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
 from ebes.types import Seq
 
-from ..data.data_types import GenBatch, DataConfig, PredBatch
+from ..data.data_types import GenBatch, LatentDataConfig, PredBatch
 
 # from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
 
@@ -23,7 +23,7 @@ class ReconstructorMSE:
 
 
 class ReconstructorBase(BaseModel):
-    def __init__(self, data_conf: DataConfig, in_features):
+    def __init__(self, data_conf: LatentDataConfig, in_features):
         super().__init__()
         self.num_names = data_conf.num_names
         self.cat_cardinalities = data_conf.cat_cardinalities

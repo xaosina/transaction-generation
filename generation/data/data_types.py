@@ -61,6 +61,12 @@ class DataConfig:
             object.__setattr__(self, "focus_on", self.seq_cols)
 
 
+@dataclass(frozen=True)
+class LatentDataConfig:
+    cat_cardinalities: Mapping[str, int] | None = None
+    num_names: Optional[list[str]] = None
+
+
 @dataclass(kw_only=True)
 class GenBatch(Batch):
     target_cat_features: torch.Tensor | None = None  # (target_len, batch, features)

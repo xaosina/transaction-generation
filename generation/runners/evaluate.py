@@ -23,10 +23,10 @@ class GenerationEvaluator(Runner):
         cfg = from_dict(PipelineConfig, cfg)
         assert isinstance(cfg, PipelineConfig)
 
-        train_loader, val_loader, test_loader = get_dataloaders(
+        (train_loader, val_loader, test_loader), internal_dataconf = get_dataloaders(
             cfg.data_conf, cfg.common_seed
         )
-        model = getattr(gen_models, cfg.model.name)(cfg.data_conf, cfg.model).to(
+        model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
         log_dir = Path(cfg.log_dir) / cfg.run_name

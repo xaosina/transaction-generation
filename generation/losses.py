@@ -47,7 +47,7 @@ class BaselineLoss(Module):
         mse_count = 0
 
         data_conf = self.data_conf
-        num_names = data_conf.num_names or []
+        num_names = y_pred.num_features_names or []
         num_names = list(set(data_conf.focus_on) & set(num_names))
 
         if data_conf.time_name in data_conf.focus_on:
@@ -85,7 +85,7 @@ class BaselineLoss(Module):
         if not y_pred.cat_features:
             return torch.tensor(0.0, device=valid_mask.device)
         data_conf = self.data_conf
-        cat_names = data_conf.cat_cardinalities or {}
+        cat_names = y_pred.cat_features or {}
         cat_names = list(set(data_conf.focus_on) & set(cat_names))
 
         total_ce = 0.0
@@ -168,7 +168,7 @@ class VAELoss(Module):
         mse_count = 0
 
         data_conf = self.data_conf
-        num_names = data_conf.num_names or []
+        num_names = y_pred.num_features_names or []
         num_names = list(set(data_conf.focus_on) & set(num_names))
 
         if data_conf.time_name in data_conf.focus_on:
@@ -204,7 +204,7 @@ class VAELoss(Module):
         if not y_pred.cat_features:
             return torch.tensor(0.0, device=valid_mask.device)
         data_conf = self.data_conf
-        cat_names = data_conf.cat_cardinalities or {}
+        cat_names = y_pred.cat_features or {}
         cat_names = list(set(data_conf.focus_on) & set(cat_names))
 
         total_ce = 0.0

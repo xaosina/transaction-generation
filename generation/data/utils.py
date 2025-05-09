@@ -1,3 +1,4 @@
+from copy import copy
 import logging
 from typing import Any, Mapping
 
@@ -7,8 +8,9 @@ from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
 from . import batch_tfs
+from .batch_tfs import NewFeatureTransform
 from .collator import SequenceCollator
-from .data_types import DataConfig
+from .data_types import DataConfig, LatentDataConfig
 from .dataset import ShardDataset
 
 logger = logging.getLogger()
@@ -42,6 +44,23 @@ def get_collator(
     )
 
 
+def get_latent_dataconf(collator: SequenceCollator) -> LatentDataConfig:
+    cat_cardinalities = copy(collator.cat_cardinalities)
+    num_names = copy(collator.num_names)
+
+    if collator.batch_transforms:
+        for tfs in collator.batch_transforms:
+            if isinstance(tfs, NewFeatureTransform):
+                for num_name in tfs.num_names:
+                    num_names += [num_name]
+                for cat_name, card in tfs.cat_cardinalities.items():
+                    cat_cardinalities[cat_name] = card
+    return LatentDataConfig(
+        cat_cardinalities=cat_cardinalities,
+        num_names=num_names,
+    )
+
+
 def get_dataloaders(data_conf: DataConfig, seed: int):
     # Create datasets
     train_dataset, val_dataset = ShardDataset.train_val_split(
@@ -57,6 +76,7 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
     # Create collators (val and test has same collators)
     train_collator = get_collator(data_conf, data_conf.train_transforms)
     val_collator = get_collator(data_conf, data_conf.val_transforms)
+    internal_dataconf = get_latent_dataconf(train_collator)
     # Create loaders
     gen = torch.Generator().manual_seed(seed)  # for shard splits between workers
     train_loader = DataLoader(
@@ -78,4 +98,4 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
         collate_fn=val_collator,
         num_workers=data_conf.num_workers,
     )
-    return train_loader, val_loader, test_loader
+    return (train_loader, val_loader, test_loader), internal_dataconf
