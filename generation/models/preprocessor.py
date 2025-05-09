@@ -33,10 +33,17 @@ class Batch2TransformedSeq(Batch2Seq):
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
-                for num_name in tfs.num_names:
+                for _ in tfs.num_names:
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
+                for _ in tfs.num_names_removed:
+                    num_count -= 1
+                cat_cardinalities = {
+                    k: v
+                    for k, v in cat_cardinalities.items()
+                    if k not in tfs.cat_names_removed
+                }
 
         self._out_dim = 0
         self._cat_embs = nn.ModuleDict()

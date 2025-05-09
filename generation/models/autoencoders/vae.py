@@ -103,6 +103,13 @@ class Encoder(nn.Module):
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
+                for _ in tfs.num_names_removed:
+                    num_count -= 1
+                cat_cardinalities = {
+                    k: v
+                    for k, v in cat_cardinalities.items()
+                    if k not in tfs.cat_names_removed
+                }
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
             categories=list(cat_cardinalities.values()) if cat_cardinalities else None,
