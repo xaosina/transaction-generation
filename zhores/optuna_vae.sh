@@ -8,12 +8,7 @@ n_gpus=1
 
 job_name=${1:-optuna_vae}
 
-n_jobs=${2:-1}
-if [ "$n_jobs" -eq 1 ]; then
-    array_range="0-0"  # Single task
-else
-    array_range="0-$((n_jobs - 1))"  # Range from 0 to n_jobs-1
-fi
+array_range=${2:-1}
 
 n_days=${3:-6}
 login=${4:-d.osin}
