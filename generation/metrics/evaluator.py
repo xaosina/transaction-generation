@@ -54,6 +54,7 @@ class SampleEvaluator:
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
         for metric in self.metrics:
             metric.log_dir = log_dir
+        assert loader.collate_fn.return_orig, "collator have to return orig seqs!"
         gt_dir, gen_dir = self.generate_samples(
             model, loader, log_dir, blim, buffer_size
         )
@@ -77,7 +78,7 @@ class SampleEvaluator:
         buffer_gt, buffer_gen = [], []
         part_counter = 0
 
-        for batch_idx, batch_input in enumerate(
+        for batch_idx, (batch_input, orig_seqs) in enumerate(
             tqdm(data_loader, disable=not self.verbose)
         ):
             if blim and batch_idx >= blim:
@@ -88,11 +89,10 @@ class SampleEvaluator:
                 batch_pred = model.generate(
                     deepcopy(batch_input), self.data_config.generation_len
                 )
-            gt, gen = _concat_samples(batch_input, batch_pred)
-            gt = data_loader.collate_fn.reverse(gt.to("cpu"))
+            gen = _concat_samples(batch_input, batch_pred)
             gen = data_loader.collate_fn.reverse(gen.to("cpu"))
 
-            buffer_gt.append(gt)
+            buffer_gt.append(orig_seqs)
             buffer_gen.append(gen)
 
             if buffer_size and len(buffer_gt) >= buffer_size:
@@ -141,4 +141,4 @@ def _concat_samples(gt: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
     gen.target_time = pred.time
     gen.target_num_features = pred.num_features
     gen.target_cat_features = pred.cat_features
-    return gt, gen
+    return gen

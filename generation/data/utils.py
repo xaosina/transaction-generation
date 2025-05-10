@@ -31,6 +31,7 @@ def get_collator(
     batch_transforms: (
         Mapping[str, Mapping[str, Any] | str] | list[Mapping[str, Any] | str] | None
     ) = None,
+    return_orig: bool = False,
 ) -> SequenceCollator:
     tfs = create_instances_from_module(batch_tfs, batch_transforms)
     return SequenceCollator(
@@ -41,6 +42,7 @@ def get_collator(
         max_seq_len=data_conf.max_seq_len,
         batch_transforms=tfs,
         padding_value=data_conf.padding_value,
+        return_orig=return_orig,
     )
 
 
@@ -81,7 +83,7 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
     )
     # Create collators (val and test has same collators)
     train_collator = get_collator(data_conf, data_conf.train_transforms)
-    val_collator = get_collator(data_conf, data_conf.val_transforms)
+    val_collator = get_collator(data_conf, data_conf.val_transforms, return_orig=True)
     internal_dataconf = get_latent_dataconf(train_collator)
     # Create loaders
     gen = torch.Generator().manual_seed(seed)  # for shard splits between workers

@@ -17,6 +17,7 @@ class SequenceCollator:
     index_name: str | None = None
     max_seq_len: int = 0
     batch_transforms: list[Callable[[GenBatch], None]] | None = None
+    return_orig: bool = False
     padding_side: str = "end"
     padding_value: float = 0
 
@@ -24,6 +25,10 @@ class SequenceCollator:
         assert (
             self.padding_side == "end" and self.padding_value == 0
         ), "CutTargetSequence and some masking will fail"
+
+        if self.return_orig:
+            orig_seqs = deepcopy(seqs)
+
         ml = min(seqs["_seq_len"].max(), self.max_seq_len)  # type: ignore
         bs = len(seqs)
 
@@ -101,7 +106,7 @@ class SequenceCollator:
             for tf in self.batch_transforms:
                 tf(batch)
 
-        return batch
+        return batch, orig_seqs if self.return_orig else batch
 
     def reverse(self, batch: GenBatch) -> pd.DataFrame:
         def to_numpy(x):

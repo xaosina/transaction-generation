@@ -35,11 +35,11 @@ evaluator:
       save_details: True
       verbose: True
 
-  - Detection:
-      dataset_config: detection/mbd
-      method_config: gru
-      condition_len: 32
-      verbose: True
+#   - Detection:
+#       dataset_config: detection/mbd
+#       method_config: gru
+#       condition_len: 32
+#       verbose: True
 
 runner:
   name: GenerationEvaluator
