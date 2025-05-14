@@ -106,7 +106,7 @@ class SequenceCollator:
             for tf in self.batch_transforms:
                 tf(batch)
 
-        return batch, orig_seqs if self.return_orig else batch
+        return (batch, orig_seqs) if self.return_orig else batch
 
     def reverse(self, batch: GenBatch) -> pd.DataFrame:
         def to_numpy(x):

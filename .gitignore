@@ -8,6 +8,7 @@ dev/**
 ebes/*
 tests/log**
 scripts/sync.sh
+zhores/configs/
 **.parquet
 
 # Byte-compiled / optimized / DLL files
