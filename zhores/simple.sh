@@ -42,8 +42,8 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \
-        --config_path zhores/configs/${job_name}.yaml
-        --run_name ${job_name}
+        --config_path zhores/configs/${job_name}.yaml \
+        --run_name ${job_name} \
         --device 'cuda:0' \
         --trainer.verbose False \
 '
