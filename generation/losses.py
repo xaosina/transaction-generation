@@ -140,6 +140,16 @@ class BaselineLoss(BaseLoss):
         return slice(1, None)  # Targets use all except first time step
 
 
+class TailLoss(BaseLoss):
+    @property
+    def pred_slice(self):
+        return slice(-1 - self.data_conf.generation_len, -1)  # Take shifted last
+
+    @property
+    def true_slice(self):
+        return slice(-self.data_conf.generation_len, None)  # Predict only generated_len
+
+
 class VAELoss(BaseLoss):
     def __init__(
         self,
@@ -171,6 +181,8 @@ def get_loss(data_conf: DataConfig, config: LossConfig):
     name = config.name
     if name == "baseline":
         return BaselineLoss(data_conf, **config.params)
+    elif name == "tail":
+        return TailLoss(data_conf, **config.params)
     elif name == "vae":
         return VAELoss(data_conf, init_beta=1.0, **config.params)
     else:

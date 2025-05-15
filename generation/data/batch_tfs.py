@@ -59,6 +59,49 @@ class NewFeatureTransform(BatchTransform):
 
 
 @dataclass
+class ShuffleBatch(BatchTransform):
+    """Randomly permutes events in a sequence batch, optionally preserving the last `keep_last_n` events.
+    Attributes:
+        keep_last_n (int): Number of events at the end of each sequence to preserve in place.
+        -1 means no shuffle
+    """
+
+    keep_last_n: int = -1
+
+    def __call__(self, batch: GenBatch):
+        if self.keep_last_n == -1:
+            pass
+        max_len = batch.time.shape[0]
+        bs = len(batch)
+        i_len = torch.arange(max_len)[:, None]  # [L, 1]
+        i_batch = torch.arange(bs)  # [B]
+
+        perm_len = batch.lengths - self.keep_last_n
+        assert (batch.lengths > self.keep_last_n).all()
+        valid = (i_len < perm_len).float()  # [L, B]
+        permutation_within_len = torch.multinomial(valid.T, max_len).T  # [L, B]
+        # Set the last `keep_last_n` indices to their original positions
+        mask = (i_len >= perm_len).expand(-1, bs)  # [L, B]
+        t_values = i_len.expand(-1, bs)
+        permutation_within_len = torch.where(mask, t_values, permutation_within_len)
+
+        if batch.cat_features is not None:
+            batch.cat_features = batch.cat_features[permutation_within_len, i_batch]
+
+        if batch.num_features is not None:
+            batch.num_features = batch.num_features[permutation_within_len, i_batch]
+
+        if batch.cat_mask is not None:
+            batch.cat_mask = batch.cat_mask[permutation_within_len, i_batch]
+
+        if batch.num_mask is not None:
+            batch.num_mask = batch.num_mask[permutation_within_len, i_batch]
+
+    def reverse(self, batch: GenBatch):
+        pass
+
+
+@dataclass
 class CutTargetSequence(BatchTransform):
     """Creates generation targets for each batch."""
 
