@@ -1,8 +1,19 @@
 # DATA
 data_conf:
   cat_cardinalities:
-    event_type: 54
-
+    src_type32: 88
+    src_type11: 47
+    event_subtype: 60
+    dst_type11: 58
+    event_type: 55
+    currency: 13
+    dst_type12: 253
+    src_type22: 84
+    src_type12: 188
+    # src_type31: 1455
+    # src_type21: 8000
+  num_names:
+    - amount
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
@@ -65,7 +76,7 @@ model:
   name: Generator
   preprocessor:
     cat_emb_dim: 16
-    num_emb_dim: 16
+    num_emb_dim: 64
     num_norm: True
     batch_transforms:
       '0':
@@ -90,7 +101,7 @@ model:
 optimizer:
   name: Adam
   params:
-    lr: 3.e-4
+    lr: 1.5e-3
     weight_decay: 1.e-9
 
 schedulers:
@@ -108,7 +119,7 @@ schedulers:
 loss:
   name: baseline
   params:
-    mse_weight: 0.5
+    mse_weight: 0.07
 
 evaluator:
   devices: ["cuda:1", "cuda:2"]

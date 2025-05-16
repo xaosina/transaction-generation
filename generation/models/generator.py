@@ -11,7 +11,7 @@ from generation.models.autoencoders.vae import Decoder as VAE_Decoder
 from generation.models.autoencoders.vae import Encoder as VAE_Encoder
 from generation.models.autoencoders.vae import VaeConfig
 
-from ..data.data_types import DataConfig, GenBatch, PredBatch, gather
+from ..data.data_types import LatentDataConfig, GenBatch, PredBatch, gather
 from .encoders import AutoregressiveEncoder, EncoderConfig
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
@@ -409,9 +409,8 @@ class BaselineHMM(BaseGenerator):
 
 
 class BaselineRepeater(BaseGenerator):
-    def __init__(self, data_conf: DataConfig, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__()
-        self.data_conf = data_conf
 
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
@@ -434,9 +433,8 @@ class BaselineRepeater(BaseGenerator):
 
 
 class BaselineHistSampler(BaseGenerator):
-    def __init__(self, data_conf: DataConfig, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__()
-        self.data_conf = data_conf
 
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
@@ -478,7 +476,7 @@ class BaselineHistSampler(BaseGenerator):
 
 
 class Generator(BaseGenerator):
-    def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
 
         self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
@@ -532,7 +530,7 @@ class Generator(BaseGenerator):
 
 
 class VAE(BaseGenerator):
-    def __init__(self, data_conf: DataConfig, model_config: ModelConfig):
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
         self.encoder = VAE_Encoder(
             model_config.vae,

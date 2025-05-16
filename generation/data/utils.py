@@ -1,3 +1,4 @@
+from copy import copy
 import logging
 from typing import Any, Mapping
 
@@ -7,8 +8,9 @@ from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
 from . import batch_tfs
+from .batch_tfs import NewFeatureTransform
 from .collator import SequenceCollator
-from .data_types import DataConfig
+from .data_types import DataConfig, LatentDataConfig
 from .dataset import ShardDataset
 
 logger = logging.getLogger()
@@ -29,6 +31,7 @@ def get_collator(
     batch_transforms: (
         Mapping[str, Mapping[str, Any] | str] | list[Mapping[str, Any] | str] | None
     ) = None,
+    return_orig: bool = False,
 ) -> SequenceCollator:
     tfs = create_instances_from_module(batch_tfs, batch_transforms)
     return SequenceCollator(
@@ -39,6 +42,30 @@ def get_collator(
         max_seq_len=data_conf.max_seq_len,
         batch_transforms=tfs,
         padding_value=data_conf.padding_value,
+        return_orig=return_orig,
+    )
+
+
+def get_latent_dataconf(collator: SequenceCollator) -> LatentDataConfig:
+    cat_cardinalities = copy(collator.cat_cardinalities)
+    num_names = copy(collator.num_names)
+
+    if collator.batch_transforms:
+        for tfs in collator.batch_transforms:
+            if isinstance(tfs, NewFeatureTransform):
+                for num_name in tfs.num_names:
+                    num_names += [num_name]
+                for cat_name, card in tfs.cat_cardinalities.items():
+                    cat_cardinalities[cat_name] = card
+                num_names = [n for n in num_names if n not in tfs.num_names_removed]
+                cat_cardinalities = {
+                    k: v
+                    for k, v in cat_cardinalities.items()
+                    if k not in tfs.cat_names_removed
+                }
+    return LatentDataConfig(
+        cat_cardinalities=cat_cardinalities,
+        num_names=num_names,
     )
 
 
@@ -56,7 +83,8 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
     )
     # Create collators (val and test has same collators)
     train_collator = get_collator(data_conf, data_conf.train_transforms)
-    val_collator = get_collator(data_conf, data_conf.val_transforms)
+    val_collator = get_collator(data_conf, data_conf.val_transforms, return_orig=True)
+    internal_dataconf = get_latent_dataconf(train_collator)
     # Create loaders
     gen = torch.Generator().manual_seed(seed)  # for shard splits between workers
     train_loader = DataLoader(
@@ -78,4 +106,4 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
         collate_fn=val_collator,
         num_workers=data_conf.num_workers,
     )
-    return train_loader, val_loader, test_loader
+    return (train_loader, val_loader, test_loader), internal_dataconf

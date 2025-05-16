@@ -6,7 +6,7 @@ import torch.nn as nn
 from ebes.model.preprocess import Batch2Seq, SeqBatchNorm
 from ebes.types import Seq
 
-from ..data.data_types import DataConfig, GenBatch
+from ..data.data_types import LatentDataConfig, GenBatch
 from ..data.batch_tfs import NewFeatureTransform
 from ..utils import create_instances_from_module
 from ..data import batch_tfs
@@ -33,10 +33,17 @@ class Batch2TransformedSeq(Batch2Seq):
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
-                for num_name in tfs.num_names:
+                for _ in tfs.num_names:
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
+                for _ in tfs.num_names_removed:
+                    num_count -= 1
+                cat_cardinalities = {
+                    k: v
+                    for k, v in cat_cardinalities.items()
+                    if k not in tfs.cat_names_removed
+                }
 
         self._out_dim = 0
         self._cat_embs = nn.ModuleDict()
@@ -91,7 +98,7 @@ class PreprocessorConfig:
     batch_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
 
 
-def create_preprocessor(data_conf: DataConfig, pre_conf: PreprocessorConfig):
+def create_preprocessor(data_conf: LatentDataConfig, pre_conf: PreprocessorConfig):
     return Batch2TransformedSeq(
         cat_cardinalities=data_conf.cat_cardinalities,
         num_features=data_conf.num_names,

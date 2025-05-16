@@ -50,6 +50,57 @@ class NewFeatureTransform(BatchTransform):
     def cat_cardinalities(self) -> list[str] | None:
         return {}
 
+    @property
+    def num_names_removed(self) -> list[str] | None:
+        return []
+
+    @property
+    def cat_names_removed(self) -> list[str] | None:
+        return []
+
+
+@dataclass
+class ShuffleBatch(BatchTransform):
+    """Randomly permutes events in a sequence batch, optionally preserving the last `keep_last_n` events.
+    Attributes:
+        keep_last_n (int): Number of events at the end of each sequence to preserve in place.
+        -1 means no shuffle
+    """
+
+    keep_last_n: int = -1
+
+    def __call__(self, batch: GenBatch):
+        if self.keep_last_n == -1:
+            pass
+        max_len = batch.time.shape[0]
+        bs = len(batch)
+        i_len = torch.arange(max_len)[:, None]  # [L, 1]
+        i_batch = torch.arange(bs)  # [B]
+
+        perm_len = batch.lengths - self.keep_last_n
+        assert (batch.lengths > self.keep_last_n).all()
+        valid = (i_len < perm_len).float()  # [L, B]
+        permutation_within_len = torch.multinomial(valid.T, max_len).T  # [L, B]
+        # Set the last `keep_last_n` indices to their original positions
+        mask = (i_len >= perm_len).expand(-1, bs)  # [L, B]
+        t_values = i_len.expand(-1, bs)
+        permutation_within_len = torch.where(mask, t_values, permutation_within_len)
+
+        if batch.cat_features is not None:
+            batch.cat_features = batch.cat_features[permutation_within_len, i_batch]
+
+        if batch.num_features is not None:
+            batch.num_features = batch.num_features[permutation_within_len, i_batch]
+
+        if batch.cat_mask is not None:
+            batch.cat_mask = batch.cat_mask[permutation_within_len, i_batch]
+
+        if batch.num_mask is not None:
+            batch.num_mask = batch.num_mask[permutation_within_len, i_batch]
+
+    def reverse(self, batch: GenBatch):
+        pass
+
 
 @dataclass
 class CutTargetSequence(BatchTransform):
@@ -102,6 +153,135 @@ class RescaleTime(BatchTransform):
 
     def reverse(self, batch: GenBatch):
         batch.time.mul_(self.scale).add_(self.loc)
+
+
+@dataclass
+class VariableRangeDecimal(NewFeatureTransform):
+    """From https://www.arxiv.org/abs/2504.07566"""
+
+    name: str
+    n: int = 4
+    smallest_magnitude: int = -5
+    biggest_magnitude: int = 13
+
+    @property
+    def cat_cardinalities(self):
+        assert self.biggest_magnitude > self.smallest_magnitude
+        new_cats = {}
+        new_cats[f"{self.name}_mag"] = (
+            self.biggest_magnitude - self.smallest_magnitude + 1
+        )
+        for i in range(1, self.n + 1):
+            new_cats[f"{self.name}_{i}"] = 10
+        return new_cats
+
+    @property
+    def num_names_removed(self) -> list[str] | None:
+        return [self.name]
+
+    def __call__(self, batch: GenBatch):
+        assert self.name in batch.num_features_names
+        feature_id = batch.num_features_names.index(self.name)
+        feature = batch.num_features[:, :, feature_id]  # L, B
+        assert (feature >= 0).all(), "Dont support negative values"
+        original_magnitude = (
+            torch.floor(torch.log10(feature.abs() + 1e-12))
+            .clamp(self.smallest_magnitude, self.biggest_magnitude)
+            .to(torch.long)
+        )
+        adjusted_magnitude = original_magnitude - self.smallest_magnitude
+
+        x_normalized = feature / (10.0 ** original_magnitude.float())
+        # Extract digits
+        digits = []
+        remainder = x_normalized
+        for _ in range(self.n):
+            digit = remainder.floor().to(torch.long)
+            digits.append(digit)
+            remainder = (remainder - digit) * 10
+
+        # Prepare categorical features
+        mag_feature = adjusted_magnitude.unsqueeze(-1)
+        digit_features = [d.unsqueeze(-1) for d in digits]
+        new_cat_features = torch.cat([mag_feature] + digit_features, dim=-1)
+
+        # Update batch.cat_features
+        if batch.cat_features is None:
+            batch.cat_features = new_cat_features
+            batch.cat_features_names = list(self.cat_cardinalities)
+        else:
+            batch.cat_features = torch.cat(
+                [batch.cat_features, new_cat_features], dim=-1
+            )
+            batch.cat_features_names += list(self.cat_cardinalities)
+
+        # Remove numerical feature
+        if len(batch.num_features_names) == 1:
+            batch.num_features_names = None
+            batch.num_features = None
+        else:
+            remaining_ids = [
+                i for i in range(len(batch.num_features_names)) if i != feature_id
+            ]
+            batch.num_features = batch.num_features[remaining_ids]
+            batch.num_features_names = [
+                n for n in batch.num_features_names if n != self.name
+            ]
+
+    def reverse(self, batch: GenBatch):
+        # Get the names of the added categorical features
+        all_names = list(self.cat_cardinalities)
+
+        # Check if these names are present in the batch's cat features
+        if batch.cat_features_names is None or not set(all_names).issubset(
+            batch.cat_features_names
+        ):
+            raise ValueError("Categorical features to reverse not found in batch")
+
+        # Get indices of the names to remove
+        new_indices = [batch.cat_features_names.index(name) for name in all_names]
+        cat_features = batch.cat_features[..., new_indices]
+
+        # Remove these features from batch
+        remaining_names = [
+            name for name in batch.cat_features_names if name not in all_names
+        ]
+        remaining_indices = [
+            i for i in range(len(batch.cat_features_names)) if i not in new_indices
+        ]
+        remaining_cat_features = batch.cat_features[..., remaining_indices]
+
+        # Update batch's cat features and names
+        batch.cat_features = remaining_cat_features
+        batch.cat_features_names = remaining_names
+        if len(remaining_names) == 0:
+            batch.cat_features = None
+            batch.cat_features_names = None
+
+        # Reconstruct the original numerical feature
+        adjusted_magnitude = cat_features[..., 0]
+        digits = [cat_features[..., i] for i in range(1, self.n + 1)]
+
+        # Convert adjusted_magnitude back to original_magnitude
+        original_magnitude = adjusted_magnitude + self.smallest_magnitude
+
+        # Reconstruct x_normalized
+        x_normalized = torch.zeros_like(adjusted_magnitude, dtype=torch.float32)
+        for i in range(self.n):
+            x_normalized += digits[i].float() * (10.0 ** (-i))
+
+        # Compute original feature
+        original_feature = x_normalized * (10.0 ** original_magnitude.float())
+
+        # Add back to num_features
+        if batch.num_features is None:
+            batch.num_features = original_feature.unsqueeze(-1)
+            batch.num_features_names = [self.name]
+        else:
+            batch.num_features = torch.cat(
+                [batch.num_features, original_feature.unsqueeze(-1)], dim=-1
+            )
+            batch.num_features_names.append(self.name)
 
 
 @dataclass

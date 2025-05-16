@@ -103,6 +103,13 @@ class Encoder(nn.Module):
                     num_count += 1
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
+                for _ in tfs.num_names_removed:
+                    num_count -= 1
+                cat_cardinalities = {
+                    k: v
+                    for k, v in cat_cardinalities.items()
+                    if k not in tfs.cat_names_removed
+                }
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
             categories=list(cat_cardinalities.values()) if cat_cardinalities else None,
@@ -316,7 +323,7 @@ class Reconstructor(nn.Module):
         h_cat = h[:, self.d_numerical :]
         assert (h_num.shape[-2] + h_cat.shape[-2]) == (
             self.d_numerical + len(self.cat_cardinalities.values())
-        )
+        ), f"{h_num.shape[-2], h_cat.shape[-2], self.d_numerical, self.cat_cardinalities.values()}"
 
         recon_x_num = torch.mul(h_num, self.weight.unsqueeze(0)).sum(-1)
         recon_x_cat = {}

@@ -29,9 +29,9 @@ def test_evaluator():
 
     cfg = pyrallis.parse(config_class=PipelineConfig, config_path="spec_config.yaml")
     logger.info("Config ready")
-    train_loader, val_loader, test_loader = get_dataloaders(cfg.data_conf)
+    (train_loader, val_loader, test_loader), latent_config = get_dataloaders(cfg.data_conf, 0)
     actual_len = 0
-    for batch in tqdm(test_loader):
+    for batch in tqdm(train_loader):
         actual_len += 1
     print(actual_len)
     assert actual_len == 284
