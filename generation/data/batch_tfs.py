@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
+import pickle
 
 import numpy as np
 import torch
@@ -58,6 +59,7 @@ class CutTargetSequence(BatchTransform):
     """Len of target sequence."""
 
     def __call__(self, batch: GenBatch):
+        breakpoint()
         assert (
             batch.lengths.min() > self.target_len
         ), "target_len is too big for this batch"
@@ -494,3 +496,79 @@ class QuantileTransform(BatchTransform):
         batch[self.feature_name] = self.qt_model.inverse_transform(
             batch[self.feature_name]
         )
+
+
+@dataclass
+class NGramTransform(BatchTransform):
+    """Add quantile transform for the feature"""
+
+    model_path: str
+    feature_name: str
+
+    @staticmethod
+    def merge_ngrams(
+        seq: np.ndarray, ngram_map: dict[tuple[int, ...], int], n: int
+    ) -> np.ndarray:
+        out, i = [], 0
+        while i < len(seq):
+            if i <= len(seq) - n and tuple(seq[i : i + n]) in ngram_map:
+                out.append(ngram_map[tuple(seq[i : i + n])])
+                i += n
+            else:
+                out.append(seq[i])
+                i += 1
+        return np.asarray(out, dtype=int)
+
+    def decode_merged_sequence(
+        self, merged: np.ndarray, ngram_map: dict[tuple[int, ...], int]
+    ) -> np.ndarray:
+        inv = {v: k for k, v in ngram_map.items()}
+        out = []
+        for t in merged:
+            if t in inv:
+                out.extend(inv[t])
+            else:
+                out.append(t)
+        return np.asarray(out, dtype=int)
+
+    def encode_sequence(
+        self,
+        seq: list[int],
+        mapping_dict: dict[int, dict[tuple[int, ...], int]],
+        n_order: list[int],
+    ) -> np.ndarray:
+        out = np.asarray(seq, dtype=int)
+
+        for n in n_order:
+            out = self.merge_ngrams(out, mapping_dict[f'{n}-grams'], n)
+        return out
+
+    def __post_init__(self):
+
+        self.mapping = None
+        with open(self.model_path, "rb") as file:
+            self.mapping = pickle.load(file)
+
+    def __call__(self, batch: GenBatch):
+        L, B = batch[self.feature_name].shape
+
+        for i in range(B):
+            seq = batch[self.feature_name][:, i].cpu().numpy()
+            seq_len = batch.lengths[i]
+            
+            seq = seq[:seq_len]
+
+            coded_seq = self.encode_sequence(seq, mapping_dict=self.mapping, n_order=[3, 2])
+
+            new_seq_len = coded_seq.shape[0]
+
+            new_seq = np.zeros((L, ))
+            new_seq[:new_seq_len] = coded_seq
+            batch[self.feature_name][:, i] = torch.tensor(new_seq)
+            batch.lengths[i] = new_seq_len
+        breakpoint()
+
+    def reverse(self, batch):
+        breakpoint()
+        batch[self.feature_name] = self.decode_merged_sequence(batch[self.feature_name])
+        breakpoint()

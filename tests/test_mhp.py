@@ -29,8 +29,6 @@ def test_mhp(config: PipelineConfig):
     gen_batch_hp = baseline_hp.generate(batch, 32)
     gen_batch_hmm = baseline_hmm.generate(batch, 32)
 
-    breakpoint()
-
     assert isinstance(batch, GenBatch)
 
 

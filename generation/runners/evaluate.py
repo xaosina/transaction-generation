@@ -54,12 +54,16 @@ class GenerationEvaluator(Runner):
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
-        val_metrics = trainer.validate(val_loader, remove=False)
-        train_metrics = trainer.validate(train_loader, remove=False)
+        # val_metrics = trainer.validate(val_loader, remove=False)
+        # train_metrics = trainer.validate(train_loader, remove=False)
         test_metrics = trainer.validate(test_loader, remove=False)
 
-        val_metrics = {k: v for k, v in val_metrics.items()}
-        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        # val_metrics = {k: v for k, v in val_metrics.items()}
+        # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
-        return dict(**train_metrics, **val_metrics, **test_metrics)
+        return dict(
+                # **train_metrics, 
+                # **val_metrics, 
+                **test_metrics
+            )

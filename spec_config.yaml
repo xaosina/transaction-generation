@@ -1,19 +1,8 @@
 # DATA
 data_conf:
   cat_cardinalities:
-    src_type32: 87
-    src_type11: 45
-    event_subtype: 60
-    dst_type11: 55
     event_type: 54
-    currency: 12
-    dst_type12: 253
-    src_type22: 84
-    src_type12: 184
-    # src_type31: 1455
-    # src_type21: 8000
-  num_names:
-    - amount
+
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
@@ -41,13 +30,14 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    "2":
-      Logarithm:
-        names: ["amount"]
+
       # QuantileTransform:
       #   feature_name: "amount"
       #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
-
+    "2":
+      NGramTransform:
+        model_path: "data/mbd-50k/ngrams-mapper-21.pt"
+        feature_name: "event_type"
 
   val_transforms:
     "0":
@@ -56,13 +46,16 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: False
-    "2":
-      Logarithm:
-        names: ["amount"]
+        disable: false
+
       # QuantileTransform:
       #   feature_name: "amount"
       #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
+    "2":
+      NGramTransform:
+        model_path: "data/mbd-50k/ngrams-mapper-21.pt"
+        feature_name: "event_type"
+
     "3":
       CutTargetSequence:
         target_len: *generation_len

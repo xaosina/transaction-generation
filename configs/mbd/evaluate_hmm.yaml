@@ -1,0 +1,102 @@
+# DATA
+data_conf:
+  cat_cardinalities:
+    event_type: 50
+  index_name: client_id
+  time_name: days_since_first_tx
+  focus_on:
+    - event_type
+
+  test_path: 'data/mbd-50k/test'
+  train_path: 'data/mbd-50k/train'
+  val_ratio: 0.15
+  num_workers: 0
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: 32
+  generation_len: &generation_len 32
+  max_seq_len: 1045
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 365.0
+    "1":
+      TimeToDiff:
+        disable: true
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 365.0
+    "1":
+      TimeToDiff:
+        disable: true
+    "2":
+      CutTargetSequence:
+        target_len: *generation_len
+
+model:
+  name: BaselineHMM
+  tpp:
+    feature_name: "event_type"
+trainer:
+  verbose: True
+
+evaluator:
+  devices:
+  - cuda:1
+  - cuda:2
+  metrics:
+  - Accuracy:
+      target_key: event_type
+  - Levenshtein:
+      target_key: event_type
+  - F1Metric:
+      target_key: event_type
+      average: macro
+  - F1Metric:
+      target_key: event_type
+      average: micro
+
+  - CardinalityCoverage:
+      target_key: event_type
+      overall: False
+  - CardinalityCoverage:
+      target_key: event_type
+      overall: True
+  - NoveltyScore:
+      target_key: event_type
+      overall: False
+  - NoveltyScore:
+      target_key: event_type
+      overall: True
+
+  - Density:
+      log_cols: []
+      with_timediff: True
+      save_details: True
+      verbose: True
+
+  - Detection:
+      dataset_config: detection/mbd_event_type
+      method_config: gru
+      condition_len: 32
+      verbose: True
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple
+  seed_keys:
+  - common_seed
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list: null

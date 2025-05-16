@@ -15,7 +15,7 @@ evaluator:
   - F1Metric:
       target_key: event_type
       average: micro
-
+      
   - CardinalityCoverage:
       target_key: event_type
       overall: False
@@ -48,5 +48,5 @@ runner:
   - common_seed
   params:
     n_runs: 1
-    n_workers: 1
+    n_workers: 1    
   device_list: null

@@ -20,3 +20,11 @@ build/*
 transaction_me*/*
 generation/data/preprocess/data/
 *temp.ipynb
+
+# Mine
+temp/
+*gpickle
+.hypothesis*
+*.out
+
+bpe_post_process.py
