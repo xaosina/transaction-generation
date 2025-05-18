@@ -1,0 +1,43 @@
+model:
+  name: Generator
+  preprocessor:
+    batch_transforms:
+      '0':
+        TimeToFeatures:
+          process_type: "cat"
+  encoder:
+    name: Transformer
+    params:
+      max_len:  ${data_conf.max_seq_len}
+      num_layers: 2
+      scale_hidden: 4
+      dropout: 0.1
+      pos_dropout: 0.1 
+      pos_enc_type: "cat"
+      num_heads: 8
+
+loss:
+  name: baseline
+  params:
+    mse_weight: 0.5
+
+optuna:
+  params:
+    request_list: []
+  suggestions:
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
+
+    - ["model.encoder.params.num_layers", [suggest_int, {low: 1, high: 10, log: False}]]
+    - ["model.encoder.params.scale_hidden", [suggest_int, {low: 1, high: 16, log: False}]]
+    - ["model.encoder.params.dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
+    - ["model.encoder.params.pos_dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
+    - ["model.encoder.params.pos_enc_type", [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]]
+    - ["model.encoder.params.num_heads", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
+
+    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["none", "diff", "cat"]}]]
+    - 
+      - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
+      - ["suggest_categorical", {choices: [True, False]}]
+
+    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

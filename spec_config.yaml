@@ -79,15 +79,15 @@ model:
           process_type: "cat"
   encoder:
     name: GRU
-    params:
-      hidden_size: 256
-      num_layers: 4
+  #   params:
+  #     hidden_size: 256
+  #     num_layers: 4
       
-  vae:
-    num_layers: 2
-    d_token: 6
-    n_head: 2
-    factor: 64
+  # vae:
+  #   num_layers: 2
+  #   d_token: 6
+  #   n_head: 2
+  #   factor: 64
 
 
 optimizer:
@@ -180,7 +180,7 @@ trainer:
 
 
 # Runner params:
-run_name: debug
+run_name: debug/-
 log_dir: log/generation
 device: "cuda:1"
 common_seed: 0
