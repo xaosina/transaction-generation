@@ -4,8 +4,8 @@ data_conf:
     event_type: 54
   index_name: client_id
   time_name: days_since_first_tx
-  focus_on:
-  
+  focus_on: 
+    - event_type
 
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
@@ -46,7 +46,7 @@ data_conf:
 model:
   name: BaselineHP
   tpp:
-    feature_name: "event_type"
+    feature_name: "event_type_merged"
 trainer:
   verbose: True
 

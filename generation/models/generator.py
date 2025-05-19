@@ -11,7 +11,8 @@ from generation.models.autoencoders.vae import Decoder as VAE_Decoder
 from generation.models.autoencoders.vae import Encoder as VAE_Encoder
 from generation.models.autoencoders.vae import VaeConfig
 
-from ..data.data_types import LatentDataConfig, GenBatch, PredBatch, gather
+
+from ..data.data_types import DataConfig, LatentDataConfig, GenBatch, PredBatch, gather
 from .encoders import AutoregressiveEncoder, EncoderConfig
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
@@ -350,7 +351,6 @@ def select_hmm_by_bic(
             try:
                 logL = model.score(obs)        # здесь бросается ValueError
             except ValueError:
-                # breakpoint()
                 continue
 
             if logL > best_logL:

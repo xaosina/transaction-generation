@@ -110,7 +110,6 @@ class CutTargetSequence(BatchTransform):
     """Len of target sequence."""
 
     def __call__(self, batch: GenBatch):
-        breakpoint()
         assert (
             batch.lengths.min() > self.target_len
         ), "target_len is too big for this batch"
@@ -677,50 +676,104 @@ class QuantileTransform(BatchTransform):
             batch[self.feature_name]
         )
 
+# @dataclass
+# class NewFeatureTransform(BatchTransform):
+#     """Does not modify old features. Only adds new ones. Always adds on the right (torch.cat(tensor, new_feature, dim=-1))"""
+
+#     @property
+#     def num_names(self) -> list[str] | None:
+#         return []
+
+#     @property
+#     def cat_cardinalities(self) -> list[str] | None:
+#         return {}
+
+#     @property
+#     def num_names_removed(self) -> list[str] | None:
+#         return []
+
+#     @property
+#     def cat_names_removed(self) -> list[str] | None:
+#         return []
+
 
 @dataclass
-class NGramTransform(BatchTransform):
+class NGramTransform(NewFeatureTransform):
     """Add quantile transform for the feature"""
 
     model_path: str
     feature_name: str
+    feature_counts: int = 54
+    ngram_counts: int = -1
 
     @staticmethod
     def merge_ngrams(
-        seq: np.ndarray, ngram_map: dict[tuple[int, ...], int], n: int
+        seq: np.ndarray, 
+        time: np.ndarray, 
+        ngram_map: dict[tuple[int, ...], int], n: int
     ) -> np.ndarray:
-        out, i = [], 0
+        out_seq, out_time, i = [], [], 0
         while i < len(seq):
             if i <= len(seq) - n and tuple(seq[i : i + n]) in ngram_map:
-                out.append(ngram_map[tuple(seq[i : i + n])])
+                out_seq.append(ngram_map[tuple(seq[i : i + n])])
+                out_time.append(np.mean(time[i: i + n]))
                 i += n
             else:
-                out.append(seq[i])
+                out_seq.append(seq[i])
+                out_time.append(time[i])
                 i += 1
-        return np.asarray(out, dtype=int)
+        return (
+            np.asarray(out_seq, dtype=int), 
+            np.asarray(out_time, dtype=float)
+        )
 
     def decode_merged_sequence(
-        self, merged: np.ndarray, ngram_map: dict[tuple[int, ...], int]
+        self, 
+        merged: np.ndarray, 
+        averaged_time: np.ndarray, 
+        ngram_map: dict[tuple[int, ...], int],
+        n_order: list[int],
     ) -> np.ndarray:
-        inv = {v: k for k, v in ngram_map.items()}
-        out = []
-        for t in merged:
+        restored_time = averaged_time
+        restored_seq = merged
+        
+        for n in n_order:
+            restored_seq, restored_time = self.demerge(restored_seq, restored_time, ngram_map, n)
+
+        return np.asarray(restored_seq, dtype=int), np.asarray(restored_time, dtype=float)
+
+    def demerge(
+        self, 
+        merged: np.ndarray, 
+        averaged_time: np.ndarray, 
+        ngram_map: dict[tuple[int, ...], int],
+        n: int,
+    ):
+        out_seq = []
+        out_times = []
+        inv = {v: k for k, v in ngram_map[f"{n}-grams"].items()}
+        for i, t in enumerate(merged):
             if t in inv:
-                out.extend(inv[t])
+                out_seq.extend(inv[t])
+                out_times.extend([averaged_time[i]] * len(inv[t]))
             else:
-                out.append(t)
-        return np.asarray(out, dtype=int)
+                out_seq.append(t)
+                out_times.append(averaged_time[i])
+
+        return out_seq, out_times
 
     def encode_sequence(
         self,
         seq: list[int],
+        time: list[float],
         mapping_dict: dict[int, dict[tuple[int, ...], int]],
         n_order: list[int],
     ) -> np.ndarray:
-        out = np.asarray(seq, dtype=int)
-
-        for n in n_order:
-            out = self.merge_ngrams(out, mapping_dict[f'{n}-grams'], n)
+        out_seq = np.asarray(seq, dtype=int)
+        out_time = np.asarray(time, dtype=float)
+        
+        for n in n_order:   
+            out = self.merge_ngrams(out_seq, out_time, mapping_dict[f'{n}-grams'], n)
         return out
 
     def __post_init__(self):
@@ -729,26 +782,122 @@ class NGramTransform(BatchTransform):
         with open(self.model_path, "rb") as file:
             self.mapping = pickle.load(file)
 
+        self.ngram_counts = sum([len(el) for el in self.mapping.values()])
+
+    @property
+    def cat_cardinalities(self) -> list[str] | None:
+        assert self.ngram_counts != -1
+        new_cats = {}
+        new_cats[f"{self.feature_name}_merged"] = self.feature_counts + self.ngram_counts + 1
+        return new_cats
+
+    @property
+    def cat_names_removed(self) -> list[str] | None:
+        return self.feature_name
+
     def __call__(self, batch: GenBatch):
         L, B = batch[self.feature_name].shape
-
+        feature_id = batch.cat_features_names.index(self.feature_name)
+        new_cat_features = np.copy(batch[self.feature_name].cpu().numpy())
+        new_times = np.copy(batch.time.cpu().numpy())
         for i in range(B):
-            seq = batch[self.feature_name][:, i].cpu().numpy()
+            seq = batch.cat_features[:, i, feature_id].cpu().numpy()
+            time = batch.time[:, i].cpu().numpy()
+
+            ## Осталось что-то со временем сделать и все.
+            ## Таргет троогать не надо, так как сравнивать будем уже после
+            ## Время пока попробуем просто усреднить
             seq_len = batch.lengths[i]
-            
             seq = seq[:seq_len]
+            time = time[:seq_len]
 
-            coded_seq = self.encode_sequence(seq, mapping_dict=self.mapping, n_order=[3, 2])
-
+            coded_seq, averaged_time = self.encode_sequence(seq, time, mapping_dict=self.mapping, n_order=[3, 2])
+            assert time.shape == seq.shape
             new_seq_len = coded_seq.shape[0]
-
             new_seq = np.zeros((L, ))
+            new_time = np.zeros((L, ))
+            
             new_seq[:new_seq_len] = coded_seq
-            batch[self.feature_name][:, i] = torch.tensor(new_seq)
+            new_time[:new_seq_len] = averaged_time
+            
+            new_cat_features[:, i] = new_seq
+            new_times[:, i] = new_time
             batch.lengths[i] = new_seq_len
-        breakpoint()
+
+        max_len = batch.lengths.max()
+        batch.cat_features[:, :, feature_id] = torch.tensor(new_cat_features)
+        batch.cat_features_names[feature_id] = f"{self.feature_name}_merged"
+        batch.time = torch.tensor(new_times)[:max_len]
+        batch.cat_features = batch.cat_features[:max_len]
+
 
     def reverse(self, batch):
-        breakpoint()
-        batch[self.feature_name] = self.decode_merged_sequence(batch[self.feature_name])
-        breakpoint()
+        new_feature_name = self.feature_name + '_merged'
+        assert new_feature_name in self.cat_cardinalities
+        L, B = batch[new_feature_name].shape
+        feature_id = batch.cat_features_names.index(new_feature_name)
+        new_cat_features = np.copy(batch[new_feature_name].cpu().numpy())
+        new_times = np.copy(batch.time.cpu().numpy())
+
+        target_cat_features = np.copy(batch.target_cat_features)
+        target_times = np.copy(batch.target_time)
+        for i in range(B):
+            seq = batch.cat_features[:, i, feature_id].cpu().numpy()
+            time = batch.time[:, i].cpu().numpy()
+            
+            target_seq = batch.target_cat_features[:, i, feature_id].cpu().numpy()
+            target_time = batch.target_time[:, i].cpu().numpy()
+
+            ## Осталось что-то со временем сделать и все.
+            ## Таргет троогать не надо, так как сравнивать будем уже после
+            ## Время пока попробуем просто усреднить
+            seq_len = batch.lengths[i]
+            seq = seq[:seq_len]
+            time = time[:seq_len]
+            decoded_seq, decoded_time = self.decode_merged_sequence(seq, time, ngram_map=self.mapping, n_order=[2, 3])
+            decoded_target, decoded_target_time = self.decode_merged_sequence(target_seq, target_time, ngram_map=self.mapping, n_order=[2, 3])
+            assert time.shape == seq.shape
+            new_seq_len = decoded_seq.shape[0]
+            new_seq = np.zeros((L, ))
+            new_time = np.zeros((L, ))
+
+            new_seq[:new_seq_len] = decoded_seq
+            new_time[:new_seq_len] = decoded_time
+            
+            new_cat_features[:, i] = new_seq
+            new_times[:, i] = new_time
+            target_cat_features[:, i, feature_id] = decoded_target[:32]
+            target_times[:, i] = decoded_target_time[:32]
+            batch.lengths[i] = new_seq_len
+        cat_feature_to_remove = self.feature_name + '_merged'
+
+        batch.cat_features_names.index(cat_feature_to_remove)
+
+        remaining_names = [name for name in batch.cat_features_names if name != self.feature_name + '_merged']
+        new_indices = [batch.cat_features_names.index(name) for name in batch.cat_features_names if name == self.feature_name + '_merged']
+        remaining_indices = [
+            i for i in range(len(batch.cat_features_names)) if i not in new_indices
+        ]
+        remaining_cat_features = batch.cat_features[..., remaining_indices]
+
+        # Update batch's cat features and names
+        batch.cat_features = remaining_cat_features
+        batch.cat_features_names = remaining_names
+        if len(remaining_names) == 0:
+            batch.cat_features = None
+            batch.cat_features_names = None
+
+        # Add back to num_features
+        if batch.cat_features is None:
+            batch.cat_features = torch.tensor(new_cat_features).unsqueeze(2)
+            batch.time = torch.tensor(new_times)
+            batch.cat_features_names = [f"{self.feature_name}"]
+            batch.target_cat_features = torch.tensor(target_cat_features)
+            batch.target_time = torch.tensor(target_times)
+
+        else:
+            batch.cat_features[:, :, feature_id] = torch.tensor(new_cat_features)
+            batch.time = torch.tensor(new_times)
+            batch.cat_features_names.append(f"{self.feature_name}")
+            batch.target_cat_features = torch.tensor(target_cat_features)
+            batch.target_time = torch.tensor(target_times)

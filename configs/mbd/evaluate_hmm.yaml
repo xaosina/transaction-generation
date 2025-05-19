@@ -1,7 +1,7 @@
 # DATA
 data_conf:
   cat_cardinalities:
-    event_type: 50
+    event_type: 54
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
@@ -46,7 +46,7 @@ data_conf:
 model:
   name: BaselineHMM
   tpp:
-    feature_name: "event_type"
+    feature_name: "event_type_merged"
 trainer:
   verbose: True
 

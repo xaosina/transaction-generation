@@ -55,7 +55,7 @@ def apply_ngrams(
     df["total_ngrams"] = df["ngrams"].str.len()  # сколько всего
 
     ngrams_total_counts = Counter()
-
+    
     for cnt in df["ngram_counts"]:
         ngrams_total_counts.update(cnt)
 
@@ -82,17 +82,18 @@ def apply_ngrams(
 def main(path_from, path_to):
     df = pd.read_parquet(path_from)
     maps = {}
+    
     mapping, df = apply_ngrams(
-        df, 3, coverage=0.2, col="event_type", new_col="event_type"
+        df, 3, coverage=0.3, col="event_type", new_col="event_type"
     )
-    breakpoint()
+    # breakpoint()
     maps[f"{3}-grams"] = mapping
     mapping, df = apply_ngrams(
-        df, 2, coverage=0.1, col="event_type", new_col="event_type"
+        df, 2, coverage=0.2, col="event_type", new_col="event_type"
     )
-    breakpoint()
+    # breakpoint()
     maps[f"{2}-grams"] = mapping
-
+    breakpoint()
     with open(path_to, "wb") as file:
         pickle.dump(maps, file)
 

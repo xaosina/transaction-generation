@@ -1,19 +1,19 @@
 # DATA
 data_conf:
   cat_cardinalities:
-    src_type32: 88
-    src_type11: 47
-    event_subtype: 60
-    dst_type11: 58
+  #   src_type32: 88
+  #   src_type11: 47
+  #   event_subtype: 60
+  #   dst_type11: 58
     event_type: 55
-    currency: 13
-    dst_type12: 253
-    src_type22: 84
-    src_type12: 188
-    # src_type31: 1455
-    # src_type21: 8000
+  #   currency: 13
+  #   dst_type12: 253
+  #   src_type22: 84
+  #   src_type12: 188
+  #   # src_type31: 1455
+  #   # src_type21: 8000
   num_names:
-    - amount
+  #   - amount
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
@@ -47,7 +47,7 @@ data_conf:
       #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
     "2":
       NGramTransform:
-        model_path: "data/mbd-50k/ngrams-mapper-21.pt"
+        model_path: "data/mbd-50k/ngrams-mapper-32.pt"
         feature_name: "event_type"
 
   val_transforms:
@@ -62,14 +62,16 @@ data_conf:
       # QuantileTransform:
       #   feature_name: "amount"
       #   model_path: "data/mbd-50k/quantile_transform_amount.pt"
-    "2":
-      NGramTransform:
-        model_path: "data/mbd-50k/ngrams-mapper-21.pt"
-        feature_name: "event_type"
 
-    "3":
+    "2":
       CutTargetSequence:
         target_len: *generation_len
+    
+    "3":
+      NGramTransform:
+        model_path: "data/mbd-50k/ngrams-mapper-32.pt"
+        feature_name: "event_type"
+
 
 # MODEL
 model:
@@ -93,9 +95,6 @@ model:
     d_token: 6
     n_head: 2
     factor: 64
-
-  tpp:
-    feature_name: "event_type"
 
 
 optimizer:

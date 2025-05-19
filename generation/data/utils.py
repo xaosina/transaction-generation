@@ -57,7 +57,7 @@ def get_latent_dataconf(collator: SequenceCollator) -> LatentDataConfig:
                     num_names += [num_name]
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
-                num_names = [n for n in num_names if n not in tfs.num_names_removed]
+                num_names = [n for n in num_names if n not in tfs.num_names_removed] if num_names is not None else None
                 cat_cardinalities = {
                     k: v
                     for k, v in cat_cardinalities.items()
