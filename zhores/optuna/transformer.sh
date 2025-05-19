@@ -6,7 +6,7 @@
 # script_name=$3
 n_gpus=1
 
-job_name=${1:-optuna_gru}
+job_name=${1:-optun/transformer}
 
 array_range=${2:-1}
 
@@ -46,7 +46,7 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
         --device 'cuda:0' \
         --trainer.verbose False \
         --run_name ${job_name} \
-        --runner.run_type optuna
-
+        --runner.run_type optuna \
+        --spec_conf configs/mbd/transformer.yaml
 '
 EOT

@@ -6,6 +6,7 @@ from typing import Mapping
 import pyrallis
 from ebes.pipeline import Runner
 from omegaconf import OmegaConf
+import omegaconf
 
 from generation.runners import PipelineConfig
 
@@ -16,10 +17,13 @@ def get_dotlist_args(cfg: Mapping, parent_key: str = "") -> list[str]:
     keys = []
     for key in cfg:
         full_key = f"{parent_key}.{key}" if parent_key else key
-        value = cfg[key]
-        if isinstance(value, Mapping):
-            keys.extend(get_dotlist_args(value, full_key))
-        else:
+        try:
+            value = cfg[key]
+            if isinstance(value, Mapping):
+                keys.extend(get_dotlist_args(value, full_key))
+            else:
+                keys.append("--" + full_key)
+        except omegaconf.errors.InterpolationKeyError:
             keys.append("--" + full_key)
     return keys
 
