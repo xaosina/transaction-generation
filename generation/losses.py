@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Module
 
-from generation.data.data_types import Batch, PredBatch, DataConfig
+from generation.data.data_types import Batch, PredBatch, DataConfig, LatentDataConfig
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ def rse_valid(pred, true, valid_mask):
 class BaseLoss(Module):
     def __init__(
         self,
-        data_conf: DataConfig,
+        data_conf: LatentDataConfig,
         mse_weight: float = 0.5,
         ignore_index: int = -100,
     ):
@@ -71,7 +71,7 @@ class BaseLoss(Module):
         data_conf = self.data_conf
         num_names = y_pred.num_features_names or []
         num_names = list(set(data_conf.focus_on) & set(num_names))
-
+        # breakpoint()
         if data_conf.time_name in data_conf.focus_on:
             pred_time = y_pred.time[self.pred_slice]  # [L, B]
             true_time = y_true.time[self.true_slice]  # [L, B]
@@ -107,6 +107,7 @@ class BaseLoss(Module):
 
         total_ce = 0.0
         ce_count = 0
+        # breakpoint()
         for key in cat_names:
             true_cat = y_true[key][self.true_slice].clone()
             current_mask = valid_mask[self.true_slice]
@@ -114,7 +115,7 @@ class BaseLoss(Module):
 
             pred_cat = y_pred.cat_features[key].permute(1, 2, 0)  # [B, C, L]
             pred_cat = pred_cat[:, :, self.pred_slice]
-
+            # breakpoint()
             # Compute loss
             ce_loss = F.cross_entropy(
                 pred_cat,
@@ -165,7 +166,7 @@ class TailLoss(BaseLoss):
 class VAELoss(BaseLoss):
     def __init__(
         self,
-        data_conf: DataConfig,
+        data_conf: LatentDataConfig,
         mse_weight: float = 0.5,
         init_beta: float = 1.0,
         ignore_index: int = -100,
@@ -189,7 +190,7 @@ class VAELoss(BaseLoss):
         self._beta = value
 
 
-def get_loss(data_conf: DataConfig, config: LossConfig):
+def get_loss(data_conf: LatentDataConfig, config: LossConfig):
     name = config.name
     if name == "baseline":
         return BaselineLoss(data_conf, **config.params)

@@ -63,6 +63,8 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class LatentDataConfig:
+    focus_on: list[str]
+    time_name: str
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
 
