@@ -44,9 +44,9 @@ data_conf:
     "2":
       Logarithm:
         names: ["amount"]
-    "shuffle":
-      ShuffleBatch:
-        keep_last_n: -1
+    # "shuffle":
+    #   ShuffleBatch:
+    #     untouched_slice: [None, None]
 
   val_transforms:
     "0":
@@ -59,9 +59,9 @@ data_conf:
     "2":
       Logarithm:
         names: ["amount"]
-    shuffle:
-      ShuffleBatch:
-        keep_last_n: -1
+    # shuffle:
+    #   ShuffleBatch:
+    #     untouched_slice: [None, None]
     "3":
       CutTargetSequence:
         target_len: *generation_len

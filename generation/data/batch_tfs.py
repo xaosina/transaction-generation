@@ -3,7 +3,7 @@
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
@@ -66,24 +66,43 @@ class ShuffleBatch(BatchTransform):
         -1 means no shuffle
     """
 
-    keep_last_n: int = -1
+    untouched_slice: list[int | None] = field(default_factory=lambda: [None, None])
+
+    def __post_init__(self):
+        assert len(self.untouched_slice) == 2
+        assert isinstance(self.untouched_slice, list)
+        a, b = self.untouched_slice
+        assert None in self.untouched_slice, "At least one element must be None"
+        assert (b is None) or (b < 0)
+        assert (a is None) or (a <= 0)
 
     def __call__(self, batch: GenBatch):
-        if self.keep_last_n == -1:
-            pass
+        if self.untouched_slice == [None, None]:
+            return
         max_len = batch.time.shape[0]
         bs = len(batch)
         i_len = torch.arange(max_len)[:, None]  # [L, 1]
         i_batch = torch.arange(bs)  # [B]
 
-        perm_len = batch.lengths - self.keep_last_n
-        assert (batch.lengths > self.keep_last_n).all()
-        valid = (i_len < perm_len).float()  # [L, B]
-        permutation_within_len = torch.multinomial(valid.T, max_len).T  # [L, B]
-        # Set the last `keep_last_n` indices to their original positions
-        mask = (i_len >= perm_len).expand(-1, bs)  # [L, B]
-        t_values = i_len.expand(-1, bs)
-        permutation_within_len = torch.where(mask, t_values, permutation_within_len)
+        up_len, bot_len = batch.lengths, torch.zeros_like(batch.lengths)
+
+        if self.untouched_slice[1] is None:
+            up_len = batch.lengths + self.untouched_slice[0]
+            bot_len = torch.zeros_like(batch.lengths)
+            assert (up_len > 0).all(), up_len
+        else:
+            up_len = batch.lengths
+            bot_len = batch.lengths + self.untouched_slice[1]
+            assert (bot_len >= 0).all(), bot_len
+        
+        valid = ((i_len >= bot_len) & (i_len < up_len))  # [L, B]
+        permutation_within_len = torch.multinomial(valid.float().T, max_len).T  # [L, B]
+        t_values = i_len.expand(-1, bs).clone()
+        if self.untouched_slice[1] is None:
+            permutation_within_len = torch.where(valid, permutation_within_len, t_values)
+        else:
+            t_values.T[valid.T] = permutation_within_len[: - self.untouched_slice[1]].T.ravel()
+            permutation_within_len = t_values
 
         if batch.cat_features is not None:
             batch.cat_features = batch.cat_features[permutation_within_len, i_batch]
@@ -96,6 +115,9 @@ class ShuffleBatch(BatchTransform):
 
         if batch.num_mask is not None:
             batch.num_mask = batch.num_mask[permutation_within_len, i_batch]
+
+        if not batch.monotonic_time:
+            batch.time = batch.time[permutation_within_len, i_batch]
 
     def reverse(self, batch: GenBatch):
         pass
