@@ -45,19 +45,19 @@ class OptunaConfig:
 
 @dataclass
 class PipelineConfig:
-    run_name: str = "debug"
+    config_factory: Optional[list[str]] = None
+    run_name: str = "debug/-"
     log_dir: str = "log/generation"
     device: str = "cuda:0"
     common_seed: int = 0
     # Config from this yaml path will override any field.
-    spec_config: Optional[str] = None
     evaluator: EvaluatorConfig = field(default_factory=EvaluatorConfig)
     data_conf: DataConfig = field(default_factory=DataConfig)
-    model: ModelConfig = field(default_factory=ModelConfig)
+    model: Optional[ModelConfig] = None
     trainer: TrainConfig = field(default_factory=TrainConfig)
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     schedulers: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     loss: LossConfig = field(default_factory=LossConfig)
     logging: LoginConfig = field(default_factory=LoginConfig)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
-    optuna: Optional[OptunaConfig] = field(default_factory=OptunaConfig)
+    optuna: Optional[OptunaConfig] = None
