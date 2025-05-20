@@ -46,9 +46,10 @@ def get_collator(
     )
 
 
-def get_latent_dataconf(collator: SequenceCollator) -> LatentDataConfig:
-    cat_cardinalities = copy(collator.cat_cardinalities)
-    num_names = copy(collator.num_names)
+def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConfig:
+    cat_cardinalities = copy(collator.cat_cardinalities) or {}
+    num_names = copy(collator.num_names) or []
+    focus_on = copy(data_conf.focus_on)
 
     if collator.batch_transforms:
         for tfs in collator.batch_transforms:
@@ -63,9 +64,17 @@ def get_latent_dataconf(collator: SequenceCollator) -> LatentDataConfig:
                     for k, v in cat_cardinalities.items()
                     if k not in tfs.cat_names_removed
                 }
+                focus_on = tfs.new_focus_on(focus_on)
+    if num_names == []:
+        num_names = None
+    if cat_cardinalities == {}:
+        cat_cardinalities = None
+
     return LatentDataConfig(
         cat_cardinalities=cat_cardinalities,
         num_names=num_names,
+        focus_on=focus_on,
+        time_name=data_conf.time_name
     )
 
 
@@ -84,7 +93,7 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
     # Create collators (val and test has same collators)
     train_collator = get_collator(data_conf, data_conf.train_transforms)
     val_collator = get_collator(data_conf, data_conf.val_transforms, return_orig=True)
-    internal_dataconf = get_latent_dataconf(train_collator)
+    internal_dataconf = get_latent_dataconf(train_collator, data_conf)
     # Create loaders
     gen = torch.Generator().manual_seed(seed)  # for shard splits between workers
     train_loader = DataLoader(

@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Module
 
-from generation.data.data_types import Batch, PredBatch, DataConfig
+from generation.data.data_types import Batch, PredBatch, LatentDataConfig
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ def rse_valid(pred, true, valid_mask):
 class BaseLoss(Module):
     def __init__(
         self,
-        data_conf: DataConfig,
+        data_conf: LatentDataConfig,
         mse_weight: float = 0.5,
         ignore_index: int = -100,
     ):
@@ -153,7 +153,7 @@ class TailLoss(BaseLoss):
 class VAELoss(BaseLoss):
     def __init__(
         self,
-        data_conf: DataConfig,
+        data_conf: LatentDataConfig,
         mse_weight: float = 0.5,
         init_beta: float = 1.0,
         ignore_index: int = -100,
@@ -177,7 +177,7 @@ class VAELoss(BaseLoss):
         self._beta = value
 
 
-def get_loss(data_conf: DataConfig, config: LossConfig):
+def get_loss(data_conf: LatentDataConfig, config: LossConfig):
     name = config.name
     if name == "baseline":
         return BaselineLoss(data_conf, **config.params)

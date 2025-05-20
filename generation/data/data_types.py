@@ -63,6 +63,8 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class LatentDataConfig:
+    focus_on: list[str]
+    time_name: str
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
 
@@ -165,7 +167,9 @@ class PredBatch:
         if self.cat_features:
             cat_features = []
             for cat_name, cat_tensor in self.cat_features.items():
-                cat_features.append(cat_tensor.argmax(dim=2))
+                cat_features.append(
+                    cat_tensor.argmax(dim=2) if cat_tensor.ndim > 2 else cat_tensor
+                )
             cat_features = torch.stack(cat_features, dim=2)
 
         return GenBatch(
