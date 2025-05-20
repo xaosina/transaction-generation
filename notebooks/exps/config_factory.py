@@ -32,6 +32,33 @@ def df_to_str(df):
         s += "\t".join(values) + "\n"
     return s
 
+def compare_dicts(dict1, dict2):
+    differences = {}
+    all_keys = set(dict1.keys()).union(set(dict2.keys()))
+
+    for key in all_keys:
+        val1 = dict1.get(key, None)
+        val2 = dict2.get(key, None)
+
+        if val1 != val2:
+            differences[key] = (val1, val2)
+
+    return differences
+
+def save_config_if_changed(filename, config):
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r") as f:
+                current = yaml.safe_load(f)
+            diff = compare_dicts(config, current)
+            if diff:
+                print(f"WARNING: {filename} exists and content differs. {diff}.")
+        except yaml.YAMLError:
+            print(f"Warning: {filename} has invalid YAML. Not overwriting.")
+        return
+
+    with open(filename, "w") as f:
+        yaml.dump(config, f, sort_keys=False)
 
 
 def generate_configs(config_rows, common_conf, base_config, output_dir="/home/transaction-generation/zhores/configs"):
@@ -61,10 +88,15 @@ def generate_configs(config_rows, common_conf, base_config, output_dir="/home/tr
         print("sh transaction-generation/zhores/simple.sh", run_name)
         # Save YAML
         os.makedirs(os.path.dirname(filename), exist_ok=True)
+        save_config_if_changed(filename, config)
+
         with open(filename, "w") as f:
             yaml.dump(config, f, sort_keys=False)
-
     print(f"✅ Generated {len(config_rows)} config files in '{output_dir}'")
+    
+    for _, row in config_rows.iterrows():
+        run_name = row["run_name"]
+        print("sh zhores/simple_mega.sh", run_name)
 
 def collect_res(df, cols = None):
     new_res = df.copy()
