@@ -23,7 +23,12 @@ def str_to_df(s):
 def df_to_str(df):
     s = "\t".join(df.columns) + "\n"
     for i in range(df.shape[0]):
-        values = [str(v) for v in df.iloc[i].tolist()]
+        values = []
+        for v in df.iloc[i].tolist():
+            if isinstance(v, float):
+                values += [str(v).replace(".", ",")]
+            else:
+                values += [str(v)]
         s += "\t".join(values) + "\n"
     return s
 
@@ -60,3 +65,14 @@ def generate_configs(config_rows, common_conf, base_config, output_dir="/home/tr
             yaml.dump(config, f, sort_keys=False)
 
     print(f"✅ Generated {len(config_rows)} config files in '{output_dir}'")
+
+def collect_res(df, cols = None):
+    new_res = df.copy()
+    for i, row in new_res.iterrows():
+        path = row["run_name"]
+        df = pd.read_csv(f"log/generation/{path}/results.csv", index_col=0)
+        test_cols = [col for col in df.index if ("test_" in col)]
+        if cols is not None:
+            test_cols = [col for col in test_cols if (col in cols)]
+        new_res.loc[i, test_cols] = df.loc[test_cols, "mean"]
+    return new_res
