@@ -1,4 +1,5 @@
 import warnings
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -9,6 +10,11 @@ from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
 
 from ...data.data_types import DataConfig, GenBatch, PredBatch
 from ..generator import BaseGenerator, ModelConfig
+
+
+@dataclass(frozen=True)
+class TPPConfig:
+    feature_name: str = ""
 
 
 class BaselineHP(BaseGenerator):
@@ -215,7 +221,7 @@ class BaselineHP(BaseGenerator):
                 self,
                 events,
                 gen_len,
-                supports=(1, 2, 3), #
+                supports=(1, 2, 3),  #
                 sizes=(20, 30, 50),
             )
             smp_marks, smp_times = self.tick_stream_to_marks_times(
