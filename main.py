@@ -29,12 +29,11 @@ def pop_arg(args, key):
 def run_config_factory(config_path, config_factory):
     config_paths = [config_path or "config.yaml"]
     if config_factory is not None:
-        config_paths = [
-            f"configs/{name}.yaml" for name in config_factory
-        ] + config_paths
+        config_paths += [f"configs/{name}.yaml" for name in config_factory]
     configs = [OmegaConf.load(path) for path in config_paths]
     merged_config = OmegaConf.merge(*configs)
-    merged_config.pop("config_factory")
+    merged_config["config_factory"] = None
+    return merged_config
 
 
 def main():
