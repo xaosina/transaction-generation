@@ -1,25 +1,24 @@
+import warnings
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
-import warnings
 
 import numpy as np
 import torch
 from ebes.model import BaseModel
 from ebes.model.seq2seq import Projection
+from hmmlearn.hmm import CategoricalHMM
+from sklearn.preprocessing import LabelEncoder
+from tick.base import TimeFunction
+from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
 
 from generation.models.autoencoders.vae import Decoder as VAE_Decoder
 from generation.models.autoencoders.vae import Encoder as VAE_Encoder
 from generation.models.autoencoders.vae import VaeConfig
 
-
-from ..data.data_types import DataConfig, LatentDataConfig, GenBatch, PredBatch, gather
+from ..data.data_types import DataConfig, GenBatch, LatentDataConfig, PredBatch, gather
 from .encoders import AutoregressiveEncoder, EncoderConfig
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
-from sklearn.preprocessing import LabelEncoder
-from hmmlearn.hmm import CategoricalHMM
-from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
-from tick.base import TimeFunction
 
 
 @dataclass(frozen=True)
