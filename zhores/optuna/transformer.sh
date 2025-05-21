@@ -6,9 +6,9 @@
 # script_name=$3
 n_gpus=1
 
-job_name=${1:-optun/transformer}
+job_name=${1:-optuna/transformer}
 
-array_range=${2:-1}
+array_range=${2:-"0-0"}
 
 n_days=${3:-6}
 login=${4:-d.osin}

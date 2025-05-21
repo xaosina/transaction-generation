@@ -47,8 +47,8 @@ def get_collator(
 
 
 def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConfig:
-    cat_cardinalities = copy(collator.cat_cardinalities)
-    num_names = copy(collator.num_names)
+    cat_cardinalities = copy(collator.cat_cardinalities) or {}
+    num_names = copy(collator.num_names) or []
     focus_on = copy(data_conf.focus_on)
 
     if collator.batch_transforms:
@@ -58,13 +58,17 @@ def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConf
                     num_names += [num_name]
                 for cat_name, card in tfs.cat_cardinalities.items():
                     cat_cardinalities[cat_name] = card
-                num_names = [n for n in num_names if n not in tfs.num_names_removed] if num_names is not None else None
+                num_names = [n for n in num_names if n not in tfs.num_names_removed]
                 cat_cardinalities = {
                     k: v
                     for k, v in cat_cardinalities.items()
                     if k not in tfs.cat_names_removed
                 }
                 focus_on = tfs.new_focus_on(focus_on)
+    if num_names == []:
+        num_names = None
+    if cat_cardinalities == {}:
+        cat_cardinalities = None
 
     return LatentDataConfig(
         cat_cardinalities=cat_cardinalities,

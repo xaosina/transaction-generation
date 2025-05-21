@@ -4,7 +4,7 @@ n_gpus=1
 
 job_name=${1:-simple}
 
-time=${2:-"00-10"}
+time=${2:-"00-03"}
 login=${3:-d.osin}
 
 PATH_TO_CHECK=/gpfs/gpfs0/${login}/transaction-generation/zhores/configs/${job_name}.yaml

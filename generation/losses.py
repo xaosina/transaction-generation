@@ -5,25 +5,13 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Module
 
-from generation.data.data_types import Batch, PredBatch, DataConfig, LatentDataConfig
+from generation.data.data_types import Batch, PredBatch, LatentDataConfig
 
 
 @dataclass(frozen=True)
 class LossConfig:
     name: Optional[str] = "baseline"
     params: dict = field(default_factory=dict)
-
-
-def mse_valid(pred, true, valid_mask):
-    if true.ndim == 3:
-        valid_mask = valid_mask.unsqueeze(-1)
-
-    res = (pred - true) ** 2
-    userwise_res = torch.where(valid_mask, res, torch.nan).nansum(dim=0)
-    userwise_tot = torch.where(valid_mask, torch.ones_like(res), torch.zeros_like(res)).sum(dim=0) 
-    mse = userwise_res / userwise_tot
-
-    return mse.sum(), mse.numel()
 
 
 def rse_valid(pred, true, valid_mask):

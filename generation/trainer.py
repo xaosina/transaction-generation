@@ -298,6 +298,7 @@ class Trainer:
 
                 with record_function("forward"):
                     pred = self._model(batch)
+
                 loss = self._loss(batch, pred)
 
                 if torch.isnan(loss).any():
