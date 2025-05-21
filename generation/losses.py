@@ -71,7 +71,6 @@ class BaseLoss(Module):
         data_conf = self.data_conf
         num_names = y_pred.num_features_names or []
         num_names = list(set(data_conf.focus_on) & set(num_names))
-        # breakpoint()
         if data_conf.time_name in data_conf.focus_on:
             pred_time = y_pred.time[self.pred_slice]  # [L, B]
             true_time = y_true.time[self.true_slice]  # [L, B]
@@ -107,7 +106,6 @@ class BaseLoss(Module):
 
         total_ce = 0.0
         ce_count = 0
-        # breakpoint()
         for key in cat_names:
             true_cat = y_true[key][self.true_slice].clone()
             current_mask = valid_mask[self.true_slice]
@@ -115,7 +113,6 @@ class BaseLoss(Module):
 
             pred_cat = y_pred.cat_features[key].permute(1, 2, 0)  # [B, C, L]
             pred_cat = pred_cat[:, :, self.pred_slice]
-            # breakpoint()
             # Compute loss
             ce_loss = F.cross_entropy(
                 pred_cat,
@@ -152,6 +149,75 @@ class BaselineLoss(BaseLoss):
     def true_slice(self):
         return slice(1, None)  # Targets use all except first time step
 
+class NoOrderLoss(BaseLoss):
+    @property
+    def pred_slice(self):
+        return slice(None, -1)  # Predictions use all except last time step
+
+    @property
+    def true_slice(self):
+        return slice(1, None)  # Targets use all except first time step
+    
+
+    def bag_mse_loss(self, logits, targets, window=10, ignore_index=-100, eps=1e-8):
+        """
+        logits  : [B,L,C]
+        targets : [B,L]
+        Возвращает средний MSE между нормализованными гистограммами p и q.
+        """
+        B, L, C = logits.shape
+        prob = logits.softmax(-1)  # [B,L,C]
+        
+        loss, n_windows = 0.0, 0
+        for t0 in range(0, L, window):
+            t1 = min(L, t0 + window)
+            
+            # Распределение предсказанний
+            p_counts = prob[:, t0:t1].sum(1)  # [B,C]
+            p = p_counts / (p_counts.sum(-1, keepdim=True) + eps)
+
+            # Распределение таргеров
+            tgt = targets[:, t0:t1]
+            mask = tgt.ne(ignore_index)
+            one_hot = F.one_hot(tgt.clamp(min=0), C).float() * mask.unsqueeze(-1)
+            q_counts = one_hot.sum(1)  # [B,C]
+            q = q_counts / (q_counts.sum(-1, keepdim=True) + eps)
+
+            loss += ((p - q) ** 2).sum(-1).mean() / 2   # MSE
+            n_windows += 1
+
+        return loss / max(n_windows, 1)
+
+
+    def _compute_loss(self, y_true, y_pred, valid_mask):
+        if not y_pred.cat_features:
+            return torch.tensor(0.0, device=valid_mask.device)
+        data_conf = self.data_conf
+        cat_names = y_pred.cat_features or {}
+        cat_names = list(set(data_conf.focus_on) & set(cat_names))
+
+        total_loss = 0.0
+        ce_count = 0
+        assert len(cat_names) == 1
+        
+        for key in cat_names:
+            true_cat = y_true[key][self.true_slice].clone()
+            current_mask = valid_mask[self.true_slice]
+            true_cat[~current_mask] = self._ignore_index    
+
+            pred_cat = y_pred.cat_features[key].permute(1, 2, 0)  # [B, C, L]
+            pred_cat = pred_cat[:, :, self.pred_slice]
+
+            loss = self.bag_mse_loss(pred_cat.permute(0, 2, 1), true_cat.permute(1, 0), window=int(1e10))
+            total_loss += loss
+            ce_count += 1
+
+        return (total_loss / ce_count) if ce_count != 0 else torch.tensor(0.0)
+
+    def __call__(self, y_true, y_pred) -> torch.Tensor:
+        valid_mask = self._valid_mask(y_true)
+        loss = self._compute_loss(y_true, y_pred, valid_mask)
+        return loss
 
 class TailLoss(BaseLoss):
     @property
@@ -198,5 +264,7 @@ def get_loss(data_conf: LatentDataConfig, config: LossConfig):
         return TailLoss(data_conf, **config.params)
     elif name == "vae":
         return VAELoss(data_conf, init_beta=1.0, **config.params)
+    elif name == "no_order_loss":
+        return NoOrderLoss(data_conf, **config.params)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")
