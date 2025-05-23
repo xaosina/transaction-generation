@@ -16,24 +16,24 @@ evaluator:
       target_key: event_type
       average: micro
 
-  - CardinalityCoverage:
-      target_key: event_type
-      overall: False
-  - CardinalityCoverage:
-      target_key: event_type
-      overall: True
-  - NoveltyScore:
-      target_key: event_type
-      overall: False
-  - NoveltyScore:
-      target_key: event_type
-      overall: True
+#   - CardinalityCoverage:
+#       target_key: event_type
+#       overall: False
+#   - CardinalityCoverage:
+#       target_key: event_type
+#       overall: True
+#   - NoveltyScore:
+#       target_key: event_type
+#       overall: False
+#   - NoveltyScore:
+#       target_key: event_type
+#       overall: True
 
-  - Density:
-      log_cols: ["amount"]
-      with_timediff: True
-      save_details: True
-      verbose: True
+#   - Density:
+#       log_cols: ["amount"]
+#       with_timediff: True
+#       save_details: True
+#       verbose: True
 
 #   - Detection:
 #       dataset_config: detection/mbd

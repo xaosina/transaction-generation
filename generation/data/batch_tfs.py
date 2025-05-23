@@ -137,7 +137,8 @@ class CutTargetSequence(BatchTransform):
     def __call__(self, batch: GenBatch):
         assert (
             batch.lengths.min() > self.target_len
-        ), "target_len is too big for this batch"
+        ), f"target_len is too big for this batch. Current min length = {batch.lengths.min()}"
+
         target_batch = batch.tail(self.target_len)
         batch.target_time = target_batch.time
         batch.target_num_features = target_batch.num_features
@@ -905,3 +906,63 @@ class NGramTransform(NewFeatureTransform):
             batch.cat_features_names.append(f"{self.feature_name}")
             batch.target_cat_features = torch.tensor(target_cat_features)
             batch.target_time = torch.tensor(target_times)
+
+
+@dataclass
+class ExcludeCategories(BatchTransform):
+    """Add quantile transform for the feature"""
+
+    feature_name: str
+    exclude_categories: list[int]
+    min_hist_len: int
+    gen_len: int
+
+    def __post_init__(self):
+        self.min_len = self.gen_len + self.min_hist_len
+
+    def __call__(self, batch: GenBatch):
+        feature_id = batch.cat_features_names.index(self.feature_name)
+        
+        L, B = batch[self.feature_name].shape
+        self.max_l = L
+        new_cat_features = np.zeros_like(batch[self.feature_name].cpu().numpy())
+        new_times = np.zeros_like(batch.time.cpu().numpy())
+        for i in range(B):
+            seq = batch.cat_features[:, i, feature_id].cpu().numpy()
+            time = batch.time[:, i].cpu().numpy()
+            seq_len = batch.lengths[i]
+            seq = seq[:seq_len]
+            time = time[:seq_len]
+
+            exclude_indicies = ~np.isin(seq, self.exclude_categories)
+            shorted_seq = seq[exclude_indicies]
+            shorted_time = time[exclude_indicies]
+            new_seq_len = shorted_seq.shape[0]
+            new_seq = np.zeros((L, ))
+            new_time = np.zeros((L, ))
+            new_seq[:new_seq_len] = shorted_seq
+            new_time[:new_seq_len] = shorted_time
+            
+            new_cat_features[:, i] = new_seq
+            new_times[:, i] = new_time
+            batch.lengths[i] = new_seq_len
+
+        max_len = batch.lengths.max()
+        valid_seqs = batch.lengths > self.min_len
+        batch.cat_features[:, :, feature_id] = torch.tensor(new_cat_features)
+        batch.time = torch.tensor(new_times)[:max_len]
+        batch.cat_features = batch.cat_features[:max_len]
+
+        batch.lengths = batch.lengths[valid_seqs]
+        batch.time = batch.time[:, valid_seqs]
+        batch.index = batch.index[valid_seqs]
+
+        if batch.cat_features is not None:
+            batch.cat_features = batch.cat_features[:, valid_seqs, :]
+        if batch.num_features is not None:
+            batch.num_features = batch.num_features[:, valid_seqs, :]
+        if batch.lengths.shape[0] == 0:
+            breakpoint()
+
+    def reverse(self, batch):
+        pass

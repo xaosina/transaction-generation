@@ -12,10 +12,13 @@ from generation.models.autoencoders.vae import VaeConfig
 
 from ..data.data_types import GenBatch, LatentDataConfig, PredBatch, gather
 from .encoders import AutoregressiveEncoder, EncoderConfig
-from .generators.tpp import TPPConfig
 from .preprocessor import PreprocessorConfig, create_preprocessor
 from .reconstructors import ReconstructorBase
 
+
+@dataclass(frozen=True)
+class TPPConfig:
+    feature_name: str = ""
 
 @dataclass(frozen=True)
 class ModelConfig:

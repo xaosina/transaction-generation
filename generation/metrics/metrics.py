@@ -36,6 +36,13 @@ class BaseMetric(ABC):
     def __repr__(self): ...
 
 
+class BatchCutMetric(BaseMetric):
+    def __call__(self, orig, gen):
+        return orig[self.data_conf.index_name].shape[0]
+    
+    def __repr__(self):
+        return "BatchCutMetric"
+
 @dataclass
 class Reconstruction(BaseMetric):
     def __call__(self, orig, gen):

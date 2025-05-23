@@ -24,4 +24,5 @@ __all__ = [
     "CardinalityCoverageSimple",
     "Gini",
     "ShannonEntropy",
+    "BatchCutMetric"
 ]

@@ -1,5 +1,4 @@
 import warnings
-from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -11,10 +10,6 @@ from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
 from ...data.data_types import DataConfig, GenBatch, PredBatch
 from ..generator import BaseGenerator, ModelConfig
 
-
-@dataclass(frozen=True)
-class TPPConfig:
-    feature_name: str = ""
 
 
 class BaselineHP(BaseGenerator):

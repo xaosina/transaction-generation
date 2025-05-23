@@ -32,6 +32,7 @@ class SampleEvaluator:
         eval_config: EvaluatorConfig,
         device: str = "cpu",
         verbose: bool = True,
+        same_latent: bool = False
     ):
         self.log_dir = Path(log_dir)
         self.data_config = data_conf
@@ -49,6 +50,7 @@ class SampleEvaluator:
             or []
         )
         self.verbose = verbose
+        self.same_latent = same_latent
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
@@ -85,13 +87,17 @@ class SampleEvaluator:
                 break
 
             batch_input = batch_input.to(self.device)
+            if self.same_latent:
+                orig_seqs = deepcopy(batch_input)
+
             with torch.no_grad():
                 batch_pred = model.generate(
                     deepcopy(batch_input), self.data_config.generation_len
                 )
             gen = _concat_samples(batch_input, batch_pred)
             gen = data_loader.collate_fn.reverse(gen.to("cpu"))
-
+            if self.same_latent:
+                orig_seqs = data_loader.collate_fn.reverse(orig_seqs.to("cpu"))
             buffer_gt.append(orig_seqs)
             buffer_gen.append(gen)
 
