@@ -33,6 +33,7 @@ class ShardDataset(IterableDataset):
         n_resamples: int = 1,
         random_end: Literal["index", "time", "none"] = "none",
         shuffle: bool = False,
+        transforms: list = None
     ):
         super().__init__()
         if isinstance(data_path, list):
@@ -52,6 +53,7 @@ class ShardDataset(IterableDataset):
         self.n_resamples = n_resamples
         self.random_end = random_end
         self.shuffle = shuffle
+        self.transforms = transforms
 
     def __len__(self):
         """
@@ -68,7 +70,7 @@ class ShardDataset(IterableDataset):
 
     @classmethod
     def train_val_split(
-        cls, data_path, data_conf: DataConfig, split_seed: int = None
+        cls, data_path, data_conf: DataConfig, split_seed: int = None, transforms: list = None
     ) -> tuple["ShardDataset", "ShardDataset"]:
         assert isinstance(data_path, str)
         fragments = {
@@ -89,6 +91,7 @@ class ShardDataset(IterableDataset):
             n_resamples=data_conf.train_resamples,
             random_end=data_conf.train_random_end,
             shuffle=True,
+            transforms=transforms,
         )
         val_dataset = cls(
             val_paths,
@@ -96,6 +99,7 @@ class ShardDataset(IterableDataset):
             seed=0,
             random_end=data_conf.val_random_end,
             shuffle=False,
+            transforms=transforms,
         )
 
         return train_dataset, val_dataset
@@ -175,10 +179,10 @@ class ShardDataset(IterableDataset):
                 )
 
             data = self._slice_rows(data, end_indices)
+        for transform in self.transforms:
+            data = transform(data)
 
-            # Post-process for time-based slicing
-            data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
-
+        data = data[data._seq_len >= min_seq_len].reset_index(drop=True)
         return data
 
     def _slice_rows(self, data, end_indices):

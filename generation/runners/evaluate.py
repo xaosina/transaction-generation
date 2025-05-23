@@ -23,8 +23,8 @@ class GenerationEvaluator(Runner):
         cfg = from_dict(PipelineConfig, cfg)
         assert isinstance(cfg, PipelineConfig)
 
-        (train_loader, val_loader, test_loader), internal_dataconf = get_dataloaders(
-            cfg.data_conf, cfg.common_seed
+        (train_loader, val_loader, test_loader), (internal_dataconf, cfg.data_conf) = (
+            get_dataloaders(cfg.data_conf, cfg.common_seed)
         )
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
@@ -63,7 +63,7 @@ class GenerationEvaluator(Runner):
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
         return dict(
-                # **train_metrics, 
-                # **val_metrics, 
-                **test_metrics
-            )
+            # **train_metrics,
+            # **val_metrics,
+            **test_metrics
+        )

@@ -3,6 +3,10 @@ config_factory:
   - methods/gru
   - datasets/mbd/metrics/default
 
+model:
+  name:
+  encoder:
+
 # Runner params:
 log_dir: log/generation
 device: "cuda:1"

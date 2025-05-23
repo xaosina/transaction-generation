@@ -60,6 +60,53 @@ class GroundTruthGenerator(BaseGenerator):
             return gen_batch.tail(gen_len)
 
 
+class ModeGenerator(BaseGenerator):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a repeator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        def get_mode(tensor, lengths, discrete=True):
+            if tensor is None:
+                return None
+            shape = list(tensor.shape)
+            shape[0] = 1
+            B = shape[1]
+            res = torch.empty(*shape, device=tensor.device, dtype=tensor.dtype)
+            for b in range(B):
+                valid_length = lengths[b]
+                valid_tensor = tensor[:valid_length, b]
+                if discrete:
+                    mode_value, _ = torch.mode(valid_tensor, dim=0)
+                    res[0, b] = mode_value
+                else:
+                    mean_value = torch.mean(valid_tensor, dim=0)
+                    res[0, b] = mean_value
+            new_shape = [1] * len(res.shape)
+            new_shape[0] = gen_len
+            return res.repeat(new_shape)  # [gen_len, B, D]
+
+        assert isinstance(hist.time, torch.Tensor)
+        assert not hist.monotonic_time, "Vpadlu delat dlya monotonic"
+        hist = deepcopy(hist)
+        gen_batch = replace(
+            hist,
+            lengths=torch.ones_like(hist.lengths) * gen_len,
+            time=get_mode(hist.time, hist.lengths, False),
+            num_features=get_mode(hist.num_features, hist.lengths, False),
+            cat_features=get_mode(hist.cat_features, hist.lengths),
+            cat_mask=get_mode(hist.cat_mask, hist.lengths),
+            num_mask=get_mode(hist.num_mask, hist.lengths),
+        )
+        if with_hist:
+            hist.append(gen_batch)
+            return hist
+        else:
+            return gen_batch
+
+
 class BaselineRepeater(BaseGenerator):
     def __init__(self, *args, **kwargs):
         super().__init__()
