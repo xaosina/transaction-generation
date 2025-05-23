@@ -74,14 +74,19 @@ def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConf
         cat_cardinalities=cat_cardinalities,
         num_names=num_names,
         focus_on=focus_on,
-        time_name=data_conf.time_name
+        time_name=data_conf.time_name,
     )
 
 
+def get_transforms(data_conf): ...
+
+
 def get_dataloaders(data_conf: DataConfig, seed: int):
+    transforms, new_data_conf = get_transforms(data_conf)
+
     # Create datasets
     train_dataset, val_dataset = ShardDataset.train_val_split(
-        data_conf.train_path, data_conf, split_seed=seed
+        data_conf.train_path, data_conf, split_seed=seed, transforms=transforms
     )
     test_dataset = ShardDataset(
         data_conf.test_path,
@@ -89,6 +94,7 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
         seed=0,
         random_end=data_conf.val_random_end,
         shuffle=False,
+        transforms=transforms,
     )
     # Create collators (val and test has same collators)
     train_collator = get_collator(data_conf, data_conf.train_transforms)
@@ -115,4 +121,4 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
         collate_fn=val_collator,
         num_workers=data_conf.num_workers,
     )
-    return (train_loader, val_loader, test_loader), internal_dataconf
+    return (train_loader, val_loader, test_loader), (internal_dataconf, new_data_conf)

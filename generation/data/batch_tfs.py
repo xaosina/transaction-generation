@@ -57,7 +57,7 @@ class NewFeatureTransform(BatchTransform):
     @property
     def cat_names_removed(self) -> list[str] | None:
         return []
-    
+
     def new_focus_on(self, focus_on) -> list[str]:
         return focus_on
 
@@ -85,7 +85,7 @@ class ShuffleBatch(BatchTransform):
             return
         max_len = batch.time.shape[0]
         bs = len(batch)
-        i_len = torch.arange(max_len)[:, None]  # [L, 1]
+        i_len = torch.arange(max_len, device=batch.lengths.device)[:, None]  # [L, 1]
         i_batch = torch.arange(bs)  # [B]
 
         up_len, bot_len = batch.lengths, torch.zeros_like(batch.lengths)
@@ -98,14 +98,18 @@ class ShuffleBatch(BatchTransform):
             up_len = batch.lengths
             bot_len = batch.lengths + self.untouched_slice[1]
             assert (bot_len >= 0).all(), bot_len
-        
-        valid = ((i_len >= bot_len) & (i_len < up_len))  # [L, B]
+
+        valid = (i_len >= bot_len) & (i_len < up_len)  # [L, B]
         permutation_within_len = torch.multinomial(valid.float().T, max_len).T  # [L, B]
         t_values = i_len.expand(-1, bs).clone()
         if self.untouched_slice[1] is None:
-            permutation_within_len = torch.where(valid, permutation_within_len, t_values)
+            permutation_within_len = torch.where(
+                valid, permutation_within_len, t_values
+            )
         else:
-            t_values.T[valid.T] = permutation_within_len[: - self.untouched_slice[1]].T.ravel()
+            t_values.T[valid.T] = permutation_within_len[
+                : -self.untouched_slice[1]
+            ].T.ravel()
             permutation_within_len = t_values
 
         if batch.cat_features is not None:
@@ -715,44 +719,43 @@ class NGramTransform(NewFeatureTransform):
 
     @staticmethod
     def merge_ngrams(
-        seq: np.ndarray, 
-        time: np.ndarray, 
-        ngram_map: dict[tuple[int, ...], int], n: int
+        seq: np.ndarray, time: np.ndarray, ngram_map: dict[tuple[int, ...], int], n: int
     ) -> np.ndarray:
         out_seq, out_time, i = [], [], 0
         while i < len(seq):
             if i <= len(seq) - n and tuple(seq[i : i + n]) in ngram_map:
                 out_seq.append(ngram_map[tuple(seq[i : i + n])])
-                out_time.append(np.mean(time[i: i + n]))
+                out_time.append(np.mean(time[i : i + n]))
                 i += n
             else:
                 out_seq.append(seq[i])
                 out_time.append(time[i])
                 i += 1
-        return (
-            np.asarray(out_seq, dtype=int), 
-            np.asarray(out_time, dtype=float)
-        )
+        return (np.asarray(out_seq, dtype=int), np.asarray(out_time, dtype=float))
 
     def decode_merged_sequence(
-        self, 
-        merged: np.ndarray, 
-        averaged_time: np.ndarray, 
+        self,
+        merged: np.ndarray,
+        averaged_time: np.ndarray,
         ngram_map: dict[tuple[int, ...], int],
         n_order: list[int],
     ) -> np.ndarray:
         restored_time = averaged_time
         restored_seq = merged
-        
-        for n in n_order:
-            restored_seq, restored_time = self.demerge(restored_seq, restored_time, ngram_map, n)
 
-        return np.asarray(restored_seq, dtype=int), np.asarray(restored_time, dtype=float)
+        for n in n_order:
+            restored_seq, restored_time = self.demerge(
+                restored_seq, restored_time, ngram_map, n
+            )
+
+        return np.asarray(restored_seq, dtype=int), np.asarray(
+            restored_time, dtype=float
+        )
 
     def demerge(
-        self, 
-        merged: np.ndarray, 
-        averaged_time: np.ndarray, 
+        self,
+        merged: np.ndarray,
+        averaged_time: np.ndarray,
         ngram_map: dict[tuple[int, ...], int],
         n: int,
     ):
@@ -778,9 +781,9 @@ class NGramTransform(NewFeatureTransform):
     ) -> np.ndarray:
         out_seq = np.asarray(seq, dtype=int)
         out_time = np.asarray(time, dtype=float)
-        
-        for n in n_order:   
-            out = self.merge_ngrams(out_seq, out_time, mapping_dict[f'{n}-grams'], n)
+
+        for n in n_order:
+            out = self.merge_ngrams(out_seq, out_time, mapping_dict[f"{n}-grams"], n)
         return out
 
     def __post_init__(self):
@@ -795,16 +798,18 @@ class NGramTransform(NewFeatureTransform):
     def cat_cardinalities(self) -> list[str] | None:
         assert self.ngram_counts != -1
         new_cats = {}
-        new_cats[f"{self.feature_name}_merged"] = self.feature_counts + self.ngram_counts + 1
+        new_cats[f"{self.feature_name}_merged"] = (
+            self.feature_counts + self.ngram_counts + 1
+        )
         return new_cats
 
     @property
     def cat_names_removed(self) -> list[str] | None:
         return self.feature_name
-    
+
     def new_focus_on(self, focus_on):
         new_focus_on = [i for i in focus_on if i != self.feature_name]
-        new_focus_on.append(self.feature_name + '_merged')
+        new_focus_on.append(self.feature_name + "_merged")
         return new_focus_on
 
     def __call__(self, batch: GenBatch):
@@ -820,15 +825,17 @@ class NGramTransform(NewFeatureTransform):
             seq = seq[:seq_len]
             time = time[:seq_len]
 
-            coded_seq, averaged_time = self.encode_sequence(seq, time, mapping_dict=self.mapping, n_order=[3, 2])
+            coded_seq, averaged_time = self.encode_sequence(
+                seq, time, mapping_dict=self.mapping, n_order=[3, 2]
+            )
             assert time.shape == seq.shape
             new_seq_len = coded_seq.shape[0]
-            new_seq = np.zeros((L, ))
-            new_time = np.zeros((L, ))
-            
+            new_seq = np.zeros((L,))
+            new_time = np.zeros((L,))
+
             new_seq[:new_seq_len] = coded_seq
             new_time[:new_seq_len] = averaged_time
-            
+
             new_cat_features[:, i] = new_seq
             new_times[:, i] = new_time
             batch.lengths[i] = new_seq_len
@@ -839,9 +846,8 @@ class NGramTransform(NewFeatureTransform):
         batch.time = torch.tensor(new_times)[:max_len]
         batch.cat_features = batch.cat_features[:max_len]
 
-
     def reverse(self, batch):
-        new_feature_name = self.feature_name + '_merged'
+        new_feature_name = self.feature_name + "_merged"
         assert new_feature_name in self.cat_cardinalities
         _, B = batch[new_feature_name].shape
         L = self.max_l
@@ -854,32 +860,44 @@ class NGramTransform(NewFeatureTransform):
         for i in range(B):
             seq = batch.cat_features[:, i, feature_id].cpu().numpy()
             time = batch.time[:, i].cpu().numpy()
-            
+
             target_seq = batch.target_cat_features[:, i, feature_id].cpu().numpy()
             target_time = batch.target_time[:, i].cpu().numpy()
 
             seq_len = batch.lengths[i]
             seq = seq[:seq_len]
             time = time[:seq_len]
-            decoded_seq, decoded_time = self.decode_merged_sequence(seq, time, ngram_map=self.mapping, n_order=[2, 3])
-            decoded_target, decoded_target_time = self.decode_merged_sequence(target_seq, target_time, ngram_map=self.mapping, n_order=[2, 3])
+            decoded_seq, decoded_time = self.decode_merged_sequence(
+                seq, time, ngram_map=self.mapping, n_order=[2, 3]
+            )
+            decoded_target, decoded_target_time = self.decode_merged_sequence(
+                target_seq, target_time, ngram_map=self.mapping, n_order=[2, 3]
+            )
             assert time.shape == seq.shape
             new_seq_len = decoded_seq.shape[0]
-            
+
             new_cat_features[:new_seq_len, i] = decoded_seq
             new_times[:new_seq_len, i] = decoded_time
 
             target_cat_features[:, i, feature_id] = decoded_target[:32]
             target_times[:, i] = decoded_target_time[:32]
-            
+
             batch.lengths[i] = new_seq_len
 
-        cat_feature_to_remove = self.feature_name + '_merged'
+        cat_feature_to_remove = self.feature_name + "_merged"
 
         batch.cat_features_names.index(cat_feature_to_remove)
 
-        remaining_names = [name for name in batch.cat_features_names if name != self.feature_name + '_merged']
-        new_indices = [batch.cat_features_names.index(name) for name in batch.cat_features_names if name == self.feature_name + '_merged']
+        remaining_names = [
+            name
+            for name in batch.cat_features_names
+            if name != self.feature_name + "_merged"
+        ]
+        new_indices = [
+            batch.cat_features_names.index(name)
+            for name in batch.cat_features_names
+            if name == self.feature_name + "_merged"
+        ]
         remaining_indices = [
             i for i in range(len(batch.cat_features_names)) if i not in new_indices
         ]
@@ -894,7 +912,9 @@ class NGramTransform(NewFeatureTransform):
 
         # Add back to num_features
         if batch.cat_features is None:
-            batch.cat_features = torch.tensor(new_cat_features, dtype=float).unsqueeze(2)
+            batch.cat_features = torch.tensor(new_cat_features, dtype=float).unsqueeze(
+                2
+            )
             batch.time = torch.tensor(new_times, dtype=float)
             batch.cat_features_names = [f"{self.feature_name}"]
             batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)

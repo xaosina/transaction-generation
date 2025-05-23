@@ -130,14 +130,14 @@ def generate_configs(
 
 def collect_res(df, cols=None):
     new_res = df.copy()
+    orig_cols = list(new_res.columns)
     for i, row in new_res.iterrows():
         path = row["run_name"]
         df = pd.read_csv(f"log/generation/{path}/results.csv", index_col=0)
         test_cols = [col for col in df.index if ("test_" in col)]
-        if cols is not None:
-            test_cols = [col for col in test_cols if (col in cols)]
-        new_res.loc[i, test_cols] = df.loc[test_cols, "mean"]
-        new_res.loc[i, [c + "_s" for c in test_cols]] = list(df.loc[test_cols, "std"])
-        if cols is not None:
-            new_res = new_res.drop(columns=cols)
+        new_res.loc[i, test_cols] = list(df.loc[test_cols, "mean"])            
+        new_res.loc[i, [c + "_std" for c in test_cols]] = list(df.loc[test_cols, "std"])
+    if cols:
+        orig_cols += cols
+    new_res = new_res[orig_cols]
     return new_res
