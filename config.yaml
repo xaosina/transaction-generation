@@ -1,8 +1,5 @@
-config_factory:
-  - datasets/mbd/mbd
-  - methods/gru
-  - datasets/mbd/metrics/default
-
+config_factory: [datasets/mbd/mbd,methods/gpt,datasets/mbd/metrics/default]
+ 
 model:
   name:
   encoder:

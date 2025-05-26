@@ -7,21 +7,6 @@ from ..data.data_types import GenBatch, LatentDataConfig, PredBatch
 # from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
 
 
-class ReconstructorMSE:
-    def __init__(self):
-
-        self.decoder = VAE_Decoder  # Import decoder from VAE.
-        self.rvqvae = ...  # #Import rvqvae from RVQ-VAE.
-
-    def forward(self, x):
-        return x
-
-    def generate(self, x):
-        x = self.decoder(x)
-        # TODO: Other reconstruction.
-        return x
-
-
 class ReconstructorBase(BaseModel):
     def __init__(self, data_conf: LatentDataConfig, in_features):
         super().__init__()
