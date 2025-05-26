@@ -78,8 +78,8 @@ def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConf
     )
 
 
-def get_transforms(data_conf): ...
-
+def get_transforms(data_conf):
+    return [], data_conf
 
 def get_dataloaders(data_conf: DataConfig, seed: int):
     transforms, new_data_conf = get_transforms(data_conf)

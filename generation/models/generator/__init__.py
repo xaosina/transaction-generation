@@ -10,10 +10,10 @@ from generation.models.autoencoders.vae import Decoder as VAE_Decoder
 from generation.models.autoencoders.vae import Encoder as VAE_Encoder
 from generation.models.autoencoders.vae import VaeConfig
 
-from ..data.data_types import GenBatch, LatentDataConfig, PredBatch, gather
-from .encoders import AutoregressiveEncoder, EncoderConfig
-from .preprocessor import PreprocessorConfig, create_preprocessor
-from .reconstructors import ReconstructorBase
+from ...data.data_types import GenBatch, LatentDataConfig, PredBatch, gather
+from ..encoders import AutoregressiveEncoder, EncoderConfig
+from ..preprocessor import PreprocessorConfig, create_preprocessor
+from ..reconstructors import ReconstructorBase
 
 
 @dataclass(frozen=True)
