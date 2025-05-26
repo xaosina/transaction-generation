@@ -13,6 +13,8 @@ data_conf:
   cat_cardinalities:
     event_type: 55
   index_name: client_id
+  num_names: 
+    ["amount"]
   time_name: days_since_first_tx
   focus_on: 
     - event_type
@@ -31,7 +33,7 @@ data_conf:
 
   train_random_end: none
   val_random_end: time
-  # loader_transforms:
+  loader_transforms:
     # "0":
     #   ExcludeCategories:
     #     feature_name: "event_type"
@@ -39,6 +41,15 @@ data_conf:
     #     # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
     #     min_hist_len: *min_history_len
     #     gen_len: *generation_len
+    "0":
+      NumericalFilter:
+        feature_name: "amount"
+        min_hist_len: *min_history_len
+        gen_len: *generation_len
+        min_cut: true
+        max_cut: true
+        low_quantile: .01
+        high_quantile: .99
 
   train_transforms:
     "0":
