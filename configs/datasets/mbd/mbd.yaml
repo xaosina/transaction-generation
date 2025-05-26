@@ -31,7 +31,15 @@ data_conf:
 
   train_random_end: none
   val_random_end: time
-  
+  # loader_transforms:
+    # "0":
+    #   ExcludeCategories:
+    #     feature_name: "event_type"
+    #     exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
+    #     # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
+    #     min_hist_len: *min_history_len
+    #     gen_len: *generation_len
+
   train_transforms:
     "0":
       RescaleTime:
@@ -40,13 +48,6 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    "2":
-      ExcludeCategories:
-        feature_name: "event_type"
-        exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
-        # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
-        min_hist_len: *min_history_len
-        gen_len: *generation_len
     # "shuffle":
     #   ShuffleBatch:
     #     untouched_slice: [None, None]
@@ -57,23 +58,10 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: False
+        disable: false
     # shuffle:
     #   ShuffleBatch:
     #     untouched_slice: [None, None]
     "2":
-      ExcludeCategories:
-        feature_name: "event_type"
-        exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
-        # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
-        min_hist_len: *min_history_len
-        gen_len: *generation_len
-    "3":
       CutTargetSequence:
         target_len: *generation_len
-# [1, 3, 4, 8, 11, 2, 12, 6, 20, 7, 13, 5, 15]
-# [54, 53, 52, 48, 51, 49, 50, 46, 47]
-
-# [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
-# [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41, 5]
-# [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]

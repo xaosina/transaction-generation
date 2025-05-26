@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
 from . import batch_tfs
+from . import loader_tfs
 from .batch_tfs import NewFeatureTransform
 from .collator import SequenceCollator
 from .data_types import DataConfig, LatentDataConfig
@@ -78,21 +79,27 @@ def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConf
     )
 
 
-def get_transforms(data_conf): ...
+def get_transforms(data_conf: DataConfig): 
+    loader_transforms = data_conf.loader_transforms
+    tfs = create_instances_from_module(loader_tfs, loader_transforms) if loader_transforms is not None else []
+    for tf in tfs:
+        data_conf = tf.new_dataconf(data_conf)
+
+    return tfs, data_conf
 
 
-def get_dataloaders(data_conf: DataConfig, seed: int):
-    transforms, new_data_conf = get_transforms(data_conf)
+def get_dataloaders(outter_data_conf: DataConfig, seed: int):
+    transforms, data_conf = get_transforms(outter_data_conf)
 
     # Create datasets
     train_dataset, val_dataset = ShardDataset.train_val_split(
-        data_conf.train_path, data_conf, split_seed=seed, transforms=transforms
+        outter_data_conf.train_path, outter_data_conf, split_seed=seed, transforms=transforms
     )
     test_dataset = ShardDataset(
-        data_conf.test_path,
-        data_conf,
+        outter_data_conf.test_path,
+        outter_data_conf,
         seed=0,
-        random_end=data_conf.val_random_end,
+        random_end=outter_data_conf.val_random_end,
         shuffle=False,
         transforms=transforms,
     )
@@ -121,4 +128,4 @@ def get_dataloaders(data_conf: DataConfig, seed: int):
         collate_fn=val_collator,
         num_workers=data_conf.num_workers,
     )
-    return (train_loader, val_loader, test_loader), (internal_dataconf, new_data_conf)
+    return (train_loader, val_loader, test_loader), (internal_dataconf, data_conf)

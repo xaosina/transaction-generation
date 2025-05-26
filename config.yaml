@@ -1,6 +1,6 @@
 config_factory:
   - datasets/mbd/mbd
-  - methods/gru
+  - methods/mode
   - datasets/mbd/metrics/default
 
 model:
@@ -13,7 +13,7 @@ device: "cuda:1"
 common_seed: 0
 
 runner:
-  name: GenerationTrainer
+  name: GenerationEvaluator
   run_type: simple
   seed_keys:
     - "common_seed"

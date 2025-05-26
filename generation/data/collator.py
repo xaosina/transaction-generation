@@ -72,7 +72,6 @@ class SequenceCollator:
                 for i, name in enumerate(num_names):
                     assert num_features is not None
                     num_features[slice_idx, b, i] = torch.tensor(s[name][-sl:])
-
             for i, (name, card) in enumerate(cat_cardinalities.items()):
                 assert cat_features is not None
                 cat_features[slice_idx, b, i] = torch.tensor(s[name][-sl:]).clamp_(

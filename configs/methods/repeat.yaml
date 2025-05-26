@@ -1,0 +1,21 @@
+
+# MODEL
+model:
+  name: BaselineRepeater
+  preprocessor:
+    cat_emb_dim: 16
+    num_emb_dim: 64
+    num_norm: True
+    batch_transforms:
+      '0':
+        TimeToFeatures:
+          process_type: "cat"
+  encoder:
+    name: GRU
+    params:
+      hidden_size: 256
+      num_layers: 4
+  tpp:
+    feature_name: "event_type"
+trainer:
+  verbose: True
