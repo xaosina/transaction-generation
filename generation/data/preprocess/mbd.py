@@ -1,36 +1,15 @@
 import argparse
-import pickle
 import shutil
 from pathlib import Path
-from typing import Dict, List
 
 import numpy as np
 import torch
-from generation.data.preprocess.quantile_transformer import QuantileTransformerTorch
 from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
-from sklearn.preprocessing import LabelEncoder
+
+from generation.data.preprocess.quantile_transformer import QuantileTransformerTorch
 
 from .common import csv_to_parquet
-
-
-# TODO: Эту функцию в препроцесс паркетов
-def encode_client_ids(train_clients: Dict, test_clients: Dict, config) -> List[Dict]:
-    clients = np.hstack((train_clients, test_clients))
-
-    encoder = LabelEncoder()
-    encoder.fit(clients)
-    train_clients = encoder.transform(train_clients)
-    test_clients = encoder.transform(test_clients)
-
-    config["client_ids_encoder_save_path"] = (
-        f"{config['vae_ckpt_dir']}/client_ids_encoder.pickle"
-    )
-
-    with open(config["client_ids_encoder_save_path"], "wb") as file:
-        pickle.dump(encoder, file)
-
-    return torch.tensor(train_clients), torch.tensor(test_clients)
 
 
 def spark_connection():
@@ -146,32 +125,44 @@ def prepocess_full_mbd(temp_path: Path, clients_number: int):
     spark_df.write.parquet((temp_path / ".temp.parquet").as_posix())
 
     spark_df = spark.read.parquet((temp_path / ".temp.parquet").as_posix())
-    save_quantile_statistic(spark_df, temp_path, features_to_transform=['amount'])
+    save_quantile_statistic(spark_df, temp_path, features_to_transform=["amount"])
 
     train_dataset, test_dataset = split_train_test(spark_df)
 
     train_dataset = set_time_features(train_dataset)
     test_dataset = set_time_features(test_dataset)
 
-    train_dataset.write.csv((temp_path / ".train.csv").as_posix(), header=True, mode="overwrite")
-    test_dataset.write.csv((temp_path / ".test.csv").as_posix(), header=True, mode="overwrite")
+    train_dataset.write.csv(
+        (temp_path / ".train.csv").as_posix(), header=True, mode="overwrite"
+    )
+    test_dataset.write.csv(
+        (temp_path / ".test.csv").as_posix(), header=True, mode="overwrite"
+    )
 
     spark.stop()
 
-def save_quantile_statistic(spark_df, temp_path: Path | str, features_to_transform=None):
-    assert features_to_transform is not None, 'feature for quantile transform should be defined.'
+
+def save_quantile_statistic(
+    spark_df, temp_path: Path | str, features_to_transform=None
+):
+    assert (
+        features_to_transform is not None
+    ), "feature for quantile transform should be defined."
 
     for feature_name in features_to_transform:
-        amount_list = spark_df.select(feature_name).rdd.map(lambda row, name=feature_name: row[name]).collect()
+        amount_list = (
+            spark_df.select(feature_name)
+            .rdd.map(lambda row, name=feature_name: row[name])
+            .collect()
+        )
 
         amount_np = np.array(amount_list, dtype=np.float64)
         amount_tensor = torch.tensor(amount_np, dtype=torch.float64)
-        
-        qt = QuantileTransformerTorch(n_quantiles=1000, output_distribution='normal')
+
+        qt = QuantileTransformerTorch(n_quantiles=1000, output_distribution="normal")
         qt.fit(amount_tensor)
 
-        qt.save((temp_path  / f"quantile_transform_{feature_name}.pt").as_posix())
-
+        qt.save((temp_path / f"quantile_transform_{feature_name}.pt").as_posix())
 
 
 def main(dataset_name="mbd-50k", clients_number=1_000):
@@ -201,7 +192,7 @@ def main(dataset_name="mbd-50k", clients_number=1_000):
         target = dataset_path / file.name
         shutil.move(file, target)
         print(f"Moved: {file} -> {target}")
-        
+
     if temp_path.exists() and temp_path.is_dir():
         shutil.rmtree(temp_path)
         print(f"Temp directory was removed: {temp_path}")
@@ -211,10 +202,14 @@ def main(dataset_name="mbd-50k", clients_number=1_000):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Preprocess and convert MBD dataset to Parquet")
+    parser = argparse.ArgumentParser(
+        description="Preprocess and convert MBD dataset to Parquet"
+    )
     parser.add_argument("--dataname", type=str, default="mbd-50k", help="Dataset name")
-    parser.add_argument("--remove-temp", type=bool, default=False, help='Cleanup temp files')
-    parser.add_argument("--nc", type=int, default=1_000, help='Number of clients')
+    parser.add_argument(
+        "--remove-temp", type=bool, default=False, help="Cleanup temp files"
+    )
+    parser.add_argument("--nc", type=int, default=1_000, help="Number of clients")
     args = parser.parse_args()
 
     main(dataset_name=args.dataname, clients_number=args.nc)

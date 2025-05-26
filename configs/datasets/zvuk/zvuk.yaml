@@ -26,8 +26,8 @@ data_conf:
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: &min_history_len 16
-  generation_len: &generation_len 16
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
   max_seq_len: 1045
   padding_value: 0
 
