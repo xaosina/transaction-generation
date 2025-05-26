@@ -9,7 +9,7 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-from generation.models.generator import Generator
+from generation.models.generator import BaseGenerator
 
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
@@ -68,7 +68,7 @@ class SampleEvaluator:
         return results
 
     def generate_samples(
-        self, model: Generator, data_loader, log_dir, blim=None, buffer_size=None
+        self, model: BaseGenerator, data_loader, log_dir, blim=None, buffer_size=None
     ):
         base_dir = log_dir / "samples"
         gt_dir, gen_dir = base_dir / "gt", base_dir / "gen"

@@ -1,3 +1,5 @@
+import importlib
+import inspect
 import logging
 import os
 import sys
@@ -230,3 +232,24 @@ def suggest_conf(suggestions: list, config: dict | DictConfig, trial: Trial):
         value = getattr(trial, suggestion[0])(first_name, **suggestion[1])
         for name in names:
             assign_by_name(config, name, value)
+
+
+def _auto_import_subclasses(current_dir, package_name, global_dict, parent_class):
+    for filename in os.listdir(current_dir):
+        if filename.endswith(".py") and not filename.startswith("__"):
+            module_name = filename[:-3]
+            full_module_name = f"{package_name}.{module_name}"
+            try:
+                module = importlib.import_module(full_module_name)
+
+                for name, obj in inspect.getmembers(module):
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, parent_class)
+                        and obj != parent_class
+                    ):
+                        global_dict[name] = obj
+
+            except Exception as e:
+                print(f"Error importing {full_module_name}: {e}")
+                continue

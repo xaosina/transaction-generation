@@ -2,23 +2,23 @@ from copy import deepcopy
 import os
 import sys
 
-# import pyrallis
+import pyrallis
 import torch
-# from tqdm import tqdm
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
 
-# from main import PipelineConfig
+from main import PipelineConfig
 
-# from generation.data.utils import get_dataloaders
-# from generation.metrics.evaluator import SampleEvaluator
-# from generation.models.generator import (
-#     BaselineRepeater,
-#     Generator,
-#     GroundTruthGenerator,
-# )
+from generation.data.utils import get_dataloaders
+from generation.metrics.evaluator import SampleEvaluator
+from generation.models.generator import (
+    BaselineRepeater,
+    Generator,
+    GroundTruthGenerator,
+)
 from generation.data.batch_tfs import ShuffleBatch
 from generation.data.data_types import GenBatch
 
@@ -70,22 +70,26 @@ def create_batch():
 
 def test_evaluator():
 
-    while True:
-        batch = create_batch()
-        o_b = deepcopy(batch)
-        ShuffleBatch([0, None])(batch)
-        i = int(input())
-        print(o_b.num_features[:, i])
-        print(batch.num_features[:, i])
+    # while True:
+    #     batch = create_batch()
+    #     o_b = deepcopy(batch)
+    #     ShuffleBatch([None, -3])(batch)
+    #     i = int(input())
+    #     print(o_b.num_features[:, i])
+    #     print(batch.num_features[:, i])
 
-    # cfg = pyrallis.parse(config_class=PipelineConfig, config_path="spec_config.yaml")
-    # logger.info("Config ready")
-    # (train_loader, val_loader, test_loader), latent_config = get_dataloaders(cfg.data_conf, 0)
-    # actual_len = 0
-    # for batch in tqdm(train_loader):
-    #     actual_len += 1
-    # print(actual_len)
-    # assert actual_len == 284
+    cfg = pyrallis.parse(config_class=PipelineConfig, config_path="/home/transaction-generation/log/generation/gru_shuffle/shuffle_pred/seed_0/config.yaml")
+    logger.info("Config ready")
+    (train_loader, val_loader, test_loader), latent_config = get_dataloaders(cfg.data_conf, 0)
+    actual_len = 0
+    for batch, orig in tqdm(test_loader):
+        print(batch.num_features[:, 0, 0])
+        print(batch.target_num_features[:, 0, 0])
+        breakpoint()
+        
+        actual_len += 1
+    print(actual_len)
+    assert actual_len == 284
 
 
 if __name__ == "__main__":
