@@ -1,4 +1,4 @@
-config_factory: [datasets/mbd/mbd,methods/gpt,datasets/mbd/metrics/default]
+config_factory: [datasets/age/age,methods/gru,datasets/age/metrics/default, ]
  
 model:
   name:
@@ -6,7 +6,7 @@ model:
 
 # Runner params:
 log_dir: log/generation
-device: "cuda:1"
+device: "cuda:0"
 common_seed: 0
 
 runner:

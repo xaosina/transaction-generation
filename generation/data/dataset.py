@@ -33,7 +33,7 @@ class ShardDataset(IterableDataset):
         n_resamples: int = 1,
         random_end: Literal["index", "time", "none"] = "none",
         shuffle: bool = False,
-        transforms: list = None
+        transforms: list = None,
     ):
         super().__init__()
         if isinstance(data_path, list):
@@ -63,14 +63,18 @@ class ShardDataset(IterableDataset):
         all_rows = sum(
             [f.count_rows() for f in pq.ParquetDataset(self.partitions).fragments]
         )
-        upper_bound = (
-            self.n_resamples * all_rows
-        ) // self.data_conf.batch_size + self.data_conf.num_workers
+        upper_bound = (self.n_resamples * all_rows) // self.data_conf.batch_size + max(
+            self.data_conf.num_workers, 1
+        )
         return upper_bound
 
     @classmethod
     def train_val_split(
-        cls, data_path, data_conf: DataConfig, split_seed: int = None, transforms: list = None
+        cls,
+        data_path,
+        data_conf: DataConfig,
+        split_seed: int = None,
+        transforms: list = None,
     ) -> tuple["ShardDataset", "ShardDataset"]:
         assert isinstance(data_path, str)
         fragments = {
@@ -129,7 +133,11 @@ class ShardDataset(IterableDataset):
                 shard_path,
                 columns=[data_conf.index_name, "_seq_len", data_conf.time_name]
                 + (data_conf.num_names or [])
-                + (list(data_conf.cat_cardinalities) if data_conf.cat_cardinalities else []),
+                + (
+                    list(data_conf.cat_cardinalities)
+                    if data_conf.cat_cardinalities
+                    else []
+                ),
             )
             data = self._preprocess(data, worker_rng)
 
