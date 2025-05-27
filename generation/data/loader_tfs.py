@@ -80,7 +80,6 @@ class NumericalFilter(LoaderTransform):
         self.min_len = self.min_hist_len + self.gen_len
 
     def __call__(self, data: pd.DataFrame) -> pd.DataFrame:
-        breakpoint()
         if self.min_cut:
             data = self.cut(data, min)
         if self.max_cut:
