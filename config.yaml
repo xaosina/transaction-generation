@@ -1,7 +1,7 @@
 config_factory:
-  - datasets/megamarket/megamarket
-  - methods/gru
-  - datasets/megamarket/metrics/default
+  - datasets/age/age
+  - methods/mode
+  - datasets/age/metrics/default
 
 model:
   name:
@@ -13,7 +13,7 @@ device: "cuda:1"
 common_seed: 0
 
 runner:
-  name: GenerationTrainer
+  name: GenerationEvaluator
   run_type: simple
   seed_keys:
     - "common_seed"

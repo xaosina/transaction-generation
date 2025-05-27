@@ -7,7 +7,7 @@ import torch
 from dacite import from_dict
 from ebes.pipeline import Runner
 
-import generation.models as gen_models
+from ..models import generator as gen_models
 from ..data.utils import get_dataloaders
 from ..metrics.evaluator import SampleEvaluator
 from ..trainer import Trainer

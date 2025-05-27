@@ -50,7 +50,6 @@ class BaselineHP(BaseGenerator):
 
         marks = np.asarray(marks)
         times = np.asarray(times, dtype=float)
-
         assert np.all(np.diff(times) >= 0), "Times must be strictly increasing"
 
         if keep_original_labels:

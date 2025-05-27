@@ -21,12 +21,12 @@ data_conf:
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
   val_ratio: 0.15
-  num_workers: 0
+  num_workers: 2
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: &min_history_len 16
-  generation_len: &generation_len 16
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
   max_seq_len: 1045
   padding_value: 0
 
@@ -58,6 +58,11 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
+    "2":
+      NGramTransform:
+        model_path: 'data/mbd-50k/ngrams-mapper-32.pt'
+        feature_name: event_type
+        feature_counts: 55
     # "shuffle":
     #   ShuffleBatch:
     #     untouched_slice: [None, None]
@@ -73,5 +78,10 @@ data_conf:
     #   ShuffleBatch:
     #     untouched_slice: [None, None]
     "2":
+      NGramTransform:
+        model_path: 'data/mbd-50k/ngrams-mapper-32.pt'
+        feature_name: event_type
+        feature_counts: 55
+    "3":
       CutTargetSequence:
         target_len: *generation_len

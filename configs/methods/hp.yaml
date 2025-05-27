@@ -16,6 +16,6 @@ model:
       hidden_size: 256
       num_layers: 4
   tpp:
-    feature_name: "event_type"
+    feature_name: "small_group"
 trainer:
   verbose: True

@@ -1,0 +1,50 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  metrics:
+    - Reconstruction
+    - Levenshtein:
+        target_key: small_group
+    # - Accuracy:
+    #     target_key: small_group
+    - F1Metric:
+        target_key: small_group
+        average: macro
+    - F1Metric:
+        target_key: small_group
+        average: micro
+
+    # - Gini:
+    #     target_key: small_group
+    # - ShannonEntropy:
+    #     target_key: small_group
+
+    # - CardinalityCoverage:
+    #     target_key: small_group
+    #     overall: False
+    # - CardinalityCoverage:
+    #     target_key: small_group
+    #     overall: True
+    # - NoveltyScore:
+    #     target_key: small_group
+    #     overall: False
+    # - NoveltyScore:
+    #     target_key: small_group
+    #     overall: True
+
+    # - Density:
+    #     log_cols: ["amount_rur"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
+
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: transformer
+    #     condition_len: 0
+    #     verbose: True
+
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: gru
+    #     condition_len: *generation_len
+    #     verbose: True
