@@ -65,6 +65,7 @@ class DataConfig:
 class LatentDataConfig:
     focus_on: list[str]
     time_name: str
+    generation_len: int
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
 

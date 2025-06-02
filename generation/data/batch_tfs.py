@@ -142,6 +142,8 @@ class CutTargetSequence(BatchTransform):
         assert (
             batch.lengths.min() > self.target_len
         ), "target_len is too big for this batch"
+        if self.target_len == 0:
+            return
         target_batch = batch.tail(self.target_len)
         batch.target_time = target_batch.time
         batch.target_num_features = target_batch.num_features
@@ -158,6 +160,8 @@ class CutTargetSequence(BatchTransform):
             batch.cat_features = (batch.cat_features * mask.unsqueeze(-1))[:new_max_len]
 
     def reverse(self, batch: GenBatch):
+        if self.target_len == 0:
+            return
         batch.append(batch.get_target_batch())
 
         batch.target_time = None

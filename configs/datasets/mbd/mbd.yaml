@@ -56,6 +56,9 @@ data_conf:
     "2":
       Logarithm:
         names: ["amount"]
+    "3":
+      CutTargetSequence:
+        target_len: 0
     # "shuffle":
     #   ShuffleBatch:
     #     untouched_slice: [None, None]

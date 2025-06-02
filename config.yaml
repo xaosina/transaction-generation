@@ -1,4 +1,4 @@
-config_factory: [datasets/age/age,methods/gru,datasets/age/metrics/default, ]
+config_factory: [datasets/mbd/mbd,methods/gru,datasets/mbd/metrics/default, ]
  
 model:
   name:
