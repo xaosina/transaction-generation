@@ -14,7 +14,7 @@ model:
     params:
       hidden_size: 256
       num_layers: 4
-      
+
   # vae:
   #   num_layers: 2
   #   d_token: 6

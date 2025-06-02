@@ -107,14 +107,14 @@ class BaselineHistSampler(BaseGenerator):
         raise "No need to train a repeator."
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
+        # assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
         assert isinstance(hist.time, torch.Tensor)
 
         hist = deepcopy(hist)
         samples = torch.tensor(
             np.array(
                 [
-                    np.sort(np.random.choice(length, size=gen_len, replace=False))
+                    np.sort(np.random.choice(length, size=gen_len, replace=True))
                     for length in hist.lengths.numpy(force=True)
                 ]
             ),

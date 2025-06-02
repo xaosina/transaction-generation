@@ -10,11 +10,9 @@ trainer:
 
 log_dir: log/generation/age
 
-# DATA
 data_conf:
-  cat_cardinalities:
-    small_group: 203
   num_names:
+    - amount_rur
   index_name: client_id
   time_name: trans_date
   focus_on:
@@ -22,18 +20,25 @@ data_conf:
   test_path: 'data/age/preprocessed/test'
   train_path: 'data/age/preprocessed/train'
   val_ratio: 0.15
-  num_workers: 2
+  num_workers: 4
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: 32
+  min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: 1024
+  max_seq_len:  &max_seq_len 515
   padding_value: 0
 
   train_random_end: none
   val_random_end: time
-  
+  loader_transforms:
+    "0":
+      ExcludeCategories:
+        feature_name: "small_group"
+        path: 'data/age/preprocessed/hfc.npy'
+        gen_len: *generation_len
+        min_hist_len: *min_history_len
+        disable: true
   train_transforms:
     "0":
       RescaleTime:
@@ -42,12 +47,16 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    # "2":
-    #   Logarithm:
-    #     names: ["amount_rur"]
-    # "shuffle":
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "log_tfs":
+      Logarithm:
+        names: ["amount_rur"]
 
   val_transforms:
     "0":
@@ -57,12 +66,19 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    # "2":
-    #   Logarithm:
-    #     names: ["amount_rur"]
-    # shuffle:
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
-    "2":
+    "log_tfs":
+      Logarithm:
+        names: ["amount_rur"]
+    "3":
       CutTargetSequence:
         target_len: *generation_len
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "shuffle_users":
+      ShuffleUsers:
+        shuffle: false

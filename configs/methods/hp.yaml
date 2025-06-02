@@ -16,6 +16,6 @@ model:
       hidden_size: 256
       num_layers: 4
   tpp:
-    feature_name: "small_group"
+    feature_name: "category_id"
 trainer:
   verbose: True

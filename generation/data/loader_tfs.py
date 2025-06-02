@@ -36,23 +36,33 @@ class LoaderTransform(ABC):
 class ExcludeCategories(LoaderTransform):
 
     feature_name: str
-    exclude_categories: list[int]
+    path: str
     min_hist_len: int
     gen_len: int
+    disable: bool = True
 
     def __post_init__(self):
         self.min_len = self.gen_len + self.min_hist_len
+        with open(self.path, "rb") as file:
+            self.exclude_categories = np.load(file)
 
-    def remove_excluded(self, seq: list[int]) -> list[int]:
-        return [e for e in seq if e not in self.exclude_categories]
+    def remove_excluded(self, seq: np.ndarray) -> np.ndarray:
+        mask = ~np.isin(seq, self.exclude_categories)
+        return seq[mask]
 
     def __call__(self, data: pd.DataFrame) -> pd.DataFrame:
+        if self.disable:
+            return data
+        
         data[self.feature_name] = data[self.feature_name].apply(self.remove_excluded)
         data["_seq_len"] = data[self.feature_name].map(len)
         mask = data["_seq_len"] >= self.min_len
         return data.loc[mask].reset_index(drop=True)
 
     def new_dataconf(self, data_conf: DataConfig) -> DataConfig:
+        if self.disable:
+            return data_conf
+        
         new_data_conf = deepcopy(data_conf)
         new_data_conf.cat_cardinalities[self.feature_name] = (
             data_conf.cat_cardinalities[self.feature_name]

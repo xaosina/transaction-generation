@@ -1,0 +1,3 @@
+data_conf:
+  cat_cardinalities: 
+    small_group: 203

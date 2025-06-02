@@ -1,0 +1,11 @@
+data_conf:
+  train_transforms:
+    "ngrams":
+      NGramTransform:
+        disable: false
+
+
+  val_transforms:
+    "ngrams":
+      NGramTransform:
+        disable: false

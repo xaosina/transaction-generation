@@ -13,7 +13,7 @@ evaluator:
         target_key: event_type
         average: micro
 
-    - BatchCutMetric
+    # - BatchCutMetric
 
     # - Gini:
     #     target_key: event_type

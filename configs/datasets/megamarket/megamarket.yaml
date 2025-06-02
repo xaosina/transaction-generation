@@ -8,10 +8,12 @@ trainer:
   verbose: True
   ckpt_resume: null
 
+log_dir: log/generation/megamarket
+
 # DATA
 data_conf:
-  cat_cardinalities:
-    category_id: 9289
+  num_names:
+    - price
   index_name: user_id
   time_name: days_since_first_tx
   focus_on: 
@@ -20,41 +22,66 @@ data_conf:
   test_path: 'data/megamarket-50k/test'
   train_path: 'data/megamarket-50k/train'
   val_ratio: 0.15
-  num_workers: 0
+  num_workers: 4
   train_resamples: 1
   batch_size: 128
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: 256
+  max_seq_len: &max_seq_len 512
   padding_value: 0
 
   train_random_end: none
   val_random_end: time
-  loader_transforms:
+  # loader_transforms:
+  #   "0":
+  #     ExcludeCategories:
+  #       feature_name: "category_id"
+  #       path: 'data/megamarket-50k/lfc.npy'
+  #       gen_len: *generation_len
+  #       min_hist_len: *min_history_len
 
   train_transforms:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 365.0
+        scale: 60.0
     "1":
       TimeToDiff:
+        disable: false
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/megamarket-50k/ngrams-mapper-32.pt'
+        feature_name: category_id
+        feature_counts: 9289
+        max_l: *max_seq_len
         disable: true
-    # "shuffle":
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
+    "log_tfs":
+      Logarithm:
+        names: ["price"]
+
   val_transforms:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 365.0
+        scale: 60.0
     "1":
       TimeToDiff:
-        disable: true
+        disable: false
+    "log_tfs":
+      Logarithm:
+        names: ["price"]
     # shuffle:
     #   ShuffleBatch:
     #     untouched_slice: [None, None]
     "2":
       CutTargetSequence:
         target_len: *generation_len
+    
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/megamarket-50k/ngrams-mapper-32.pt'
+        feature_name: category_id
+        feature_counts: 9289
+        max_l: *max_seq_len
+        disable: true

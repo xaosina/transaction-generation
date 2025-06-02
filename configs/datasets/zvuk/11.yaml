@@ -1,0 +1,18 @@
+log_dir: log/generation/zvuk_11
+
+data_conf:
+  num_names:
+  index_name: user_id
+  time_name: days_since_first_tx
+  focus_on:
+    - track_id
+
+  train_transforms:
+    "log_tfs":
+      Logarithm:
+        names: []
+
+  val_transforms:
+    "log_tfs":
+      Logarithm:
+        names: []

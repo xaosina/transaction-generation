@@ -8,47 +8,37 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-# DATA
-data_conf:
-  cat_cardinalities:
-    event_type: 55
-  index_name: client_id
-  num_names: 
-  time_name: days_since_first_tx
-  focus_on: 
-    - event_type
+log_dir: log/generation/mbd
 
+data_conf:
+  num_names:
+    - amount
+  index_name: client_id
+  time_name: days_since_first_tx
+  focus_on:
+    - event_type
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
   val_ratio: 0.15
-  num_workers: 2
+  num_workers: 4
   train_resamples: 1
   batch_size: 128
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: 1045
+  max_seq_len:  &max_seq_len 1045
   padding_value: 0
 
   train_random_end: none
   val_random_end: time
-  loader_transforms:
-    # "0":
-    #   ExcludeCategories:
-    #     feature_name: "event_type"
-    #     exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
-    #     # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
-    #     min_hist_len: *min_history_len
-    #     gen_len: *generation_len
-    # "0":
-    #   NumericalFilter:
-    #     feature_name: "amount"
-    #     min_hist_len: *min_history_len
-    #     gen_len: *generation_len
-    #     min_cut: true
-    #     max_cut: true
-    #     low_quantile: .01
-    #     high_quantile: .99
+  # loader_transforms:
+  # "0":
+  #   ExcludeCategories:
+  #     feature_name: "event_type"
+  #     exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
+  #     # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
+  #     min_hist_len: *min_history_len
+  #     gen_len: *generation_len
 
   train_transforms:
     "0":
@@ -58,14 +48,18 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    "2":
+    "ngrams":
       NGramTransform:
         model_path: 'data/mbd-50k/ngrams-mapper-32.pt'
         feature_name: event_type
         feature_counts: 55
-    # "shuffle":
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
+        max_l: *max_seq_len
+        disable: true
+    "log_tfs":
+      Logarithm:
+        names: ["amount"]
+
+
   val_transforms:
     "0":
       RescaleTime:
@@ -73,15 +67,20 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: false
-    # shuffle:
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
-    "2":
+        disable: False
+    "log_tfs":
+      Logarithm:
+        names: ["amount"]
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len
+    "ngrams":
       NGramTransform:
         model_path: 'data/mbd-50k/ngrams-mapper-32.pt'
         feature_name: event_type
         feature_counts: 55
-    "3":
-      CutTargetSequence:
-        target_len: *generation_len
+        max_l: *max_seq_len
+        disable: true
+    "shuffle_users":
+      ShuffleUsers:
+        shuffle: false
