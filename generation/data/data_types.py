@@ -126,11 +126,10 @@ class GenBatch(Batch):
         self.cat_mask = append_tensor(self.cat_mask, other.cat_mask)
         self.num_mask = append_tensor(self.num_mask, other.num_mask)
 
-    def tail(self, tail_len: int):
+    def tail(self, tail_len: int, shift=0):
         """Returns a new batch containing only last tail_len elements of each sequence."""
         assert self.lengths.min() >= tail_len, "tail_len is too big"
-
-        start_index = self.lengths - tail_len  # [1, B]
+        start_index = (self.lengths - tail_len - shift).clip(0)  # [1, B]
         target_ids = (
             torch.arange(tail_len, device=start_index.device)[:, None] + start_index
         )  # [target_len, B]

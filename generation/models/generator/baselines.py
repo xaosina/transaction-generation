@@ -3,8 +3,9 @@ from dataclasses import replace
 
 import numpy as np
 import torch
-from . import BaseGenerator
-from ...data.data_types import GenBatch, gather
+
+from ...data.data_types import GenBatch, LatentDataConfig, gather
+from . import BaseGenerator, ModelConfig
 
 
 class GroundTruthGenerator(BaseGenerator):
@@ -76,7 +77,8 @@ class ModeGenerator(BaseGenerator):
 
 
 class BaselineRepeater(BaseGenerator):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+        self.shift = (model_config.params or {}).get("shift", 0)
         super().__init__()
 
     def forward(self, x: GenBatch):

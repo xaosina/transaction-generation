@@ -29,6 +29,7 @@ class ModelConfig:
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     vae: VaeConfig = field(default_factory=VaeConfig)
     tpp: TPPConfig = field(default_factory=TPPConfig)
+    params: dict = None
 
 
 class BaseGenerator(BaseModel):
