@@ -49,7 +49,7 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: target
+  name: matched
   params:
     mse_weight: 0.07
 

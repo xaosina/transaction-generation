@@ -158,7 +158,10 @@ class PredBatch:
     cat_features: dict[str, torch.Tensor] | None = None  # {"name": (len, batch, C)}
 
     def get_numerical(self):
-        return torch.cat((self.time.unsqueeze(-1), self.num_features), dim=2)
+        tensors = [self.time.unsqueeze(-1)]
+        if self.num_features is not None:
+            tensors = [self.num_features] + tensors
+        return torch.cat(tensors, dim=2)
 
     def to_batch(self):
         cat_features = None

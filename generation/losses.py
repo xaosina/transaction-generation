@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.nn import Module
 
 from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
+from torch_linear_assignment import batch_linear_assignment
 
 
 @dataclass(frozen=True)
@@ -315,7 +316,6 @@ class TargetLoss(Module):
             true_cat = y_true.target_cat_features[:, :, true_id].clone()
 
             pred_cat = y_pred.cat_features[key].permute(1, 2, 0)  # [B, C, L]
-            pred_cat = pred_cat[:, :]
             # Compute loss
             ce_loss = F.cross_entropy(
                 pred_cat,
@@ -336,12 +336,91 @@ class TargetLoss(Module):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
 
 
+class MatchedLoss(TargetLoss):
+    def __call__(self, y_true: GenBatch, y_pred: PredBatch):
+        # Step 1: calculate cost matrix [B, L, L]
+        data_conf = self.data_conf
+        L, B = y_true.target_time.shape
+
+        cost = torch.zeros(
+            L, L, B, device=y_true.target_time.device, dtype=y_true.target_time.dtype
+        )
+        # 1.1 Calculate R2 score
+        assert y_true.num_features_names == y_pred.num_features_names
+        num_names = (y_true.num_features_names or []) + [data_conf.time_name]
+        num_ids = [
+            num_names.index(name) for name in num_names if name in data_conf.focus_on
+        ]
+        num_pred = y_pred.get_numerical()  # [L, B, Dn+1]
+        num_true = y_true.target_time.unsqueeze(-1)  # [L, B, 1]
+        if num_ids:
+            num_true = torch.cat((y_true.target_num_features, num_true), dim=2)
+
+            res = (
+                num_pred[:, None, :, num_ids] - num_true[None, :, :, num_ids]
+            ) ** 2  # [L, L, B, D]
+
+            userwise_mean = num_true.mean(dim=0)  # B, [D]
+            tot = (num_true - userwise_mean) ** 2  # L, B, [D]
+            userwise_tot = tot.sum(dim=0)  # B, [D]
+
+            res = res / userwise_tot[None, None, :, :]  # Scaled mse, [L, L, B, D]
+            cost += res.mean(3)  # [L, L, B] R2 score
+
+        # 1.2 Calculate accuracy
+        pred_batch = y_pred.to_batch()
+        assert y_true.cat_features_names == pred_batch.cat_features_names
+        cat_names = y_true.cat_features_names or []
+        cat_ids = [
+            cat_names.index(name) for name in cat_names if name in data_conf.focus_on
+        ]
+        cat_pred, cat_true = pred_batch.cat_features, y_true.target_cat_features
+        if cat_ids:
+            res = cat_pred[:, None, :, cat_ids] != cat_true[None, :, :, cat_ids]
+            cost += res.to(torch.float32).mean(3)  # [L, L, B]
+        
+        # Step 2: calculate assignment
+        cost = cost.permute((2, 0, 1))  # [B, L, L]
+        assignment = batch_linear_assignment(cost).T # L, B
+        assignment = assignment.unsqueeze(-1) # L, B, 1
+
+        # Step 3: calculate loss using new order.
+        mse_loss, cat_loss = 0, 0
+        if num_ids:
+            num_true = num_true.gather(0, assignment.expand(num_true.shape))
+            res = (num_pred[:, :, num_ids] - num_true[:, :, num_ids]) ** 2  # L, B, D
+            userwise_res = res.sum(dim=0)  # B, D
+            rse = userwise_res / userwise_tot # B, D
+            mse_loss += rse.mean()
+        if cat_ids:
+            total_ce = 0.0
+            ce_count = 0
+            cat_true = cat_true.gather(0, assignment.expand(cat_true.shape))
+            cat_names = [name for name in cat_names if name in data_conf.focus_on]
+            for key in cat_names:
+                true_id = y_true.cat_features_names.index(key)
+                true_cat = cat_true[:, :, true_id].clone()
+                pred_cat = y_pred.cat_features[key].permute(1, 2, 0)  # [B, C, L]
+                # Compute loss
+                ce_loss = F.cross_entropy(
+                    pred_cat,
+                    true_cat.permute(1, 0),  # [B, L']
+                    ignore_index=self._ignore_index,
+                )
+                total_ce += ce_loss
+                ce_count += 1
+            cat_loss += (total_ce / ce_count)
+        return self.combine_losses(mse_loss, cat_loss)
+
+
 def get_loss(data_conf: LatentDataConfig, config: LossConfig):
     name = config.name
     if name == "baseline":
         return BaselineLoss(data_conf, **config.params)
-    if name == "target":
+    elif name == "target":
         return TargetLoss(data_conf, **config.params)
+    elif name == "matched":
+        return MatchedLoss(data_conf, **config.params)
     elif name == "tail":
         return TailLoss(data_conf, **config.params)
     elif name == "vae":
