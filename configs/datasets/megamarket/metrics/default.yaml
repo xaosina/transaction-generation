@@ -14,3 +14,8 @@ evaluator:
         average: micro
 
     - BatchCutMetric
+    - Density:
+        log_cols: []
+        with_timediff: True
+        save_details: True
+        verbose: False

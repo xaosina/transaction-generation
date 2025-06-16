@@ -11,10 +11,26 @@ from time import time
 from typing import Any, Dict, Mapping, Optional, Sequence
 
 import torch
+from torch.nn import Module
 import yaml
 from omegaconf import DictConfig, ListConfig
 from optuna import Trial
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
+
+
+class MeanDict:
+    def __init__(self):
+        self.sums = {}
+        self.counts = {}
+
+    def update(self, d):
+        for key in d:
+            self.sums[key] = self.sums.get(key, 0) + d[key].item()
+            self.counts[key] = self.counts.get(key, 0) + 1
+
+    def mean(self):
+        assert self.sums.keys() == self.counts.keys()
+        return {key: self.sums[key] / self.counts[key] for key in self.sums}
 
 
 class RateLimitFilter(logging.Filter):
@@ -30,6 +46,22 @@ class RateLimitFilter(logging.Filter):
             return False
         self.last_log[m] = t
         return True
+
+
+def freeze_module(m: Module):
+    for param in m.parameters():
+        param.requires_grad = False
+
+    def train(self, mode=True):
+        if not isinstance(mode, bool):
+            raise ValueError("training mode is expected to be boolean")
+        self.training = mode
+        for module in self.children():
+            module.train(False)
+        return self
+
+    m.train = train
+    return m
 
 
 class DummyProfiler:

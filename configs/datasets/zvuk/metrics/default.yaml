@@ -3,50 +3,20 @@ evaluator:
   metrics:
     - Reconstruction
     - Levenshtein:
-        target_key: event_type
+        target_key: track_id
     # - Accuracy:
     #     target_key: event_type
     - F1Metric:
-        target_key: event_type
+        target_key: track_id
         average: macro
     - F1Metric:
-        target_key: event_type
+        target_key: track_id
         average: micro
 
     - BatchCutMetric
 
-    # - Gini:
-    #     target_key: event_type
-    # - ShannonEntropy:
-    #     target_key: event_type
-
-    # - CardinalityCoverage:
-    #     target_key: event_type
-    #     overall: False
-    # - CardinalityCoverage:
-    #     target_key: event_type
-    #     overall: True
-    # - NoveltyScore:
-    #     target_key: event_type
-    #     overall: False
-    # - NoveltyScore:
-    #     target_key: event_type
-    #     overall: True
-
-    # - Density:
-    #     log_cols: ["amount"]
-    #     with_timediff: True
-    #     save_details: True
-    #     verbose: False
-
-    # - Detection:
-    #     dataset_config: detection/mbd
-    #     method_config: transformer
-    #     condition_len: 0
-    #     verbose: True
-
-    # - Detection:
-    #     dataset_config: detection/mbd
-    #     method_config: gru
-    #     condition_len: *generation_len
-    #     verbose: True
+    - Density:
+        log_cols: []
+        with_timediff: True
+        save_details: True
+        verbose: False

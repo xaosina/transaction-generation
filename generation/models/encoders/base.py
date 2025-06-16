@@ -10,7 +10,7 @@ from torch import nn
 
 
 @dataclass(frozen=True)
-class EncoderConfig:
+class LatentEncConfig:
     name: str
     params: Optional[Mapping[str, Any]] = None
 

@@ -27,7 +27,7 @@ data_conf:
   batch_size: 128
 
   min_history_len: &min_history_len 32
-  generation_len: &generation_len 32
+  generation_len: &generation_len 16
   max_seq_len: &max_seq_len 512
   padding_value: 0
 

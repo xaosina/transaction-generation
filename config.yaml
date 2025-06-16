@@ -1,11 +1,14 @@
 config_factory:
-  - datasets/age/age
+  - datasets/zvuk/zvuk
   - methods/gru
-  - datasets/age/metrics/default
+  - datasets/zvuk/metrics/default
+  - datasets/zvuk/cat_features_full
 
 model:
   name:
   encoder:
+
+data_conf.generation_len: 16
 
 # Runner params:
 log_dir: log/generation

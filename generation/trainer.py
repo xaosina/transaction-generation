@@ -14,7 +14,7 @@ from tqdm.autonotebook import tqdm
 from generation.schedulers.schedulers import CompositeScheduler
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, get_profiler, record_function
+from .utils import LoadTime, get_profiler, record_function, MeanDict
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +275,7 @@ class Trainer:
         self._model.train()
 
         loss_ema = 0.0
-        losses: list[float] = []
+        log_losses: MeanDict = MeanDict()
 
         total_iters = iters
         if (
@@ -299,14 +299,15 @@ class Trainer:
                 with record_function("forward"):
                     pred = self._model(batch)
 
-                loss = self._loss(batch, pred)
+                loss_dict = self._loss(batch, pred)
+                loss = loss_dict['loss']
+                log_losses.update(loss_dict)
 
                 if torch.isnan(loss).any():
                     raise ValueError("None detected in loss. Terminating training.")
 
                 with record_function("backward"):
                     loss.backward()
-                losses.append(loss.item())
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
@@ -320,10 +321,10 @@ class Trainer:
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
                 self._last_epoch + 1,
-                np.mean(losses),
+                log_losses.mean(),
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
-        return {"loss": loss, "loss_ema": loss_ema}
+        return {"loss_ema": loss_ema } | log_losses.mean()
 
     @torch.inference_mode()
     def validate(
@@ -422,6 +423,7 @@ class Trainer:
                 break
 
         logger.info("run '%s' finished successfully", self._run_name)
+        return losses
 
     def best_checkpoint(self) -> Path:
         """

@@ -15,7 +15,7 @@ data_conf:
     ["play_duration"]
   time_name: days_since_first_tx
   focus_on: 
-    - event_type
+    - track_id
 
   test_path: 'data/zvuk-50k/test'
   train_path: 'data/zvuk-50k/train'
@@ -25,8 +25,8 @@ data_conf:
   batch_size: 128
 
   min_history_len: &min_history_len 32
-  generation_len: &generation_len 32
-  max_seq_len: 545
+  generation_len: &generation_len 16
+  max_seq_len: &max_seq_len 545
   padding_value: 0
 
   train_random_end: none
@@ -78,7 +78,7 @@ data_conf:
         disable: false
     "log_tfs":
       Logarithm:
-        names: ["price"]
+        names: ["play_duration"]
     "2":
       CutTargetSequence:
         target_len: *generation_len
