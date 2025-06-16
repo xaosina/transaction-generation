@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import torch
 from ebes.model import BaseModel, TakeLastHidden, ValidHiddenMean
@@ -29,7 +30,7 @@ class ModelConfig:
     encoder: EncoderConfig = field(default_factory=EncoderConfig)
     vae: VaeConfig = field(default_factory=VaeConfig)
     tpp: TPPConfig = field(default_factory=TPPConfig)
-    params: dict = None
+    params: Optional[dict[str, Any]] = None
 
 
 class BaseGenerator(BaseModel):

@@ -77,6 +77,20 @@ class GenBatch(Batch):
     target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
     monotonic_time: bool = True
 
+    def get_numerical(self):
+        tensors = [self.time.unsqueeze(-1)]
+        if self.num_features is not None:
+            tensors = [self.num_features] + tensors
+        return torch.cat(tensors, dim=2)
+
+    def get_target_numerical(self):
+        assert self.target_time is not None
+        tensors = [self.target_time.unsqueeze(-1)]
+        if self.target_num_features is not None:
+            tensors = [self.target_num_features] + tensors
+        return torch.cat(tensors, dim=2)
+
+
     def get_target_batch(self):
         assert self.target_time is not None
         return deepcopy(

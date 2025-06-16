@@ -336,7 +336,22 @@ class TargetLoss(Module):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
 
 
-class MatchedLoss(TargetLoss):
+class MatchedLoss(Module):
+    def __init__(
+        self,
+        data_conf: LatentDataConfig,
+        mse_weight: float = 0.5,
+        ignore_index: int = -100,
+        max_shift: int = 0,
+    ):
+        super().__init__()
+        assert 0 <= mse_weight <= 1
+        self.data_conf = data_conf
+        self.mse_weight = mse_weight
+        self._ignore_index = ignore_index
+        assert -1 <= max_shift <= data_conf.generation_len
+        self.max_shift = max_shift
+
     def __call__(self, y_true: GenBatch, y_pred: PredBatch):
         # Step 1: calculate cost matrix [B, L, L]
         data_conf = self.data_conf
@@ -352,10 +367,8 @@ class MatchedLoss(TargetLoss):
             num_names.index(name) for name in num_names if name in data_conf.focus_on
         ]
         num_pred = y_pred.get_numerical()  # [L, B, Dn+1]
-        num_true = y_true.target_time.unsqueeze(-1)  # [L, B, 1]
+        num_true = y_true.get_target_numerical() # [L, B, Dn+1]
         if num_ids:
-            num_true = torch.cat((y_true.target_num_features, num_true), dim=2)
-
             res = (
                 num_pred[:, None, :, num_ids] - num_true[None, :, :, num_ids]
             ) ** 2  # [L, L, B, D]
@@ -381,7 +394,17 @@ class MatchedLoss(TargetLoss):
         
         # Step 2: calculate assignment
         cost = cost.permute((2, 0, 1))  # [B, L, L]
+        if self.max_shift >= 0:
+            i_indices = torch.arange(L, device=cost.device)[:, None] # L, 1
+            j_indices = torch.arange(L, device=cost.device)
+            distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
+            mask_outside_band = distance_from_diagonal > self.max_shift
+            cost.masked_fill_(mask_outside_band, -torch.inf)
+        breakpoint()
         assignment = batch_linear_assignment(cost).T # L, B
+        assignment = batch_linear_assignment(cost.to(device="cpu")).T # L, B
+        
+        
         assignment = assignment.unsqueeze(-1) # L, B, 1
 
         # Step 3: calculate loss using new order.
@@ -411,6 +434,9 @@ class MatchedLoss(TargetLoss):
                 ce_count += 1
             cat_loss += (total_ce / ce_count)
         return self.combine_losses(mse_loss, cat_loss)
+    
+    def combine_losses(self, mse_loss, ce_loss):
+        return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
 
 
 def get_loss(data_conf: LatentDataConfig, config: LossConfig):
