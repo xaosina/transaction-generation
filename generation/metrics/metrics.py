@@ -36,6 +36,13 @@ class BaseMetric(ABC):
     def __repr__(self): ...
 
 
+class BatchCutMetric(BaseMetric):
+    def __call__(self, orig, gen):
+        return orig[self.data_conf.index_name].shape[0]
+    
+    def __repr__(self):
+        return "BatchCutMetric"
+
 @dataclass
 class Reconstruction(BaseMetric):
     def __call__(self, orig, gen):
@@ -144,6 +151,47 @@ class Accuracy(BinaryMetric):
 
     def __repr__(self):
         return f"Accuracy on {self.target_key}"
+
+
+@dataclass
+class PR(BinaryMetric):
+
+    @staticmethod
+    def get_statistics(gt: np.ndarray, pred: np.ndarray) -> UserStatistic:
+        assert isinstance(gt, np.ndarray) and isinstance(pred, np.ndarray)
+        if len(gt) == 0 and len(pred) == 0:
+            return {}
+
+        cls_metric = dict()
+        gt_counter = collections.Counter(gt)
+        pred_counter = collections.Counter(pred)
+
+        all_classes = set(np.concatenate([gt, pred]))
+        for cls in all_classes:
+            gt_cls = gt_counter.get(cls, 0)
+            pred_cls = pred_counter.get(cls, 0)
+
+            tp = min(gt_cls, pred_cls)
+            fn = max(0, gt_cls - pred_cls)
+            fp = max(0, pred_cls - gt_cls)
+
+            precision = tp / (tp + fp) if (tp + fp) != 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) != 0 else 0
+
+            cls_metric[cls] = {
+                "Precision": precision,
+                "Recall": recall,
+            }
+
+        return cls_metric
+
+    def get_scores(self, row):
+        gt, pred = row["gt"], row["pred"]
+        stats = self.get_statistics(gt, pred)
+        return stats
+
+    def __repr__(self):
+        return f"PR on {self.target_key}"
 
 
 @dataclass

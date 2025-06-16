@@ -1,0 +1,21 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  metrics:
+    - Reconstruction
+    - Levenshtein:
+        target_key: category_id
+    # - Accuracy:
+    #     target_key: event_type
+    - F1Metric:
+        target_key: category_id
+        average: macro
+    - F1Metric:
+        target_key: category_id
+        average: micro
+
+    - BatchCutMetric
+    - Density:
+        log_cols: []
+        with_timediff: True
+        save_details: True
+        verbose: False

@@ -29,9 +29,10 @@ class DataConfig:
     val_random_end: str = "none"  # Literal["index", "time", "none"] = "none"
     #
     time_name: str = "Time"
-    cat_cardinalities: Mapping[str, int] | None = None
+    cat_cardinalities: list | None = None
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
+    loader_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     train_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     val_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
     padding_value: float = 0
@@ -50,6 +51,13 @@ class DataConfig:
     def __post_init__(self):
         time_name = self.time_name
         num_names = set(self.num_names or [])
+
+        if self.cat_cardinalities:
+            cat_dict = {
+                self.cat_cardinalities[i][0]: self.cat_cardinalities[i][1]
+                for i in range(len(self.cat_cardinalities))
+            }
+            object.__setattr__(self, "cat_cardinalities", cat_dict)
         cat_names = set(self.cat_cardinalities or {})
 
         if (time_name in cat_names | num_names) or (cat_names & num_names):
@@ -89,7 +97,6 @@ class GenBatch(Batch):
         if self.target_num_features is not None:
             tensors = [self.target_num_features] + tensors
         return torch.cat(tensors, dim=2)
-
 
     def get_target_batch(self):
         assert self.target_time is not None

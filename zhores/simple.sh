@@ -48,3 +48,5 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
         --trainer.verbose False \
 '
 EOT
+
+# sh transaction-generation/zhores/simple.sh mbd/all_to_one 6-00 e.surkov

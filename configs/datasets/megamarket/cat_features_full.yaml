@@ -1,0 +1,5 @@
+data_conf:
+  cat_cardinalities:
+    category_id: 9289
+    event: 5
+    item_id: 1559772

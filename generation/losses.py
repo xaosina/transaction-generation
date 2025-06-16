@@ -136,7 +136,7 @@ class BaseLoss(Module):
         valid_mask = self._valid_mask(y_true)
         mse_loss = self._compute_mse(y_true, y_pred, valid_mask)
         ce_loss = self._compute_ce(y_true, y_pred, valid_mask)
-        return self.combine_losses(mse_loss, ce_loss)
+        return {'loss': self.combine_losses(mse_loss, ce_loss)}
 
     def combine_losses(self, mse_loss, ce_loss):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
@@ -220,7 +220,7 @@ class NoOrderLoss(BaseLoss):
     def __call__(self, y_true, y_pred) -> torch.Tensor:
         valid_mask = self._valid_mask(y_true)
         loss = self._compute_loss(y_true, y_pred, valid_mask)
-        return loss
+        return {'loss': loss}
 
 
 class TailLoss(BaseLoss):
@@ -254,7 +254,7 @@ class VAELoss(BaseLoss):
             (1 + std_z - mu_z.pow(2) - std_z.exp()).mean(-1).mean()
         )
 
-        return base_loss + self._beta * kld_term
+        return {'loss': base_loss + self._beta * kld_term, 'kl_loss': kld_term}
 
     def update_beta(self, value):
         self._beta = value

@@ -44,12 +44,12 @@ def merge_ngrams(
 def apply_ngrams(
     df,
     n,
+    col:str,
     coverage: float = 0.5,
-    col: str = "event_type",
-    new_col="event_type_merged",
+    new_col="category_merged",
     return_merged: bool = False,
 ):
-    df["ngrams"] = df["event_type"].apply(lambda s: extract_ngrams(s, n=n))
+    df["ngrams"] = df[col].apply(lambda s: extract_ngrams(s, n=n))
     df["ngram_counts"] = df["ngrams"].apply(Counter)  # Counter per row
     df["unique_ngrams"] = df["ngram_counts"].apply(len)  # сколько разных
     df["total_ngrams"] = df["ngrams"].str.len()  # сколько всего
@@ -79,19 +79,19 @@ def apply_ngrams(
         return ngram_to_token, df
 
 
-def main(path_from, path_to):
+def main(path_from, path_to, feature_name):
     df = pd.read_parquet(path_from)
     maps = {}
     
     mapping, df = apply_ngrams(
-        df, 3, coverage=0.3, col="event_type", new_col="event_type"
+        df, 3, coverage=0.3, col=feature_name, new_col=feature_name
     )
-    # breakpoint()
+    breakpoint()
     maps[f"{3}-grams"] = mapping
     mapping, df = apply_ngrams(
-        df, 2, coverage=0.2, col="event_type", new_col="event_type"
+        df, 2, coverage=0.2, col=feature_name, new_col=feature_name
     )
-    # breakpoint()
+    breakpoint()
     maps[f"{2}-grams"] = mapping
     breakpoint()
     with open(path_to, "wb") as file:
@@ -103,12 +103,15 @@ if __name__ == "__main__":
         description="Preprocess and convert MBD dataset to Parquet"
     )
     parser.add_argument(
-        "--data_path", type=str, required=True, help="Path to current dataset"
+        "--data-path", type=str, required=True, help="Path to current dataset"
     )
     parser.add_argument(
-        "--save_path", type=str, default=False, help="Path to save some modes"
+        "--feature", type=str, required=True, help='Feature to be ngrammed'
+    )
+    parser.add_argument(
+        "--save-path", type=str, default=False, help="Path to save some modes"
     )
 
     args = parser.parse_args()
 
-    main(path_from=args.data_path, path_to=args.save_path, )
+    main(path_from=args.data_path, path_to=args.save_path, feature_name=args.feature)

@@ -141,7 +141,7 @@ class CutTargetSequence(BatchTransform):
     def __call__(self, batch: GenBatch):
         assert (
             batch.lengths.min() > self.target_len
-        ), "target_len is too big for this batch"
+        ), f"target_len is too big for this batch. Current min length = {batch.lengths.min()}"
         if self.target_len == 0:
             return
         target_batch = batch.tail(self.target_len)
@@ -719,6 +719,9 @@ class NGramTransform(NewFeatureTransform):
     feature_counts: int = 54
     ngram_counts: int = -1
     max_l: int = -1
+    min_hist_len: int = 32
+    gen_len: int = 32
+    disable: bool = False
 
     @staticmethod
     def merge_ngrams(
@@ -790,7 +793,7 @@ class NGramTransform(NewFeatureTransform):
         return out
 
     def __post_init__(self):
-
+        self.min_len = self.min_hist_len + self.gen_len
         self.mapping = None
         with open(self.model_path, "rb") as file:
             self.mapping = pickle.load(file)
@@ -799,6 +802,9 @@ class NGramTransform(NewFeatureTransform):
 
     @property
     def cat_cardinalities(self) -> list[str] | None:
+        if self.disable:
+            return {}
+        
         assert self.ngram_counts != -1
         new_cats = {}
         new_cats[f"{self.feature_name}_merged"] = (
@@ -808,14 +814,22 @@ class NGramTransform(NewFeatureTransform):
 
     @property
     def cat_names_removed(self) -> list[str] | None:
-        return self.feature_name
+        if self.disable:
+            return []
+        else:
+            return [self.feature_name]
 
     def new_focus_on(self, focus_on):
+        if self.disable:
+            return [self.feature_name]
+        
         new_focus_on = [i for i in focus_on if i != self.feature_name]
         new_focus_on.append(self.feature_name + "_merged")
         return new_focus_on
 
     def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
         L, B = batch[self.feature_name].shape
         self.max_l = L
         feature_id = batch.cat_features_names.index(self.feature_name)
@@ -844,12 +858,28 @@ class NGramTransform(NewFeatureTransform):
             batch.lengths[i] = new_seq_len
 
         max_len = batch.lengths.max()
-        batch.cat_features[:, :, feature_id] = torch.tensor(new_cat_features)
-        batch.cat_features_names[feature_id] = f"{self.feature_name}_merged"
+        # remove old feature
+        mask = torch.arange(batch.cat_features.shape[-1]) != feature_id
+        batch.cat_features = batch.cat_features[:, :, mask]
+        batch.cat_features_names.remove(self.feature_name)
+
+        batch.cat_features = torch.cat((batch.cat_features, torch.tensor(new_cat_features)[..., None]), dim=-1)
+        batch.cat_features_names.append(f"{self.feature_name}_merged")
+
         batch.time = torch.tensor(new_times)[:max_len]
+        if batch.num_features is not None:
+            batch.num_features = batch.num_features[:max_len]
         batch.cat_features = batch.cat_features[:max_len]
 
+        # mask = batch.lengths > self.min_len
+        # batch.lengths = batch.lengths[mask]
+        # batch.cat_features = batch.cat_features[:, mask, :]
+        # batch.time = batch.time[:, mask]
+        # batch.index = batch.index[mask]
+
     def reverse(self, batch):
+        if self.disable:
+            return
         new_feature_name = self.feature_name + "_merged"
         assert new_feature_name in self.cat_cardinalities
         _, B = batch[new_feature_name].shape
@@ -882,15 +912,14 @@ class NGramTransform(NewFeatureTransform):
             new_cat_features[:new_seq_len, i] = decoded_seq
             new_times[:new_seq_len, i] = decoded_time
 
-            target_cat_features[:, i, feature_id] = decoded_target[:32]
-            target_times[:, i] = decoded_target_time[:32]
+            target_cat_features[:, i, feature_id] = decoded_target[:self.gen_len]
+            target_times[:, i] = decoded_target_time[:self.gen_len]
 
             batch.lengths[i] = new_seq_len
 
         cat_feature_to_remove = self.feature_name + "_merged"
 
         batch.cat_features_names.index(cat_feature_to_remove)
-
         remaining_names = [
             name
             for name in batch.cat_features_names
@@ -912,20 +941,42 @@ class NGramTransform(NewFeatureTransform):
         if len(remaining_names) == 0:
             batch.cat_features = None
             batch.cat_features_names = None
-
-        # Add back to num_features
         if batch.cat_features is None:
-            batch.cat_features = torch.tensor(new_cat_features, dtype=float).unsqueeze(
-                2
-            )
+            batch.cat_features = torch.tensor(new_cat_features, dtype=float)[..., None]
             batch.time = torch.tensor(new_times, dtype=float)
             batch.cat_features_names = [f"{self.feature_name}"]
             batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)
             batch.target_time = torch.tensor(target_times, dtype=float)
 
         else:
-            batch.cat_features[:, :, feature_id] = torch.tensor(new_cat_features)
-            batch.time = torch.tensor(new_times)
+            if batch.num_features is not None:
+                new_num_features = torch.zeros((L, B, len(batch.num_features_names)))
+                new_num_features[:batch.num_features.shape[0], ...] = batch.num_features
+                batch.num_features = new_num_features
             batch.cat_features_names.append(f"{self.feature_name}")
-            batch.target_cat_features = torch.tensor(target_cat_features)
-            batch.target_time = torch.tensor(target_times)
+            new_cat_features_tensor = torch.zeros((L, B, len(batch.cat_features_names)), dtype=float)
+            new_cat_features_tensor[:batch.cat_features.shape[0], :, :-1] = batch.cat_features
+            new_cat_features_tensor[:, :, feature_id] = torch.tensor(new_cat_features, dtype=float)
+            batch.cat_features = new_cat_features_tensor
+            batch.time = torch.tensor(new_times, dtype=float)
+            batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)
+            batch.target_time = torch.tensor(target_times, dtype=float)
+
+@dataclass
+class ShuffleUsers(BatchTransform):
+
+    shuffle: bool = False
+
+    def __call__(self, batch: GenBatch):
+        return
+
+    def reverse(self, batch: GenBatch): 
+        if self.shuffle:
+            B = batch.index.size
+            perm = torch.randperm(B)
+            if batch.target_cat_features is not None:
+                batch.target_cat_features = batch.target_cat_features[:, perm, :]
+            if batch.target_num_features is not None:
+                batch.target_num_features = batch.target_num_features[:, perm, :]
+            if batch.target_time is not None:
+                batch.target_time = batch.target_time[:, perm]

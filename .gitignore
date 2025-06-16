@@ -2,6 +2,7 @@ log/*
 data/**/*.csv
 data/**/*.crc
 data/**/*.pt
+data/**/*.npy
 data/**/*.parquet
 data/**/*_SUCCESS
 dev/**
@@ -29,3 +30,7 @@ temp/
 *.out
 
 bpe_post_process.py
+temp*
+*/exps/configs/*
+notebooks/
+*pkl

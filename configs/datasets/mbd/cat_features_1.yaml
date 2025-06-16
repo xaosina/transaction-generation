@@ -1,0 +1,3 @@
+data_conf:
+  cat_cardinalities:
+    event_type: 55

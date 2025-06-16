@@ -1,0 +1,91 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'Reconstruction overall'
+  iters_per_epoch: null
+  patience: 10
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+# DATA
+data_conf:
+  index_name: user_id
+  num_names: 
+    ["play_duration"]
+  time_name: days_since_first_tx
+  focus_on: 
+    - track_id
+
+  test_path: 'data/zvuk-50k/test'
+  train_path: 'data/zvuk-50k/train'
+  val_ratio: 0.15
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 16
+  max_seq_len: &max_seq_len 545
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  loader_transforms:
+    # "0":
+    #   ExcludeCategories:
+    #     feature_name: "event_type"
+    #     exclude_categories: [15, 17, 34,  4,  3, 18, 26, 24, 32, 29, 27, 35, 39, 12,  1, 37, 31,  2, 16, 25,  0, 21, 11, 28, 30, 13, 19]
+    #     # exclude_categories: [53, 52, 51, 47, 48, 40, 50, 49, 23, 42, 44, 45, 33, 20, 36, 41,  5, 46, 6,  8, 10, 22, 14, 43, 38,  7,  9]
+    #     min_hist_len: *min_history_len
+    #     gen_len: *generation_len
+    # "0":
+    #   NumericalFilter:
+    #     feature_name: "amount"
+    #     min_hist_len: *min_history_len
+    #     gen_len: *generation_len
+    #     min_cut: true
+    #     max_cut: true
+    #     low_quantile: .01
+    #     high_quantile: .99
+
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 60.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/zvuk-50k/ngrams-mapper-32.pt'
+        feature_name: track_id
+        feature_counts: 825181
+        max_l: *max_seq_len
+        disable: true
+    "log_tfs":
+      Logarithm:
+        names: ["play_duration"]
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 60.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "log_tfs":
+      Logarithm:
+        names: ["play_duration"]
+    "2":
+      CutTargetSequence:
+        target_len: *generation_len
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/zvuk-50k/ngrams-mapper-32.pt'
+        feature_name: track_id
+        feature_counts: 825181
+        max_l: *max_seq_len
+        disable: true

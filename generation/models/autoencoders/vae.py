@@ -1,3 +1,4 @@
+from copy import deepcopy
 import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -10,34 +11,9 @@ from ebes.types import Seq
 
 from generation.data import batch_tfs
 from generation.data.batch_tfs import NewFeatureTransform
-from generation.data.data_types import GenBatch, PredBatch
+from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
 from generation.data.utils import create_instances_from_module
-
-# class Tokenizer(nn.Module):
-#     def __init__(self, d_numerical, categories, d_token, bias=True):
-#         super().__init__()
-#         self.linear = nn.Linear(1, d_token, bias=bias)
-#         if categories is not None:
-#             self.category_embeddings = nn.ModuleList(
-#                 [
-#                     nn.Embedding(num_embeddings=num_classes, embedding_dim=d_token)
-#                     for num_classes in categories
-#                 ]
-#             )
-#         else:
-#             self.category_embeddings = None
-#     def forward(self, x_num, x_cat=None):
-#         token_num = self.linear(x_num).unsqueeze(1)
-#         assert x_num.shape[1] == token_num.shape[1]
-#         if x_cat is not None and self.category_embeddings is not None:
-#             tokens_cat = []
-#             for i, emb in enumerate(self.category_embeddings):
-#                 tokens_cat.append(emb(x_cat[:, i]).unsqueeze(1))
-#             tokens_cat = torch.cat(tokens_cat, dim=1)
-#             tokens = torch.cat([token_num, tokens_cat], dim=1)
-#         else:
-#             tokens = token_num
-#         return tokens
+from generation.models.autoencoders.base import BaseAE, AEConfig
 
 
 @dataclass
@@ -49,31 +25,47 @@ class VaeConfig:
     pretrained: bool = False
 
 
-class VAE(nn.Module):
-    def __init__(
-        self,
-        vae_conf: VaeConfig,
-        cat_cardinalities: Mapping[str, int],
-        num_names: Sequence[str] | None = None,
-        batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
-    ):
+class VAE(BaseAE):
+    def __init__(self, data_conf: LatentDataConfig, model_config: AEConfig):
         super().__init__()
         self.encoder = Encoder(
-            vae_conf,
-            cat_cardinalities=cat_cardinalities,
-            num_names=num_names,
-            batch_transforms=batch_transforms,
-        )
-        self.decoder = Decoder(
-            vae_conf,
-            num_names=num_names,
-            cat_cardinalities=cat_cardinalities,
+            model_config.vae,
+            cat_cardinalities=data_conf.cat_cardinalities,
+            num_names=data_conf.num_names,
+            batch_transforms=model_config.preprocessor.batch_transforms,
         )
 
-    def forward(self, batch: GenBatch) -> PredBatch:
-        seq, params = self.encoder(batch)
-        h = self.decoder(seq)
-        return h, params
+        self.decoder = Decoder(
+            model_config.vae,
+            cat_cardinalities=data_conf.cat_cardinalities,
+            num_names=data_conf.num_names,
+        )
+
+    def forward(self, x: GenBatch) -> PredBatch:
+        """
+        Forward pass of the Variational AutoEncoder
+        Args:
+            x (GenBatch): Input sequence [L, B, D]
+
+        """
+
+        assert not self.encoder.pretrained
+        x, params = self.encoder(x)
+        x = self.decoder(x)
+        return x, params
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        hist = deepcopy(hist)
+        assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
+        x = self.encoder(hist.get_target_batch())
+        if not self.encoder.pretrained:
+            x = x[0]
+        x = self.decoder.generate(x)
+        if with_hist:
+            hist.append(x)
+            return hist
+        else:
+            return x
 
 
 class Encoder(nn.Module):

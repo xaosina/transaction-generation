@@ -10,11 +10,7 @@ trainer:
 
 log_dir: log/generation/age
 
-# DATA
 data_conf:
-  cat_cardinalities:
-    age: 5
-    small_group: 203
   num_names:
     - amount_rur
   index_name: client_id
@@ -31,6 +27,7 @@ data_conf:
   min_history_len: 32
   generation_len: &generation_len 32
   max_seq_len: 1024
+
   padding_value: 0
 
   train_random_end: none
@@ -44,12 +41,16 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
-    "2":
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "log_tfs":
       Logarithm:
         names: ["amount_rur"]
-    # "shuffle":
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
 
   val_transforms:
     "0":
@@ -58,13 +59,20 @@ data_conf:
         scale: 730
     "1":
       TimeToDiff:
-        disable: False
-    "2":
+        disable: false
+    "log_tfs":
       Logarithm:
         names: ["amount_rur"]
-    # shuffle:
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
     "3":
       CutTargetSequence:
         target_len: *generation_len
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "shuffle_users":
+      ShuffleUsers:
+        shuffle: false
