@@ -1,5 +1,6 @@
 log/*
 data/**/*.csv
+data/**/*.csv.gz
 data/**/*.crc
 data/**/*.pt
 data/**/*.npy
