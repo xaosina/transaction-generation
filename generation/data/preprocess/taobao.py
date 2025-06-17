@@ -10,7 +10,7 @@ from common import cat_freq, collect_lists
 
 CAT_FEATURES = ["item_id", "item_category", "behavior_type"]
 INDEX_COLUMNS = ["user_id"]
-ORDERING_COLUMNS = ["days_since_first_tx"]
+ORDERING_COLUMNS = ["time_since_tuesday"]
 
 
 def main():
@@ -56,13 +56,11 @@ def main():
         # Choose time interval
         w_hist = df.filter(f"time >= '{start_date}' and time < '{mid_date}'")
         # fix time
-        window_spec_min = Window.partitionBy("user_id")
-        w_hist = w_hist.withColumn("first_event_time", F.min("time").over(window_spec_min))
         w_hist = w_hist.withColumn(
-            "days_since_first_tx",
+            "time_since_tuesday",
             (
                 F.unix_timestamp(F.col("time"))
-                - F.unix_timestamp(F.col("first_event_time"))
+                - F.unix_timestamp(F.to_timestamp(F.lit(start_date), "yyyy-MM-dd"))
             )
             / (60 * 60 * 24),
         )
