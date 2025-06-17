@@ -153,7 +153,7 @@ def main(data_path, dataset_name, clients_number=1_000):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
-        description="Preprocess and convert MBD dataset to Parquet"
+        description="Preprocess and convert megamarket dataset to Parquet"
     )
 
     parser.add_argument("--data_path", type=str, required=True, help="Path to raw data")

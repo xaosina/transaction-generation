@@ -80,6 +80,41 @@ class Reconstruction(BaseMetric):
 
 
 @dataclass
+class EffectiveReconstruction(BaseMetric):
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+        results = {}
+
+        cat_cards = (self.data_conf.cat_cardinalities or {})
+        for col in self.data_conf.focus_on:
+
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+            results[col] = df.apply(
+                self._compute_accuracy if col in cat_cards else self._compute_mse,
+                axis=1,
+            ).mean()
+        return {
+            "overall": np.mean(list(results.values())),
+            **results,
+        }
+
+    def _compute_mse(self, row):
+        gt, pred = row["gt"], row["pred"]
+        return r2_score(gt, pred)
+
+    def _compute_accuracy(self, row):
+        gt, pred = row["gt"], row["pred"]
+        return accuracy_score(gt, pred)
+
+    def __repr__(self):
+        return "Reconstruction"
+
+@dataclass
 class BinaryMetric(BaseMetric):
     target_key: str
 

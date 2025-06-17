@@ -1,8 +1,10 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import torch
-from ebes.model import BaseModel
+from ebes.model import BaseModel, TakeLastHidden, ValidHiddenMean
+from ebes.types import Seq
 from ebes.model.seq2seq import Projection
 
 from generation.models.autoencoders.vae import Decoder as VAE_Decoder
@@ -28,6 +30,9 @@ class ModelConfig:
     # vae: VaeConfig = field(default_factory=VaeConfig)
     tpp: TPPConfig = field(default_factory=TPPConfig)
     autoencoder: AEConfig = field(default_factory=AEConfig)
+    pooler: str = "last"
+    params: Optional[dict[str, Any]] = None
+
 
 
 class BaseGenerator(BaseModel):
@@ -39,7 +44,7 @@ class BaseGenerator(BaseModel):
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
 
 
-class Generator(BaseGenerator):
+class AutoregressiveGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
 
@@ -95,3 +100,80 @@ class Generator(BaseGenerator):
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return hist.tail(gen_len)  # Return GenBatch of size [gen_len, B, D]
+
+
+class Reshaper(BaseModel):
+    def __init__(self, gen_len: int):
+        super().__init__()
+        self.gen_len = gen_len
+
+    def forward(self, tensor: torch.Tensor) -> Seq:
+        assert (
+            tensor.shape[1] % self.gen_len == 0
+        ), f"hidden_size doesnt divide by {self.gen_len}"
+        B, D = tensor.shape
+        return Seq(
+            tokens=tensor.view(B, self.gen_len, D // self.gen_len).permute(1, 0, 2),
+            lengths=torch.ones_like(tensor, dtype=torch.long) * self.gen_len,
+            time=None,
+        )
+
+
+class OneShotGenerator(BaseGenerator):
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+        super().__init__()
+
+        self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
+
+        encoder_params = model_config.encoder.params or {}
+        encoder_params["input_size"] = self.preprocess.output_dim
+        self.encoder = AutoregressiveEncoder(model_config.encoder.name, encoder_params)
+        self.poller = (
+            TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
+        )
+        self.reshaper = Reshaper(data_conf.generation_len)
+
+        self.projector = Projection(
+            self.encoder.output_dim // data_conf.generation_len,
+            (2 * self.encoder.output_dim) // data_conf.generation_len,
+        )
+
+        self.reconstructor = ReconstructorBase(data_conf, self.projector.output_dim)
+
+    def forward(self, x: GenBatch) -> PredBatch:
+        """
+        Forward pass of the Auto-regressive Transformer
+        Args:
+            x (GenBatch): Input sequence [L, B, D]
+
+        """
+        x = self.preprocess(x)  # Sequence of [L, B, D]
+        x = self.encoder(x)  # [L, B, D]
+        x = self.poller(x)  # [B, D]
+        x = self.reshaper(x)  # [gen_len, B, D // gen_len]
+        x = self.projector(x)  # [gen_len, B, 2 * D // gen_len]
+        x = self.reconstructor(x)
+        return x
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+        """
+        Auto-regressive generation using the transformer
+
+        Args:
+            x (Seq): Input sequence [L, B, D]
+
+        """
+        assert (
+            gen_len == self.reshaper.gen_len
+        ), f"Can't generate other than {self.reshaper.gen_len}"
+        hist = deepcopy(hist)
+
+        with torch.no_grad():
+            pred = self.forward(hist).to_batch()
+        if with_hist:
+            hist.append(pred)
+            return hist  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return pred  # Return GenBatch of size [gen_len, B, D]
+
+

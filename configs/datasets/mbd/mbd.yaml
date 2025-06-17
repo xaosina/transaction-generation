@@ -10,13 +10,26 @@ trainer:
 
 log_dir: log/generation/mbd
 
+# DATA
 data_conf:
+  cat_cardinalities:
+    - src_type32, 88
+    - src_type11, 47
+    - event_subtype, 60
+    - dst_type11, 58
+    - event_type, 55
+    - currency, 13
+    - dst_type12, 253
+    - src_type22, 84
+    - src_type12, 188
+    # src_type31: 1455
+    # src_type21: 8000
   num_names:
     - amount
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
-    - event_type
+
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
   val_ratio: 0.15
@@ -25,7 +38,7 @@ data_conf:
   batch_size: 128
 
   min_history_len: &min_history_len 32
-  generation_len: &generation_len 16
+  generation_len: &generation_len 32
   max_seq_len:  &max_seq_len 1045
   padding_value: 0
 
@@ -58,7 +71,12 @@ data_conf:
     "log_tfs":
       Logarithm:
         names: ["amount"]
-
+    "3":
+      CutTargetSequence:
+        target_len: 0
+    # "shuffle":
+    #   ShuffleBatch:
+    #     untouched_slice: [None, None]
 
   val_transforms:
     "0":

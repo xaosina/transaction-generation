@@ -40,7 +40,6 @@ class GenerationTrainer(Runner):
             cfg.evaluator,
             device=cfg.device,
             verbose=cfg.trainer.verbose,
-            same_latent=True
         )
         trainer = Trainer(
             model=model,

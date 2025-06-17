@@ -1,6 +1,6 @@
 # MODEL
 model:
-  name: Generator
+  name: AutoregressiveGenerator
   preprocessor:
     cat_emb_dim: 16
     num_emb_dim: 64
@@ -14,7 +14,7 @@ model:
     params:
       hidden_size: 256
       num_layers: 4
-
+      
   # vae:
   #   num_layers: 2
   #   d_token: 6

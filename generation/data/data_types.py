@@ -29,7 +29,7 @@ class DataConfig:
     val_random_end: str = "none"  # Literal["index", "time", "none"] = "none"
     #
     time_name: str = "Time"
-    cat_cardinalities: Mapping[str, int] | None = None
+    cat_cardinalities: list | None = None
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
     loader_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
@@ -51,6 +51,13 @@ class DataConfig:
     def __post_init__(self):
         time_name = self.time_name
         num_names = set(self.num_names or [])
+
+        if self.cat_cardinalities:
+            cat_dict = {
+                self.cat_cardinalities[i][0]: self.cat_cardinalities[i][1]
+                for i in range(len(self.cat_cardinalities))
+            }
+            object.__setattr__(self, "cat_cardinalities", cat_dict)
         cat_names = set(self.cat_cardinalities or {})
 
         if (time_name in cat_names | num_names) or (cat_names & num_names):
@@ -66,6 +73,7 @@ class DataConfig:
 class LatentDataConfig:
     focus_on: list[str]
     time_name: str
+    generation_len: int
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
 
@@ -76,6 +84,19 @@ class GenBatch(Batch):
     target_num_features: torch.Tensor | None = None  # (target_len, batch, features)
     target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
     monotonic_time: bool = True
+
+    def get_numerical(self):
+        tensors = [self.time.unsqueeze(-1)]
+        if self.num_features is not None:
+            tensors = [self.num_features] + tensors
+        return torch.cat(tensors, dim=2)
+
+    def get_target_numerical(self):
+        assert self.target_time is not None
+        tensors = [self.target_time.unsqueeze(-1)]
+        if self.target_num_features is not None:
+            tensors = [self.target_num_features] + tensors
+        return torch.cat(tensors, dim=2)
 
     def get_target_batch(self):
         assert self.target_time is not None
@@ -126,11 +147,10 @@ class GenBatch(Batch):
         self.cat_mask = append_tensor(self.cat_mask, other.cat_mask)
         self.num_mask = append_tensor(self.num_mask, other.num_mask)
 
-    def tail(self, tail_len: int):
+    def tail(self, tail_len: int, shift=0):
         """Returns a new batch containing only last tail_len elements of each sequence."""
         assert self.lengths.min() >= tail_len, "tail_len is too big"
-
-        start_index = self.lengths - tail_len  # [1, B]
+        start_index = (self.lengths - tail_len - shift).clip(0)  # [1, B]
         target_ids = (
             torch.arange(tail_len, device=start_index.device)[:, None] + start_index
         )  # [target_len, B]
@@ -158,7 +178,10 @@ class PredBatch:
     cat_features: dict[str, torch.Tensor] | None = None  # {"name": (len, batch, C)}
 
     def get_numerical(self):
-        return torch.cat((self.time.unsqueeze(-1), self.num_features), dim=2)
+        tensors = [self.time.unsqueeze(-1)]
+        if self.num_features is not None:
+            tensors = [self.num_features] + tensors
+        return torch.cat(tensors, dim=2)
 
     def to_batch(self):
         cat_features = None

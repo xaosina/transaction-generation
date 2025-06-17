@@ -8,9 +8,9 @@ from pyspark.sql.types import LongType, FloatType
 from common import cat_freq, collect_lists, train_test_split
 
 
-CAT_FEATURES = ["small_group"]
+CAT_FEATURES = ["small_group", "age"]
 NUM_FEATURES = ["amount_rur"]
-INDEX_COLUMNS = ["client_id"]
+INDEX_COLUMNS = ["client_id", "bins"]
 ORDERING_COLUMNS = ["trans_date"]
 TARGET_VALS = [0, 1, 2, 3]
 TEST_FRACTION = 0.2
@@ -21,13 +21,13 @@ def main():
     parser.add_argument(
         "--data-path",
         help="Path to directory containing CSV files",
-        required=True,
+        default="data/age",
         type=Path,
     )
     parser.add_argument(
         "--save-path",
         help="Where to save preprocessed parquets",
-        required=True,
+        default="data/age/preprocessed",
         type=Path,
     )
     parser.add_argument(
@@ -62,6 +62,7 @@ def main():
     ).select(F.col("client_id").cast(LongType()), F.col("bins").cast(LongType()))
 
     df_kag_train = df_kag_train.join(df_label, on="client_id")
+    df_kag_train = df_kag_train.withColumn("age", F.col("bins"))
 
 
     df = df_kag_train
@@ -77,10 +78,8 @@ def main():
         order_by=ORDERING_COLUMNS,
     )
 
-    stratify_col, stratify_col_vals = None, None
-    if df_kag_train is not None:  # target has non-null values
-        stratify_col = "bins"
-        stratify_col_vals = TARGET_VALS
+    stratify_col = "bins"
+    stratify_col_vals = TARGET_VALS
 
     # stratified splitting on train and test
     train_df, test_df = train_test_split(
@@ -92,8 +91,8 @@ def main():
         random_seed=args.split_seed,
     )
 
-    train_df.coalesce(1).write.parquet((args.save_path / "train").as_posix(), mode=mode)
-    test_df.coalesce(1).write.parquet((args.save_path / "test").as_posix(), mode=mode)
+    train_df.repartition(20).write.parquet((args.save_path / "train").as_posix(), mode=mode)
+    test_df.repartition(3).write.parquet((args.save_path / "test").as_posix(), mode=mode)
 
 
 if __name__ == "__main__":

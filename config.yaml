@@ -1,18 +1,12 @@
-config_factory:
-  - datasets/zvuk/zvuk
-  - methods/gru
-  - datasets/zvuk/metrics/default
-  - datasets/zvuk/cat_features_full
-
+config_factory: [datasets/mbd/mbd,methods/gru_oneshot,datasets/mbd/metrics/default, ]
+ 
 model:
   name:
   encoder:
 
-data_conf.generation_len: 16
-
 # Runner params:
 log_dir: log/generation
-device: "cuda:1"
+device: "cuda:0"
 common_seed: 0
 
 runner:

@@ -13,8 +13,6 @@ evaluator:
         target_key: event_type
         average: micro
 
-    # - BatchCutMetric
-
     # - Gini:
     #     target_key: event_type
     # - ShannonEntropy:

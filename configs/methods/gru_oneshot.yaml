@@ -1,5 +1,13 @@
+data_conf:
+  train_random_end: time
+  train_transforms:
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+# MODEL
 model:
-  name: Generator
+  name: OneShotGenerator
   preprocessor:
     cat_emb_dim: 16
     num_emb_dim: 64
@@ -9,16 +17,17 @@ model:
         TimeToFeatures:
           process_type: "cat"
   encoder:
-    name: GPT
+    name: GRU
     params:
-      max_len: ${data_conf.max_seq_len}
-      n_layer: 2
-      n_head: 12
-      n_embd: 768
-      dropout: 0.0
-      bias: True
-
-data_conf.max_seq_len: 512
+      hidden_size: 256
+      num_layers: 4
+  pooler: "last"
+      
+  # vae:
+  #   num_layers: 2
+  #   d_token: 6
+  #   n_head: 2
+  #   factor: 64
 
 
 optimizer:
@@ -40,9 +49,10 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: baseline
+  name: matched
   params:
     mse_weight: 0.07
+    max_shift: -1
 
 optuna:
   params:
@@ -65,12 +75,9 @@ optuna:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
-    - ["model.encoder.params.n_layer", [suggest_int, {low: 1, high: 12, log: False}]]
-    - ["model.encoder.params.n_head", [suggest_categorical, {choices: [1, 2, 4, 8, 16]}]]
-    - ["model.encoder.params.n_embd", [suggest_int, {low: 16, high: 960, log: False, step: 16}]]
-    - ["model.encoder.params.dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
-    - ["model.encoder.params.bias", [suggest_categorical, {choices: [True, False]}]]
-
+    - ["model.encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
+    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 7, log: False}]]
+    - ["model.encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
 
     - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
     - 

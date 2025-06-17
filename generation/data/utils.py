@@ -47,7 +47,9 @@ def get_collator(
     )
 
 
-def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConfig:
+def get_latent_dataconf(
+    collator: SequenceCollator, data_conf: DataConfig
+) -> LatentDataConfig:
     cat_cardinalities = copy(collator.cat_cardinalities) or {}
     num_names = copy(collator.num_names) or []
     focus_on = copy(data_conf.focus_on)
@@ -76,6 +78,7 @@ def get_latent_dataconf(collator: SequenceCollator, data_conf) -> LatentDataConf
         num_names=num_names,
         focus_on=focus_on,
         time_name=data_conf.time_name,
+        generation_len=data_conf.generation_len,
     )
 
 

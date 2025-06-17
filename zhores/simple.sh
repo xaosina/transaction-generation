@@ -5,7 +5,7 @@ n_gpus=1
 job_name=${1:-simple}
 
 time=${2:-"00-03"}
-login=${3:-e.surkov}
+login=${3:-d.osin}
 
 PATH_TO_CHECK=/gpfs/gpfs0/${login}/transaction-generation/zhores/configs/${job_name}.yaml
 
@@ -49,5 +49,4 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
 '
 EOT
 
-
-sh transaction-generation/zhores/simple.sh mbd/all_to_one 6-00 e.surkov
+# sh transaction-generation/zhores/simple.sh mbd/all_to_one 6-00 e.surkov

@@ -38,10 +38,11 @@ def run_config_factory(config_path, config_factory):
 
 def main():
     args = sys.argv[1:]
-    cfg = pyrallis.parse(PipelineConfig, "config.yaml", args)
-    args, _ = pop_arg(args, "--config_factory")
+    args, config_factory = pop_arg(args, "--config_factory")
     args, config_path = pop_arg(args, "--config_path")
-    merged_config = run_config_factory(config_path, cfg.config_factory)
+    path = config_path or "config.yaml"
+    config_factory = config_factory or OmegaConf.load(path).get("config_factory")
+    merged_config = run_config_factory(config_path, config_factory)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as tmpfile:
         OmegaConf.save(config=merged_config, f=tmpfile.name)
