@@ -114,11 +114,11 @@ def prepocess_full_mbd(data_path, temp_path: Path, clients_number: int):
     train_dataset = set_time_features(train_dataset, user_id, time_feature)
     test_dataset = set_time_features(test_dataset, user_id, time_feature)
 
-    train_dataset.write.csv(
-        (temp_path / ".train.csv").as_posix(), header=True, mode="overwrite"
+    train_dataset.write.parquet(
+        (temp_path / ".train.parquet").as_posix(), header=True, mode="overwrite"
     )
-    test_dataset.write.csv(
-        (temp_path / ".test.csv").as_posix(), header=True, mode="overwrite"
+    test_dataset.write.parquet(
+        (temp_path / ".test.parquet").as_posix(), header=True, mode="overwrite"
     )
 
     spark.stop()
