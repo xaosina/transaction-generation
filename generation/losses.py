@@ -6,7 +6,10 @@ import torch.nn.functional as F
 from torch.nn import Module
 
 from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
-from torch_linear_assignment import batch_linear_assignment
+try:
+    from torch_linear_assignment import batch_linear_assignment
+except Exception:
+    print('No module batch_linear_assignment was installed')
 
 
 @dataclass(frozen=True)
