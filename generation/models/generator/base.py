@@ -15,7 +15,7 @@ from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
 from ..encoders import AutoregressiveEncoder, LatentEncConfig
 from generation.models.autoencoders.base import AEConfig, BaseAE
 from generation.models import autoencoders
-from utils import freeze_module
+from generation.utils import freeze_module
 
 @dataclass(frozen=True)
 class TPPConfig:
@@ -25,10 +25,8 @@ class TPPConfig:
 @dataclass(frozen=True)
 class ModelConfig:
     name: str
-    # preprocessor: PreprocessorConfig = field(default_factory=PreprocessorConfig)
     latent_encoder: LatentEncConfig = field(default_factory=LatentEncConfig)
-    # vae: VaeConfig = field(default_factory=VaeConfig)
-    tpp: TPPConfig = field(default_factory=TPPConfig)
+    # tpp: TPPConfig = field(default_factory=TPPConfig)
     autoencoder: AEConfig = field(default_factory=AEConfig)
     pooler: str = "last"
     params: Optional[dict[str, Any]] = None
@@ -47,12 +45,12 @@ class BaseGenerator(BaseModel):
 class AutoregressiveGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
-
+        
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
             data_conf, model_config.autoencoder
         )
 
-        if model_config.autoencoder.checkpoint:
+        if model_config.autoencoder.checkpoint != "none":
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location=self.autoencoder.device)
             msg = self.autoencoder.load_state_dict(ckpt["model"]["autoencoder"], strict=False)
 
@@ -60,8 +58,8 @@ class AutoregressiveGenerator(BaseGenerator):
             self.autoencoder = freeze_module(self.autoencoder)
 
         encoder_params = model_config.latent_encoder.params or {}
-        encoder_params["input_size"] = self.preprocess.output_dim
-        
+        encoder_params["input_size"] = self.autoencoder.encoder.output_dim
+
         self.encoder = AutoregressiveEncoder(
             model_config.latent_encoder.name, encoder_params
         )

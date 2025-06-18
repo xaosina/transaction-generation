@@ -1,8 +1,4 @@
-config_factory: [datasets/mbd/mbd,methods/gru_oneshot,datasets/mbd/metrics/default, ]
- 
-model:
-  name:
-  encoder:
+config_factory: [datasets/mbd/mbd,methods/gru,datasets/mbd/metrics/default]
 
 # Runner params:
 log_dir: log/generation

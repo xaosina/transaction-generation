@@ -1,4 +1,3 @@
 data_conf:
   cat_cardinalities:
     track_id: 825181
-    session_id: 2201418
