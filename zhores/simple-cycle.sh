@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# simple-cycle.sh — отправляет в очередь все конфиги из папки,
-#                  поддерживает диапазон по префиксам exp<number>_
+# simple-cycle.sh _ __________ _ _______ ___ _______ __ _____,
+#                  ____________ ________ __ _________ exp<number>_
 #
 # Usage:
 #   ./simple-cycle.sh <config-dir> [time] [login] [start_exp] [end_exp]
-#     config-dir — папка с .yaml
-#     time       — лимит Slurm (по умолчанию 06-00)
-#     login      — логин для e-mail (по умолчанию whoami)
-#     start_exp  — нижняя граница индекса exp (по умолчанию 1)
-#     end_exp    — верхняя граница индекса exp (по умолчанию 10)
+#     config-dir _ _____ _ .yaml
+#     time       _ _____ Slurm (__ _________ 06-00)
+#     login      _ _____ ___ e-mail (__ _________ whoami)
+#     start_exp  _ ______ _______ _______ exp (__ _________ 1)
+#     end_exp    _ _______ _______ _______ exp (__ _________ 10)
 
 CONFIG_DIR=$1
 TIME=${2:-06-00}
@@ -28,11 +28,13 @@ if [ ! -d "$CONFIG_DIR" ]; then
 fi
 
 shopt -s nullglob
-for cfg in "$CONFIG_DIR"/*.yaml; do
-  job_name=$(basename "$cfg" .yaml)
-
-  # если есть префикс exp<number>_, фильтруем по диапазону
-  if [[ $job_name =~ ^exp([0-9]+)_ ]]; then
+for cfg in "$CONFIG_DIR"*.yaml; do
+  rel_cfg=${cfg#*transaction-generation/}
+  job_name=$(basename "${cfg#*/}" .yaml)
+  echo $rel_cfg
+  echo $cfg
+  # ____ ____ _______ exp<number>_, _________ __ _________
+  if [[ $job_name =~ ^exp([0-9]+)- ]]; then
     idx=${BASH_REMATCH[1]}
     if (( idx < START_EXP || idx > END_EXP )); then
       echo "Skipping $job_name (exp index $idx outside [$START_EXP,$END_EXP])"
@@ -58,7 +60,7 @@ srun singularity exec --bind /gpfs/gpfs0/${LOGIN}:/home -f --nv image_trans.sif 
   cd /home/transaction-generation
   nvidia-smi
   python main.py \
-    --config_path ${cfg} \
+    --config_path ${rel_cfg} \
     --run_name ${job_name} \
     --device cuda:0 \
     --trainer.verbose False

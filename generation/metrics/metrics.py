@@ -129,7 +129,6 @@ class BinaryMetric(BaseMetric):
             keys=["gt", "pred"],
             axis=1,
         ).map(lambda x: x[-self.data_conf.generation_len :])
-        breakpoint()
         return df.apply(self.get_scores, axis=1).mean()
 
 
