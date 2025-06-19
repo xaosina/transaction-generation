@@ -1,55 +1,74 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# simple-cycle.sh — отправляет в очередь все конфиги из папки
+#
+# Usage:
+#   ./simple-cycle.sh <config-dir> [time] [login] [max_exp]
+#     config-dir — папка с .yaml
+#     time       — лимит Slurm (по умолчанию 06-00)
+#     login      — логин для путей и e-mail (по умолчанию whoami)
+#     max_exp    — если префикс в run_name начинается с exp<number>_, 
+#                  отправить только номера ≤ max_exp (по умолчанию 10)
 
-n_gpus=1
+CONFIG_DIR=$1
+TIME=${2:-06-00}
+LOGIN=${3:-$(whoami)}
+MAX_EXP=${4:-10}
 
-config_dir=${1:-zhores/configs}
-
-time=${2:-"00-03"}
-login=${3:-d.osin}
-
-if [ ! -d "$config_dir"]; then
-    echo "Error: Directory '$config_dir' is not found"
-    exit 1
+if [ -z "$CONFIG_DIR" ]; then
+  echo "Usage: $0 <config-dir> [time] [login] [max_exp]"
+  exit 1
 fi
 
-for cfg in "$config_dir"/*.yaml; do
-    job_name=$(baseline "$cfg" .yaml)
-    echo "Submitting job: $job_name"
+if [ ! -d "$CONFIG_DIR" ]; then
+  echo "Error: directory '$CONFIG_DIR' not found."
+  exit 1
+fi
 
-    sbatch <<EOT
+# Чтобы *.yaml не остался как литерал, если нет файлов
+shopt -s nullglob
 
+for cfg in "$CONFIG_DIR"/*.yaml; do
+  job_name=$(basename "$cfg" .yaml)
+
+  # Если имя в формате exp<number>_*, берём только первые MAX_EXP
+  if [[ $job_name =~ ^exp([0-9]+)- ]]; then
+    idx=${BASH_REMATCH[1]}
+    if (( idx > MAX_EXP )); then
+      echo "Skipping $job_name (exp index $idx > $MAX_EXP)"
+      continue
+    fi
+  fi
+
+  echo "Submitting job: $job_name"
+
+  sbatch <<EOT
 #!/bin/bash
-
 #SBATCH --job-name=${job_name}
-
 #SBATCH --partition=ais-gpu
-
 #SBATCH --mail-type=ALL
-
-#SBATCH --mail-user=${login}@skoltech.ru
-
+#SBATCH --mail-user=${LOGIN}@skoltech.ru
 #SBATCH --output=outputs/${job_name}/%j.txt
-
-#SBATCH --time=${time}
-
-#SBATCH --mem=$((n_gpus * 100))G
-
+#SBATCH --time=${TIME}
+#SBATCH --mem=$((1 * 100))G
 #SBATCH --nodes=1
+#SBATCH -c $((8 * 1))
+#SBATCH --gpus=1
 
-#SBATCH -c $((8 * n_gpus))
-
-#SBATCH --gpus=${n_gpus}
-
-srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
-    cd /home/transaction-generation;
-    nvidia-smi;
-    python main.py \
-        --config_path zhores/configs/${job_name}.yaml \
-        --run_name ${job_name} \
-        --device 'cuda:0' \
-        --trainer.verbose False \
-'
+srun singularity exec \\
+    --bind /gpfs/gpfs0/${LOGIN}:/home \\
+    -f --nv image_trans.sif bash -lc '
+      cd /home/transaction-generation
+      nvidia-smi
+      python main.py \\
+        --config_path ${cfg} \\
+        --run_name ${job_name} \\
+        --device cuda:0 \\
+        --trainer.verbose False
+    '
 EOT
 
 done
-# sh transaction-generation/zhores/simple.sh mbd/all_to_one 6-00 e.surkov
+
+# Отключаем nullglob
+shopt -u nullglob

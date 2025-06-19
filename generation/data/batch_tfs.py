@@ -458,11 +458,13 @@ class Logarithm(BatchTransform):
 
     def __call__(self, batch: GenBatch):
         for name in self.names:
-            batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
+            if batch.num_features_names and name in batch.num_features_names: #TODO: We need it better
+                batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
 
     def reverse(self, batch: GenBatch):
         for name in self.names:
-            batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
+            if batch.num_features_names and name in batch.num_features_names:
+                batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
 
 
 @dataclass
@@ -1031,7 +1033,10 @@ class HideFeaturesFromTrain(NewFeatureTransform):
                 if name not in self.cat_features
             ]
             batch.cat_features_names = [batch.cat_features_names[id] for id in ff_ids]
-            batch.cat_features = batch.cat_features[:, :, [ff_ids]]
+            batch.cat_features = batch.cat_features[:, :, ff_ids]
+            if batch.cat_features_names.__len__() == 0:
+                batch.cat_features = None
+                batch.cat_features_names = None
 
         if self.num_features:
             ff_ids = [
@@ -1041,6 +1046,9 @@ class HideFeaturesFromTrain(NewFeatureTransform):
             ]
             batch.num_features_names = [batch.num_features_names[id] for id in ff_ids]
             batch.num_features = batch.num_features[:, :, ff_ids]
+            if batch.num_features_names.__len__() == 0:
+                batch.num_features = None
+                batch.num_features_names = None
 
     def reverse(self, batch):
         pass
