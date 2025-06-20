@@ -211,7 +211,9 @@ def train_test_split(
     return train_df, test_df
 
 
-def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False):
+def csv_to_parquet(
+    data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False
+):
     if isinstance(save_path, str):
         save_path = Path(save_path)
     if isinstance(cat_codes_path, str):
@@ -265,7 +267,7 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_pat
         print("Reading idx codes.")
         idc = CatMap.read(idx_codes_path)
         df = idc.encode(df)
-        
+
     df = collect_lists(
         df,
         group_by=index_columns + target_columns,
@@ -273,6 +275,23 @@ def csv_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_pat
     )
     df_repartitioned = df.repartition(20)
 
-    df_repartitioned.write.parquet((save_path / ("train" if cat_codes_path is None else 'test')).as_posix(), 
-                                   mode=mode)
-    
+    df_repartitioned.write.parquet(
+        (save_path / ("train" if cat_codes_path is None else "test")).as_posix(),
+        mode=mode,
+    )
+
+
+def code_categories(df, path, cat_features):
+    vcs = cat_freq(df, cat_features)
+    for vc in vcs:
+        df = vc.encode(df)
+        vc.write(path / "cat_codes" / vc.feature_name, mode="overwrite")
+    return df
+
+
+def code_indexes(df, path, index_columns):
+    print("Creating new idx codes.")
+    idc = cat_freq(df, index_columns)[0]
+    df = idc.encode(df)
+    idc.write(path / "idx", mode="overwrite")
+    return df

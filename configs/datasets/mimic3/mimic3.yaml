@@ -1,0 +1,77 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'Reconstruction overall'
+  iters_per_epoch: null
+  patience: 10
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+log_dir: log/generation/mimic3
+
+# DATA
+data_conf:
+  cat_cardinalities:
+    - ["CRR", 5]
+  num_names: ["Temp", "SpO2", "HR", "RR", "SBP", "DBP", "TGCS", "FiO2", "Glucose", "pH"]
+  index_name: hadm_id
+  time_name: hours_since_adm
+  focus_on:
+
+  test_path: 'data/mimic3/preprocessed/test'
+  train_path: 'data/mimic3/preprocessed/train'
+  val_ratio: 0.15
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 16
+  generation_len: &generation_len 16
+  max_seq_len:  &max_seq_len 256
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  loader_transforms:
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 48.0
+    "NaN1":
+      ForwardFillNans:
+        backward: true
+    "NaN2":
+      FillNans:
+        fill_value: -1.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "log_tfs":
+      Logarithm:
+        names: ["Glucose"]
+    "3":
+      CutTargetSequence:
+        target_len: 0
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 48.0
+    "NaN1":
+      ForwardFillNans:
+        backward: true
+    "NaN2":
+      FillNans:
+        fill_value: -1.0
+    "1":
+      TimeToDiff:
+        disable: False
+    "log_tfs":
+      Logarithm:
+        names: ["Glucose"]
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len

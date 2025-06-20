@@ -1,4 +1,4 @@
-config_factory: [datasets/age/age,methods/gru,datasets/age/metrics/default]
+config_factory: [datasets/megamarket/megamarket,methods/gru,datasets/megamarket/metrics/default]
 
 # Runner params:
 log_dir: log/generation

@@ -1,5 +1,0 @@
-data_conf:
-  cat_cardinalities:
-    age: 5
-    small_group: 203
-  focus_on: ["small_group"]

@@ -1,0 +1,33 @@
+trainer:
+  verbose: True
+
+evaluator:
+  devices:
+  - cuda:1
+  - cuda:2
+  metrics:
+  - Reconstruction
+  - Levenshtein:
+      target_key: CRR
+  - F1Metric:
+      target_key: CRR
+      average: macro
+  - F1Metric:
+      target_key: CRR
+      average: micro
+
+  - Density:
+      log_cols: ["Glucose"]
+      with_timediff: True
+      save_details: True
+      verbose: True
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple
+  seed_keys:
+  - common_seed
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list: null

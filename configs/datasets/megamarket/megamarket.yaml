@@ -12,15 +12,19 @@ log_dir: log/generation/megamarket
 
 # DATA
 data_conf:
+  cat_cardinalities:
+    - ["category_id", 9242]
+    - ["event", 5]
+    - ["item_id", 1447254]
   num_names:
     - price
   index_name: user_id
   time_name: days_since_first_tx
   focus_on: 
-    - category_id
+    - price
 
-  test_path: 'data/megamarket-50k/test'
-  train_path: 'data/megamarket-50k/train'
+  test_path: 'data/megamarket-100k/test'
+  train_path: 'data/megamarket-100k/train'
   val_ratio: 0.15
   num_workers: 4
   train_resamples: 1
@@ -37,7 +41,7 @@ data_conf:
   #   "0":
   #     ExcludeCategories:
   #       feature_name: "category_id"
-  #       path: 'data/megamarket-50k/lfc.npy'
+  #       path: 'data/megamarket-100k/lfc.npy'
   #       gen_len: *generation_len
   #       min_hist_len: *min_history_len
 
@@ -51,7 +55,7 @@ data_conf:
         disable: false
     "ngrams":
       NGramTransform:
-        model_path: 'data/megamarket-50k/ngrams-mapper-32.pt'
+        model_path: 'data/megamarket-100k/ngrams-mapper-32.pt'
         feature_name: category_id
         feature_counts: 9289
         max_l: *max_seq_len
@@ -80,7 +84,7 @@ data_conf:
     
     "ngrams":
       NGramTransform:
-        model_path: 'data/megamarket-50k/ngrams-mapper-32.pt'
+        model_path: 'data/megamarket-100k/ngrams-mapper-32.pt'
         feature_name: category_id
         feature_counts: 9289
         max_l: *max_seq_len
