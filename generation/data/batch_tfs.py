@@ -803,12 +803,13 @@ class NGramTransform(NewFeatureTransform):
         return out
 
     def __post_init__(self):
-        self.min_len = self.min_hist_len + self.gen_len
-        self.mapping = None
-        with open(self.model_path, "rb") as file:
-            self.mapping = pickle.load(file)
+        if not self.disable:
+            self.min_len = self.min_hist_len + self.gen_len
+            self.mapping = None
+            with open(self.model_path, "rb") as file:
+                self.mapping = pickle.load(file)
 
-        self.ngram_counts = sum([len(el) for el in self.mapping.values()])
+            self.ngram_counts = sum([len(el) for el in self.mapping.values()])
 
     @property
     def cat_cardinalities(self) -> list[str] | None:
