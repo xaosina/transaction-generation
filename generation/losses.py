@@ -27,7 +27,8 @@ def rse_valid(pred, true, valid_mask):
     userwise_mean = torch.where(valid_mask, true, torch.nan).nanmean(dim=0)  # B, [D]
     tot = (true - userwise_mean) ** 2  # L, B, [D]
     userwise_tot = torch.where(valid_mask, tot, torch.nan).nansum(dim=0)  # B, [D]
-    rse = userwise_res / userwise_tot
+    eps = 1e-8
+    rse = userwise_res / (userwise_tot + eps)
     return rse.sum(), rse.numel()
 
 
@@ -403,7 +404,6 @@ class MatchedLoss(Module):
             distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
             mask_outside_band = distance_from_diagonal > self.max_shift
             cost.masked_fill_(mask_outside_band, -torch.inf)
-        breakpoint()
         assignment = batch_linear_assignment(cost).T # L, B
         assignment = batch_linear_assignment(cost.to(device="cpu")).T # L, B
         

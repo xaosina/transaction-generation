@@ -1,14 +1,27 @@
 model:
-  name: Generator
-  preprocessor:
-    cat_emb_dim: 16
-    num_emb_dim: 64
-    num_norm: True
+  name: AutoregressiveGenerator
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 16
+      num_emb_dim: 64
+      num_norm: True
+    pretrain: False
+    frozen: False
+    checkpoint: "none"
     batch_transforms:
       '0':
         TimeToFeatures:
           process_type: "cat"
-  encoder:
+      'set_features':
+        Identity
+        # HideFeaturesFromTrain:
+        #   cat_features: 
+        #   num_features: 
+        #     - amount
+
+
+  latent_encoder:
     name: GPT
     params:
       max_len: ${data_conf.max_seq_len}
