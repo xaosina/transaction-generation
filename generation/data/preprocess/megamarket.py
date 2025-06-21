@@ -1,3 +1,4 @@
+import os
 import argparse
 import shutil
 from pathlib import Path
@@ -11,6 +12,7 @@ from generation.data.preprocess.utils import (
     read_data,
     select_clients,
     set_time_features,
+    spark_connection
 )
 
 
@@ -28,12 +30,12 @@ METADATA = {
     "index_columns": ["user_id"],
     "target_columns": [],
     "raw_time_name": "datetime",
-    "ordering_columns": ["days_since_first_tx"],
+    "ordering_columns": ["hours_since_first_tx"],
 }
 
 
 def split_train_test_by_date(
-    df: DataFrame, time_col: str = "datetime", cutoff_date: str = "2023-03-15"
+    df: DataFrame, time_col: str, cutoff_date: str = "2023-03-15"
 ) -> tuple[DataFrame, DataFrame]:
     df_dates = df.withColumn("_event_date", F.to_date(F.col(time_col)))
 
@@ -53,7 +55,9 @@ def prepocess_full_mbd(
     debug=False,
 ):
 
-    spark, df = read_data(raw_data_path, debug=debug)
+    spark = spark_connection()
+    assert not os.path.isdir(raw_data_path)
+    df = read_data(spark, raw_data_path, debug=debug)
 
     df = seq_len_filter(df, METADATA["index_columns"][0], 128)
 
@@ -67,10 +71,10 @@ def prepocess_full_mbd(
     )
 
     train_dataset = set_time_features(
-        train_dataset, METADATA["index_columns"][0], METADATA["raw_time_name"]
+        train_dataset, METADATA["index_columns"][0], METADATA["raw_time_name"], denom=(60 * 60), time_name=METADATA["ordering_columns"][0]
     )
     test_dataset = set_time_features(
-        test_dataset, METADATA["index_columns"][0], METADATA["raw_time_name"]
+        test_dataset, METADATA["index_columns"][0], METADATA["raw_time_name"], denom=(60 * 60), time_name=METADATA["ordering_columns"][0]
     )
 
     train_dataset.write.csv(
@@ -98,6 +102,7 @@ def main(
     )
 
     csv_to_parquet(
+        'train',
         temp_path / ".train.csv",
         save_path=output_path,
         cat_codes_path=output_path / "cat_codes",
@@ -107,6 +112,7 @@ def main(
     )
 
     csv_to_parquet(
+        'test',
         temp_path / ".test.csv",
         save_path=output_path,
         cat_codes_path=output_path / "cat_codes",
@@ -134,12 +140,10 @@ if __name__ == "__main__":
         description="Preprocess and convert megamarket dataset to Parquet"
     )
 
-    parser.add_argument("--data_path", type=str, required=True, help="Path to raw data")
+    parser.add_argument("--data-path", type=str, required=True, help="Path to raw data")
     parser.add_argument("--dataname", type=str, required=True, help="Dataset name")
-    parser.add_argument(
-        "--remove-temp", type=bool, default=False, help="Cleanup temp files"
-    )
-    parser.add_argument("--debug", type=bool, default=False, help="Debug mode")
+    parser.add_argument("--remove-temp", action="store_true", help="Cleanup temp files")
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
     parser.add_argument("--nc", type=int, default=1_000, help="Number of clients")
     args = parser.parse_args()
 
