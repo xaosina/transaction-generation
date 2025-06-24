@@ -64,7 +64,6 @@ def main():
             )
             / (60 * 60 * 24),
         )
-        w_hist = w_hist.drop("first_event_time")
         return w_hist
 
     df_train = extract_data(df, "2014-11-18", "2014-12-02")
