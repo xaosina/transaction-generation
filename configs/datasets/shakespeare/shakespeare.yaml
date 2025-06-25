@@ -1,0 +1,59 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'Reconstruction overall'
+  iters_per_epoch: null
+  patience: 10
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+log_dir: log/generation/shakespeare
+
+# DATA
+data_conf:
+  cat_cardinalities:
+    - ["char", 65]
+  num_names:
+  index_name: speach_id
+  time_name: char_number
+  focus_on:
+
+  test_path: 'data/shakespeare/preprocessed/test'
+  train_path: 'data/shakespeare/preprocessed/train'
+  val_ratio: 0.15
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
+  max_seq_len:  &max_seq_len 400
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  loader_transforms:
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 400.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "3":
+      CutTargetSequence:
+        target_len: 0
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 400.0
+    "1":
+      TimeToDiff:
+        disable: False
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len

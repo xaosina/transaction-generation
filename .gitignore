@@ -1,4 +1,5 @@
 log/*
+data/**
 data/**/*.csv
 data/**/*.csv.gz
 data/**/*.crc
