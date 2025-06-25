@@ -21,7 +21,7 @@ from ...data import batch_tfs
 @dataclass(frozen=True)
 class AEConfig:
     name: str = ""
-    params: dict
+    params: Optional[dict[str, Any]] = None
     pretrain: bool = False
     frozen: bool = False
     checkpoint: str = None
@@ -49,7 +49,7 @@ class BaselineAE(BaseAE):
             batch_transforms=ae_config.batch_transforms,
         )
 
-        self.decoder = ReconstructorBase(data_conf, self.encoder._out_dim)
+        self.decoder = ReconstructorBase(data_conf, self.encoder.output_dim)
 
     def forward(self, x: GenBatch) -> PredBatch:
         raise "No need to train a GroundTruthGenerator."

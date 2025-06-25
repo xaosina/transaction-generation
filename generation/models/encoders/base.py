@@ -3,7 +3,7 @@ from typing import Optional, Mapping, Any
 import torch
 
 # from .transformer.ar import AR
-from ebes.model import BaseModel
+from ebes.model import BaseModel, Projection
 from ebes.model.seq2seq import BaseSeq2Seq
 from ebes.types import Seq
 from torch import nn
@@ -20,13 +20,15 @@ class AutoregressiveEncoder(BaseSeq2Seq):
         super().__init__()
         params = params or {}
         self.model = BaseModel.get_model(name, **params)
+        self.projector = Projection(self.model.output_dim, params['input_size'])
 
     @property
     def output_dim(self):
-        return self.model.output_dim
+        return self.projector.output_dim
 
     def forward(self, seq: Seq) -> Seq:
-        return self.model(seq)
+        seq = self.model(seq)
+        return self.projector(seq)
 
     def generate(self, seq: Seq) -> Seq:  # returns a sequence of shape [1, B, D]
         seq = self.forward(seq)

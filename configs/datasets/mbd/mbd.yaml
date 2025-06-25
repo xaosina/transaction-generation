@@ -13,15 +13,15 @@ log_dir: log/generation/mbd
 # DATA
 data_conf:
   cat_cardinalities:
-    - src_type32, 88
-    - src_type11, 47
-    - event_subtype, 60
-    - dst_type11, 58
-    - event_type, 55
-    - currency, 13
-    - dst_type12, 253
-    - src_type22, 84
-    - src_type12, 188
+    - ["src_type32", 88]
+    - ["src_type11", 47]
+    - ["event_subtype", 60]
+    - ["dst_type11", 58]
+    - ["event_type", 55]
+    - ["currency", 13]
+    - ["dst_type12", 253]
+    - ["src_type22", 84]
+    - ["src_type12", 188]
     # src_type31: 1455
     # src_type21: 8000
   num_names:

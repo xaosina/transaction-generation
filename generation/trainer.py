@@ -321,7 +321,7 @@ class Trainer:
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
                 self._last_epoch + 1,
-                log_losses.mean(),
+                log_losses.mean()['loss'],
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
         return {"loss_ema": loss_ema } | log_losses.mean()

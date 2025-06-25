@@ -17,7 +17,7 @@ data_conf:
     - ["behavior_type", 5]
   num_names:
   index_name: user_id
-  time_name: days_since_first_tx
+  time_name: time_since_tuesday
   focus_on:
 
   test_path: 'data/taobao/preprocessed/test'

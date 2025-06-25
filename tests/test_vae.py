@@ -125,7 +125,7 @@ def test_encoder(config: PipelineConfig):
     encoder = Encoder(
         config.model.vae,
         cat_cardinalities=data_conf.cat_cardinalities,
-        num_names=data_conf.num_names,
+        num_features=data_conf.num_names,
         batch_transforms=pre_conf.batch_transforms,
     ).to(device=device)
 

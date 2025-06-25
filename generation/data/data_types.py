@@ -1,7 +1,7 @@
 import logging
 from copy import copy, deepcopy
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Union
 
 import numpy as np
 import torch
@@ -29,7 +29,7 @@ class DataConfig:
     val_random_end: str = "none"  # Literal["index", "time", "none"] = "none"
     #
     time_name: str = "Time"
-    cat_cardinalities: list | None = None
+    cat_cardinalities: Optional[Union[list[list[Any]], Mapping[str, Any]]] = None
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
     loader_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
@@ -51,8 +51,7 @@ class DataConfig:
     def __post_init__(self):
         time_name = self.time_name
         num_names = set(self.num_names or [])
-
-        if self.cat_cardinalities:
+        if isinstance(self.cat_cardinalities, list):
             cat_dict = {
                 self.cat_cardinalities[i][0]: self.cat_cardinalities[i][1]
                 for i in range(len(self.cat_cardinalities))

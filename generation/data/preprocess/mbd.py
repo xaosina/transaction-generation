@@ -8,8 +8,8 @@ from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 
 from generation.data.preprocess.quantile_transformer import QuantileTransformerTorch
-
-from .common import csv_to_parquet
+from generation.data.preprocess.common import code_categories, code_indexes
+from .common import save_to_parquet
 
 
 def spark_connection():
@@ -112,10 +112,10 @@ METADATA = {
 }
 
 
-def prepocess_full_mbd(temp_path: Path, clients_number: int):
+def prepocess_full_mbd(temp_path: Path, clients_number: int, dataset_path: Path):
 
     spark = spark_connection()
-    spark_df = spark.read.parquet("/home/dev/sb-proj/data/mbd-dataset/detail/trx")
+    spark_df = spark.read.parquet("/home/dev/sb-proj/data/mbd-dataset/detail/trx").limit(10000).cache()
     spark_df = spark_df.dropna()
 
     spark_df = choose_years(spark_df, [2021, 2022])
@@ -126,6 +126,9 @@ def prepocess_full_mbd(temp_path: Path, clients_number: int):
 
     spark_df = spark.read.parquet((temp_path / ".temp.parquet").as_posix())
     save_quantile_statistic(spark_df, temp_path, features_to_transform=["amount"])
+    
+    spark_df = code_indexes(spark_df, dataset_path, METADATA['index_columns'])
+    spark_df = code_categories(spark_df, dataset_path, METADATA['cat_features'])
 
     train_dataset, test_dataset = split_train_test(spark_df)
 
@@ -140,6 +143,8 @@ def prepocess_full_mbd(temp_path: Path, clients_number: int):
     )
 
     spark.stop()
+
+    return #path
 
 
 def save_quantile_statistic(
@@ -166,22 +171,23 @@ def save_quantile_statistic(
 
 
 def main(dataset_name="mbd-50k", clients_number=1_000):
-    temp_path = Path("data/temp")
+    temp_path = Path("data/temp-mbd")
     dataset_path = Path(f"data/{dataset_name}")
 
-    prepocess_full_mbd(temp_path, clients_number)
+    prepocess_full_mbd(temp_path, clients_number, dataset_path)
 
-    csv_to_parquet(
+    save_to_parquet(
         temp_path / ".train.csv",
-        save_path=dataset_path,
-        cat_codes_path=None,
+        save_path=dataset_path / "train",
+        cat_codes_path=dataset_path / "cat_codes",
+        idx_codes_path=dataset_path / "idx",
         metadata=METADATA,
         overwrite=True,
     )
 
-    csv_to_parquet(
+    save_to_parquet(
         temp_path / ".test.csv",
-        save_path=dataset_path,
+        save_path=dataset_path / "test",
         cat_codes_path=dataset_path / "cat_codes",
         idx_codes_path=dataset_path / "idx",
         metadata=METADATA,

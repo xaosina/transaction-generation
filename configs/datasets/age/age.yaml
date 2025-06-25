@@ -11,6 +11,9 @@ trainer:
 log_dir: log/generation/age
 
 data_conf:
+  cat_cardinalities:
+    - ["age", 5]
+    - ["small_group", 203]
   num_names:
     - amount_rur
   index_name: client_id
@@ -24,9 +27,9 @@ data_conf:
   train_resamples: 1
   batch_size: 128
 
-  min_history_len: 32
+  min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: 1024
+  max_seq_len: &max_seq_len 1024
 
   padding_value: 0
 

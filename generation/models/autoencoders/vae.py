@@ -31,7 +31,7 @@ class VAE(BaseAE):
         self.encoder = Encoder(
             model_config.vae,
             cat_cardinalities=data_conf.cat_cardinalities,
-            num_names=data_conf.num_names,
+            num_features=data_conf.num_names,
             batch_transforms=model_config.preprocessor.batch_transforms,
         )
 
@@ -73,7 +73,7 @@ class Encoder(nn.Module):
         self,
         vae_conf: VaeConfig,
         cat_cardinalities: Mapping[str, int] | None = None,
-        num_names: Sequence[str] | None = None,
+        num_features: Sequence[str] | None = None,
         batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
         bias=True,
     ):
@@ -81,8 +81,8 @@ class Encoder(nn.Module):
         self.d_token = vae_conf.d_token
         self.pretrained = vae_conf.pretrained
 
-        if num_names is not None:
-            num_count = len(num_names)
+        if num_features is not None:
+            num_count = len(num_features)
         else:
             num_count = 0
         self.batch_transforms = create_instances_from_module(

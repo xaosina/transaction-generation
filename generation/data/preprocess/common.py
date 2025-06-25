@@ -211,7 +211,9 @@ def train_test_split(
     return train_df, test_df
 
 
-def save_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False):
+def save_to_parquet(
+    data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False
+):
     if isinstance(save_path, str):
         save_path = Path(save_path)
     if isinstance(cat_codes_path, str):
@@ -247,28 +249,6 @@ def save_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_pa
     for_selection += [F.col(name).cast(FloatType()) for name in ordering_columns]
     df = df.select(*for_selection)
 
-    if cat_codes_path is None:
-        print("Creating new cat codes.")
-        vcs = cat_freq(df, cat_features)
-        for vc in vcs:
-            df = vc.encode(df)
-            vc.write(save_path / "cat_codes" / vc.feature_name, mode=mode)
-    else:
-        print("Reading cat codes.")
-        for cat_col in cat_features:
-            vc = CatMap.read(cat_codes_path / cat_col)
-            df = vc.encode(df)
-
-    if idx_codes_path is None:
-        print("Creating new idx codes.")
-        idc = cat_freq(df, index_columns)[0]
-        df = idc.encode(df)
-        idc.write(save_path / "idx", mode=mode)
-    else:
-        print("Reading idx codes.")
-        idc = CatMap.read(idx_codes_path)
-        df = idc.encode(df)
-        
     df = collect_lists(
         df,
         group_by=index_columns + target_columns,
@@ -276,6 +256,24 @@ def save_to_parquet(data, save_path, metadata, cat_codes_path=None, idx_codes_pa
     )
     df_repartitioned = df.repartition(20)
 
-    df_repartitioned.write.parquet((save_path / ("train" if cat_codes_path is None else 'test')).as_posix(), 
-                                   mode=mode)
-    
+    df_repartitioned.write.parquet(
+        save_path.as_posix(),
+        mode=mode,
+    )
+    spark.stop()
+
+
+def code_categories(df, path, cat_features):
+    vcs = cat_freq(df, cat_features)
+    for vc in vcs:
+        df = vc.encode(df)
+        vc.write(path / "cat_codes" / vc.feature_name, mode="overwrite")
+    return df
+
+
+def code_indexes(df, path, index_columns):
+    print("Creating new idx codes.")
+    idc = cat_freq(df, index_columns)[0]
+    df = idc.encode(df)
+    idc.write(path / "idx", mode="overwrite")
+    return df

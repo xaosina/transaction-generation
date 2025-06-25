@@ -6,7 +6,10 @@ import torch.nn.functional as F
 from torch.nn import Module
 
 from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
-from torch_linear_assignment import batch_linear_assignment
+try:
+    from torch_linear_assignment import batch_linear_assignment
+except Exception:
+    print('No module batch_linear_assignment was installed')
 
 
 @dataclass(frozen=True)
@@ -24,7 +27,8 @@ def rse_valid(pred, true, valid_mask):
     userwise_mean = torch.where(valid_mask, true, torch.nan).nanmean(dim=0)  # B, [D]
     tot = (true - userwise_mean) ** 2  # L, B, [D]
     userwise_tot = torch.where(valid_mask, tot, torch.nan).nansum(dim=0)  # B, [D]
-    rse = userwise_res / userwise_tot
+    eps = 1e-8
+    rse = userwise_res / (userwise_tot + eps)
     return rse.sum(), rse.numel()
 
 

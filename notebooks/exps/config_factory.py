@@ -17,18 +17,18 @@ def load_base_yaml(path):
     return OmegaConf.to_container(merged_config, resolve=True)
 
 
-def str_to_df(s):
+def str_to_df(s, sep='\t'):
     s = s.strip().split("\n")
-    df = pd.DataFrame(columns=s[0].split("\t"))
+    df = pd.DataFrame(columns=s[0].split(sep))
     for i, line in enumerate(s[1:]):
-        line = line.split("\t")
+        line = line.split(sep)
         df.loc[i] = line
     for i in range(df.shape[0]):
         for j in range(df.shape[1]):
             try:
-                df.iloc[i, j] = eval(df.iloc[i, j])
-            except Exception:
-                pass
+                df.iat[i, j] = eval(df.iat[i, j])
+            except Exception as e:
+                print(f"Не удалось распарсить ячейку {i},{j}: {e}")
     return df
 
 

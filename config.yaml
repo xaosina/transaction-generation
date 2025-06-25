@@ -1,8 +1,4 @@
 config_factory: [datasets/shakespeare/shakespeare,methods/gru_oneshot,datasets/shakespeare/metrics/default, ]
- 
-model:
-  name:
-  encoder:
 
 # Runner params:
 log_dir: log/generation

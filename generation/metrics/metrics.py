@@ -39,9 +39,10 @@ class BaseMetric(ABC):
 class BatchCutMetric(BaseMetric):
     def __call__(self, orig, gen):
         return orig[self.data_conf.index_name].shape[0]
-    
+
     def __repr__(self):
         return "BatchCutMetric"
+
 
 @dataclass
 class Reconstruction(BaseMetric):
@@ -49,7 +50,7 @@ class Reconstruction(BaseMetric):
         assert (orig.columns == gen.columns).all()
         results = {}
 
-        cat_cards = (self.data_conf.cat_cardinalities or {})
+        cat_cards = self.data_conf.cat_cardinalities or {}
         for col in self.data_conf.focus_on:
 
             df = pd.concat(
@@ -85,7 +86,7 @@ class EffectiveReconstruction(BaseMetric):
         assert (orig.columns == gen.columns).all()
         results = {}
 
-        cat_cards = (self.data_conf.cat_cardinalities or {})
+        cat_cards = self.data_conf.cat_cardinalities or {}
         for col in self.data_conf.focus_on:
 
             df = pd.concat(
@@ -113,6 +114,7 @@ class EffectiveReconstruction(BaseMetric):
 
     def __repr__(self):
         return "Reconstruction"
+
 
 @dataclass
 class BinaryMetric(BaseMetric):
@@ -155,7 +157,6 @@ class Accuracy(BinaryMetric):
 
 @dataclass
 class PR(BinaryMetric):
-
     @staticmethod
     def get_statistics(gt: np.ndarray, pred: np.ndarray) -> UserStatistic:
         assert isinstance(gt, np.ndarray) and isinstance(pred, np.ndarray)
@@ -181,6 +182,9 @@ class PR(BinaryMetric):
             cls_metric[cls] = {
                 "Precision": precision,
                 "Recall": recall,
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
             }
 
         return cls_metric
@@ -188,10 +192,50 @@ class PR(BinaryMetric):
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         stats = self.get_statistics(gt, pred)
-        return stats
+        return pd.Series(stats)
 
     def __repr__(self):
         return f"PR on {self.target_key}"
+
+
+@dataclass
+class Precision(PR):
+    average: str = "macro"
+
+    def get_scores(self, row):
+        gt, pred = row["gt"], row["pred"]
+        stats = self.get_statistics(gt, pred)
+        perfs = stats.values()
+        if self.average == 'macro':
+            ret = sum(m["Precision"] for m in perfs) / len(perfs)
+        else:
+            total_tp = sum(m["tp"] for m in perfs)
+            total_fp = sum(m["fp"] for m in perfs)
+            ret = total_tp / (total_tp + total_fp) if (total_tp + total_fp) else 0
+
+        return ret
+
+    def __repr__(self):
+        return f"Precision {self.average} on {self.target_key}"
+
+
+@dataclass
+class Recall(PR):
+    average: str = "macro"
+    def get_scores(self, row):
+        gt, pred = row["gt"], row["pred"]
+        stats = self.get_statistics(gt, pred)
+        perfs = stats.values()
+        if self.average == 'macro':
+            ret = sum(m["Recall"] for m in perfs) / len(perfs)
+        else:
+            total_tp = sum(m["tp"] for m in perfs)
+            total_fn = sum(m["fn"] for m in perfs)
+            ret = total_tp / (total_tp + total_fn) if (total_tp + total_fn) else 0
+        return ret
+
+    def __repr__(self):
+        return f"Recall {self.average} on {self.target_key}"
 
 
 @dataclass

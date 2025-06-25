@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class EvaluatorConfig:
     devices: list[str] = field(default_factory=lambda: ["cuda:0"])
-    metrics: Optional[list[Mapping[str, Any] | str]] = None
+    metrics: list[Mapping[str, Any] | str] = None
 
 
 class SampleEvaluator:

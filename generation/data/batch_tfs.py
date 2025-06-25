@@ -4,7 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 import pickle
 
 import numpy as np
@@ -60,6 +60,14 @@ class NewFeatureTransform(BatchTransform):
 
     def new_focus_on(self, focus_on) -> list[str]:
         return focus_on
+
+
+class Identity(NewFeatureTransform):
+    def __call__(self, batch: GenBatch):
+        pass
+
+    def reverse(self, batch: GenBatch):
+        pass
 
 
 @dataclass
@@ -449,12 +457,16 @@ class Logarithm(BatchTransform):
     """Feature names to transform by taking the logarithm."""
 
     def __call__(self, batch: GenBatch):
+        num_names = batch.num_features_names or []
         for name in self.names:
-            batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
+            if name in num_names:
+                batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
 
     def reverse(self, batch: GenBatch):
+        num_names = batch.num_features_names or []
         for name in self.names:
-            batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
+            if name in num_names:
+                batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
 
 
 @dataclass
@@ -793,18 +805,19 @@ class NGramTransform(NewFeatureTransform):
         return out
 
     def __post_init__(self):
-        self.min_len = self.min_hist_len + self.gen_len
-        self.mapping = None
-        with open(self.model_path, "rb") as file:
-            self.mapping = pickle.load(file)
+        if not self.disable:
+            self.min_len = self.min_hist_len + self.gen_len
+            self.mapping = None
+            with open(self.model_path, "rb") as file:
+                self.mapping = pickle.load(file)
 
-        self.ngram_counts = sum([len(el) for el in self.mapping.values()])
+            self.ngram_counts = sum([len(el) for el in self.mapping.values()])
 
     @property
     def cat_cardinalities(self) -> list[str] | None:
         if self.disable:
             return {}
-        
+
         assert self.ngram_counts != -1
         new_cats = {}
         new_cats[f"{self.feature_name}_merged"] = (
@@ -821,8 +834,8 @@ class NGramTransform(NewFeatureTransform):
 
     def new_focus_on(self, focus_on):
         if self.disable:
-            return [self.feature_name]
-        
+            return focus_on
+
         new_focus_on = [i for i in focus_on if i != self.feature_name]
         new_focus_on.append(self.feature_name + "_merged")
         return new_focus_on
@@ -863,7 +876,9 @@ class NGramTransform(NewFeatureTransform):
         batch.cat_features = batch.cat_features[:, :, mask]
         batch.cat_features_names.remove(self.feature_name)
 
-        batch.cat_features = torch.cat((batch.cat_features, torch.tensor(new_cat_features)[..., None]), dim=-1)
+        batch.cat_features = torch.cat(
+            (batch.cat_features, torch.tensor(new_cat_features)[..., None]), dim=-1
+        )
         batch.cat_features_names.append(f"{self.feature_name}_merged")
 
         batch.time = torch.tensor(new_times)[:max_len]
@@ -912,8 +927,8 @@ class NGramTransform(NewFeatureTransform):
             new_cat_features[:new_seq_len, i] = decoded_seq
             new_times[:new_seq_len, i] = decoded_time
 
-            target_cat_features[:, i, feature_id] = decoded_target[:self.gen_len]
-            target_times[:, i] = decoded_target_time[:self.gen_len]
+            target_cat_features[:, i, feature_id] = decoded_target[: self.gen_len]
+            target_times[:, i] = decoded_target_time[: self.gen_len]
 
             batch.lengths[i] = new_seq_len
 
@@ -951,16 +966,25 @@ class NGramTransform(NewFeatureTransform):
         else:
             if batch.num_features is not None:
                 new_num_features = torch.zeros((L, B, len(batch.num_features_names)))
-                new_num_features[:batch.num_features.shape[0], ...] = batch.num_features
+                new_num_features[: batch.num_features.shape[0], ...] = (
+                    batch.num_features
+                )
                 batch.num_features = new_num_features
             batch.cat_features_names.append(f"{self.feature_name}")
-            new_cat_features_tensor = torch.zeros((L, B, len(batch.cat_features_names)), dtype=float)
-            new_cat_features_tensor[:batch.cat_features.shape[0], :, :-1] = batch.cat_features
-            new_cat_features_tensor[:, :, feature_id] = torch.tensor(new_cat_features, dtype=float)
+            new_cat_features_tensor = torch.zeros(
+                (L, B, len(batch.cat_features_names)), dtype=float
+            )
+            new_cat_features_tensor[: batch.cat_features.shape[0], :, :-1] = (
+                batch.cat_features
+            )
+            new_cat_features_tensor[:, :, feature_id] = torch.tensor(
+                new_cat_features, dtype=float
+            )
             batch.cat_features = new_cat_features_tensor
             batch.time = torch.tensor(new_times, dtype=float)
             batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)
             batch.target_time = torch.tensor(target_times, dtype=float)
+
 
 @dataclass
 class ShuffleUsers(BatchTransform):
@@ -970,7 +994,7 @@ class ShuffleUsers(BatchTransform):
     def __call__(self, batch: GenBatch):
         return
 
-    def reverse(self, batch: GenBatch): 
+    def reverse(self, batch: GenBatch):
         if self.shuffle:
             B = batch.index.size
             perm = torch.randperm(B)
@@ -980,3 +1004,54 @@ class ShuffleUsers(BatchTransform):
                 batch.target_num_features = batch.target_num_features[:, perm, :]
             if batch.target_time is not None:
                 batch.target_time = batch.target_time[:, perm]
+
+
+@dataclass
+class HideFeaturesFromTrain(NewFeatureTransform):
+
+    cat_features: Optional[list[str]] = None
+    num_features: Optional[list[str]] = None
+
+    @property
+    def num_names_removed(self) -> list[str] | None:
+        return self.num_features
+
+    @property
+    def cat_names_removed(self) -> list[str] | None:
+        return self.cat_features
+
+    def new_focus_on(self, focus_on) -> list[str]:
+        return focus_on
+
+    def __post_init__(
+        self,
+    ):
+        self.source_batch = None
+
+    def __call__(self, batch: GenBatch):
+        if self.cat_features:
+            ff_ids = [
+                index
+                for index, name in enumerate(batch.cat_features_names)
+                if name not in self.cat_features
+            ]
+            batch.cat_features_names = [batch.cat_features_names[id] for id in ff_ids]
+            batch.cat_features = batch.cat_features[:, :, ff_ids]
+            if batch.cat_features_names.__len__() == 0:
+                batch.cat_features = None
+                batch.cat_features_names = None
+
+        if self.num_features:
+            ff_ids = [
+                index
+                for index, name in enumerate(batch.num_features_names)
+                if name not in self.num_features
+            ]
+            batch.num_features_names = [batch.num_features_names[id] for id in ff_ids]
+            batch.num_features = batch.num_features[:, :, ff_ids]
+            if batch.num_features_names.__len__() == 0:
+                batch.num_features = None
+                batch.num_features_names = None
+
+    def reverse(self, batch):
+        pass
