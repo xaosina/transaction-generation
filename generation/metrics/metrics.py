@@ -426,6 +426,14 @@ class CardinalityCoverage(GenVsHistoryMetric):
     def __repr__(self):
         return self.overall * "Overall " + f"CardinalityCoverage on {self.target_key}"
 
+@dataclass
+class Cardinality(GenVsHistoryMetric):
+    def get_scores(self, row):
+        hists, preds = row["hists"], row["preds"]
+        return len(np.unique(preds))
+
+    def __repr__(self):
+        return self.overall * "Overall " + f"Cardinality on {self.target_key}"
 
 @dataclass
 class NoveltyScore(GenVsHistoryMetric):

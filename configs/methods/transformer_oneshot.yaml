@@ -8,15 +8,20 @@ data_conf:
 # MODEL
 model:
   name: OneShotGenerator
-  preprocessor:
-    cat_emb_dim: 16
-    num_emb_dim: 64
-    num_norm: True
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 16
+      num_emb_dim: 64
+      num_norm: True
+    pretrain: False
+    frozen: False
+    checkpoint:
     batch_transforms:
       '0':
         TimeToFeatures:
           process_type: "cat"
-  encoder:
+  latent_encoder:
     name: Transformer
     params:
       max_len: ${data_conf.max_seq_len}

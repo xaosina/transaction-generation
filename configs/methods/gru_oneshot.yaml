@@ -8,15 +8,20 @@ data_conf:
 # MODEL
 model:
   name: OneShotGenerator
-  preprocessor:
-    cat_emb_dim: 16
-    num_emb_dim: 64
-    num_norm: True
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 32
+      num_emb_dim: 32
+      num_norm: True
+    pretrain: False
+    frozen: False
+    checkpoint:
     batch_transforms:
       '0':
         TimeToFeatures:
-          process_type: "cat"
-  encoder:
+          process_type: "none"
+  latent_encoder:
     name: GRU
     params:
       hidden_size: 256
@@ -49,10 +54,10 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: matched
+  name: target
   params:
     mse_weight: 0.07
-    max_shift: -1
+    # max_shift: -1
 
 optuna:
   params:

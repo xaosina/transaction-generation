@@ -17,21 +17,21 @@ data_conf:
   num_names:
   index_name: speach_id
   time_name: char_number
-  focus_on:
+  focus_on: ["char"]
 
   test_path: 'data/shakespeare/preprocessed/test'
   train_path: 'data/shakespeare/preprocessed/train'
   val_ratio: 0.15
-  num_workers: 4
-  train_resamples: 1
+  num_workers: 3
+  train_resamples: 3
   batch_size: 128
 
   min_history_len: &min_history_len 32
-  generation_len: &generation_len 32
-  max_seq_len:  &max_seq_len 400
+  generation_len: &generation_len 4
+  max_seq_len:  &max_seq_len 48
   padding_value: 0
 
-  train_random_end: none
+  train_random_end: index
   val_random_end: time
   loader_transforms:
   train_transforms:
