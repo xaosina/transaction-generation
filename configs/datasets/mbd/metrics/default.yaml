@@ -2,8 +2,6 @@ evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
     - Reconstruction
-    - PR:
-        target_key: event_type
     - Levenshtein:
         target_key: event_type
     # - Accuracy:
@@ -14,7 +12,18 @@ evaluator:
     - F1Metric:
         target_key: event_type
         average: micro
-
+    - Precision:
+        target_key: event_type
+        average: macro
+    - Precision:
+        target_key: event_type
+        average: micro
+    - Recall:
+        target_key: event_type
+        average: macro
+    - Recall:
+        target_key: event_type
+        average: micro
     # - Gini:
     #     target_key: event_type
     # - ShannonEntropy:
@@ -33,11 +42,11 @@ evaluator:
     #     target_key: event_type
     #     overall: True
 
-    - Density:
-        log_cols: ["amount"]
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: ["amount"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd

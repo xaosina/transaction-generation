@@ -10,12 +10,23 @@ evaluator:
     - F1Metric:
         target_key: behavior_type
         average: micro
-
-    - Density:
-        log_cols: []
-        with_timediff: True
-        save_details: True
-        verbose: False
+    - Precision:
+        target_key: behavior_type
+        average: macro
+    - Precision:
+        target_key: behavior_type
+        average: micro
+    - Recall:
+        target_key: behavior_type
+        average: macro
+    - Recall:
+        target_key: behavior_type
+        average: micro
+    # - Density:
+    #     log_cols: []
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd

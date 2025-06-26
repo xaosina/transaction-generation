@@ -12,7 +12,18 @@ evaluator:
     - F1Metric:
         target_key: small_group
         average: micro
-
+    - Precision:
+        target_key: small_group
+        average: macro
+    - Precision:
+        target_key: small_group
+        average: micro
+    - Recall:
+        target_key: small_group
+        average: macro
+    - Recall:
+        target_key: small_group
+        average: micro
     # - Gini:
     #     target_key: small_group
     # - ShannonEntropy:
@@ -31,11 +42,11 @@ evaluator:
     #     target_key: small_group
     #     overall: True
 
-    - Density:
-        log_cols: ["amount_rur"]
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: ["amount_rur"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd
