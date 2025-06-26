@@ -1,0 +1,30 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  metrics:
+    - Reconstruction
+    - Levenshtein:
+        target_key: level_2
+    - F1Metric:
+        target_key: level_2
+        average: macro
+    - F1Metric:
+        target_key: level_2
+        average: micro
+
+    - Density:
+        log_cols: ["purchase_sum"]
+        with_timediff: True
+        save_details: True
+        verbose: False
+
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: transformer
+    #     condition_len: 0
+    #     verbose: True
+
+    # - Detection:
+    #     dataset_config: detection/mbd
+    #     method_config: gru
+    #     condition_len: *generation_len
+    #     verbose: True

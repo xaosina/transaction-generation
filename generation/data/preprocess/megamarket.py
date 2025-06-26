@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame
-from .common import csv_to_parquet
+from .common import save_to_parquet
 from generation.data.preprocess.common import code_indexes, code_categories
 from generation.data.preprocess.utils import (
     seq_len_filter,
@@ -101,20 +101,18 @@ def main(
         raw_data_path, output_path, temp_path, clients_number, debug=debug
     )
 
-    csv_to_parquet(
-        'train',
+    save_to_parquet(
         temp_path / ".train.csv",
-        save_path=output_path,
+        save_path=output_path / "train",
         cat_codes_path=output_path / "cat_codes",
         idx_codes_path=output_path / "idx",
         metadata=METADATA,
         overwrite=True,
     )
 
-    csv_to_parquet(
-        'test',
+    save_to_parquet(
         temp_path / ".test.csv",
-        save_path=output_path,
+        save_path=output_path / "test",
         cat_codes_path=output_path / "cat_codes",
         idx_codes_path=output_path / "idx",
         metadata=METADATA,

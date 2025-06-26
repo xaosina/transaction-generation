@@ -136,7 +136,7 @@ class BaseLoss(Module):
             < y_true.lengths
         )
 
-    def __call__(self, y_true, y_pred) -> torch.Tensor:
+    def __call__(self, y_true, y_pred) -> dict:
         valid_mask = self._valid_mask(y_true)
         mse_loss = self._compute_mse(y_true, y_pred, valid_mask)
         ce_loss = self._compute_ce(y_true, y_pred, valid_mask)
@@ -334,7 +334,7 @@ class TargetLoss(Module):
     def __call__(self, y_true, y_pred) -> torch.Tensor:
         mse_loss = self._compute_mse(y_true, y_pred)
         ce_loss = self._compute_ce(y_true, y_pred)
-        return self.combine_losses(mse_loss, ce_loss)
+        return {'loss': self.combine_losses(mse_loss, ce_loss)}
 
     def combine_losses(self, mse_loss, ce_loss):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
@@ -403,7 +403,8 @@ class MatchedLoss(Module):
             j_indices = torch.arange(L, device=cost.device)
             distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
             mask_outside_band = distance_from_diagonal > self.max_shift
-            cost.masked_fill_(mask_outside_band, -torch.inf)
+            cost.masked_fill_(mask_outside_band, torch.inf)
+        breakpoint()
         assignment = batch_linear_assignment(cost).T # L, B
         assignment = batch_linear_assignment(cost.to(device="cpu")).T # L, B
         
@@ -436,7 +437,7 @@ class MatchedLoss(Module):
                 total_ce += ce_loss
                 ce_count += 1
             cat_loss += (total_ce / ce_count)
-        return self.combine_losses(mse_loss, cat_loss)
+        return {'loss': self.combine_losses(mse_loss, cat_loss)}
     
     def combine_losses(self, mse_loss, ce_loss):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)

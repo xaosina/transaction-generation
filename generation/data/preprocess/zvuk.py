@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pyspark.sql import functions as F
 from pyspark.sql import DataFrame
-from .common import csv_to_parquet
+from .common import save_to_parquet
 from generation.data.preprocess.common import code_indexes, code_categories
 from generation.data.preprocess.utils import (
     seq_len_filter,
@@ -88,11 +88,11 @@ def prepocess_full_mbd(
         test_dataset, METADATA["index_columns"][0], METADATA["raw_time_name"], denom=(60 * 60), time_name=METADATA["ordering_columns"][0]
     )
 
-    train_dataset.write.csv(
-        (temp_path / ".train.csv").as_posix(), header=True, mode="overwrite"
+    train_dataset.write.parquet(
+        (temp_path / ".train.parquet").as_posix(), header=True, mode="overwrite"
     )
-    test_dataset.write.csv(
-        (temp_path / ".test.csv").as_posix(), header=True, mode="overwrite"
+    test_dataset.write.parquet(
+        (temp_path / ".test.parquet").as_posix(), header=True, mode="overwrite"
     )
 
     spark.stop()
@@ -112,20 +112,18 @@ def main(
         raw_data_path, output_path, temp_path, clients_number, debug=debug
     )
 
-    csv_to_parquet(
-        'train',
+    save_to_parquet(
         temp_path / ".train.csv",
-        save_path=output_path,
+        save_path=output_path / "train",
         cat_codes_path=output_path / "cat_codes",
         idx_codes_path=output_path / "idx",
         metadata=METADATA,
         overwrite=True,
     )
 
-    csv_to_parquet(
-        'test',
+    save_to_parquet(
         temp_path / ".test.csv",
-        save_path=output_path,
+        save_path=output_path / "test",
         cat_codes_path=output_path / "cat_codes",
         idx_codes_path=output_path / "idx",
         metadata=METADATA,

@@ -457,13 +457,15 @@ class Logarithm(BatchTransform):
     """Feature names to transform by taking the logarithm."""
 
     def __call__(self, batch: GenBatch):
+        num_names = batch.num_features_names or []
         for name in self.names:
-            if batch.num_features_names and name in batch.num_features_names: #TODO: We need it better
+            if name in num_names:
                 batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
 
     def reverse(self, batch: GenBatch):
+        num_names = batch.num_features_names or []
         for name in self.names:
-            if batch.num_features_names and name in batch.num_features_names:
+            if name in num_names:
                 batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
 
 

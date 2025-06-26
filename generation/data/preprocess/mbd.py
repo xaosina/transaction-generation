@@ -9,7 +9,7 @@ from pyspark.sql import functions as F
 
 from generation.data.preprocess.quantile_transformer import QuantileTransformerTorch
 from generation.data.preprocess.common import code_categories, code_indexes
-from .common import csv_to_parquet
+from .common import save_to_parquet
 
 
 def spark_connection():
@@ -176,18 +176,18 @@ def main(dataset_name="mbd-50k", clients_number=1_000):
 
     prepocess_full_mbd(temp_path, clients_number, dataset_path)
 
-    csv_to_parquet(
+    save_to_parquet(
         temp_path / ".train.csv",
-        save_path=dataset_path,
+        save_path=dataset_path / "train",
         cat_codes_path=dataset_path / "cat_codes",
         idx_codes_path=dataset_path / "idx",
         metadata=METADATA,
         overwrite=True,
     )
 
-    csv_to_parquet(
+    save_to_parquet(
         temp_path / ".test.csv",
-        save_path=dataset_path,
+        save_path=dataset_path / "test",
         cat_codes_path=dataset_path / "cat_codes",
         idx_codes_path=dataset_path / "idx",
         metadata=METADATA,

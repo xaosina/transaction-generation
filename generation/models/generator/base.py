@@ -17,6 +17,7 @@ from generation.models.autoencoders.base import AEConfig, BaseAE
 from generation.models import autoencoders
 from generation.utils import freeze_module
 
+
 @dataclass(frozen=True)
 class TPPConfig:
     feature_name: str = ""
@@ -32,7 +33,6 @@ class ModelConfig:
     params: Optional[dict[str, Any]] = None
 
 
-
 class BaseGenerator(BaseModel):
     def __init__(self, *args, **kwargs):
         super().__init__()
@@ -45,14 +45,16 @@ class BaseGenerator(BaseModel):
 class AutoregressiveGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
-        
+
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
             data_conf, model_config.autoencoder
         )
 
-        if model_config.autoencoder.checkpoint != "none":
-            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location=self.autoencoder.device)
-            msg = self.autoencoder.load_state_dict(ckpt["model"]["autoencoder"], strict=False)
+        if model_config.autoencoder.checkpoint:
+            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
+            msg = self.autoencoder.load_state_dict(
+                ckpt["model"]["autoencoder"], strict=False
+            )
 
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
@@ -121,11 +123,24 @@ class OneShotGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
 
-        self.preprocess = create_preprocessor(data_conf, model_config.preprocessor)
+        self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
+            data_conf, model_config.autoencoder
+        )
+        if model_config.autoencoder.checkpoint:
+            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
+            msg = self.autoencoder.load_state_dict(
+                ckpt["model"]["autoencoder"], strict=False
+            )
 
-        encoder_params = model_config.encoder.params or {}
-        encoder_params["input_size"] = self.preprocess.output_dim
-        self.encoder = AutoregressiveEncoder(model_config.encoder.name, encoder_params)
+        if model_config.autoencoder.frozen:
+            self.autoencoder = freeze_module(self.autoencoder)
+
+        encoder_params = model_config.latent_encoder.params or {}
+        encoder_params["input_size"] = self.autoencoder.encoder.output_dim
+
+        self.encoder = AutoregressiveEncoder(
+            model_config.latent_encoder.name, encoder_params
+        )
         self.poller = (
             TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
         )
@@ -133,10 +148,8 @@ class OneShotGenerator(BaseGenerator):
 
         self.projector = Projection(
             self.encoder.output_dim // data_conf.generation_len,
-            (2 * self.encoder.output_dim) // data_conf.generation_len,
+            self.encoder.output_dim,
         )
-
-        self.reconstructor = ReconstructorBase(data_conf, self.projector.output_dim)
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
@@ -145,12 +158,12 @@ class OneShotGenerator(BaseGenerator):
             x (GenBatch): Input sequence [L, B, D]
 
         """
-        x = self.preprocess(x)  # Sequence of [L, B, D]
+        x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
         x = self.encoder(x)  # [L, B, D]
         x = self.poller(x)  # [B, D]
         x = self.reshaper(x)  # [gen_len, B, D // gen_len]
-        x = self.projector(x)  # [gen_len, B, 2 * D // gen_len]
-        x = self.reconstructor(x)
+        x = self.projector(x)
+        x = self.autoencoder.decoder(x)
         return x
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
@@ -173,5 +186,3 @@ class OneShotGenerator(BaseGenerator):
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return pred  # Return GenBatch of size [gen_len, B, D]
-
-

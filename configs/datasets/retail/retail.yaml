@@ -1,0 +1,83 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'Reconstruction overall'
+  iters_per_epoch: null
+  patience: 4
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+log_dir: log/generation/retail
+
+# DATA
+data_conf:
+  cat_cardinalities:
+  - ["is_own_trademark", 3]
+  - ["is_alcohol", 3]
+  - ["level_1", 4]
+  - ["level_2", 43]
+  - ["level_3", 202]
+  - ["level_4", 789]
+  - ["segment_id", 120]
+  - ["gender": 4]
+
+  num_names:
+    - age
+    - trn_sum_from_iss
+    - netto
+    - regular_points_received
+    - express_points_received
+    - product_quantity
+    - regular_points_spent
+    - express_points_spent
+    - purchase_sum
+
+  index_name: client_id
+  time_name: transaction_datetime
+  focus_on:
+
+  test_path: 'data/retail/preprocessed/test'
+  train_path: 'data/retail/preprocessed/train'
+  val_ratio: 0.15
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
+  max_seq_len:  &max_seq_len 256
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  loader_transforms:
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 117.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "log_tfs":
+      Logarithm:
+        names: ["purchase_sum"]
+    "3":
+      CutTargetSequence:
+        target_len: 0
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 117.0
+    "1":
+      TimeToDiff:
+        disable: False
+    "log_tfs":
+      Logarithm:
+        names: ["purchase_sum"]
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len

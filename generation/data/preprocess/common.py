@@ -211,8 +211,8 @@ def train_test_split(
     return train_df, test_df
 
 
-def csv_to_parquet(
-    part, data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False
+def save_to_parquet(
+    data, save_path, metadata, cat_codes_path=None, idx_codes_path=None, overwrite=False
 ):
     if isinstance(save_path, str):
         save_path = Path(save_path)
@@ -224,7 +224,10 @@ def csv_to_parquet(
     spark = SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
     if isinstance(data, Path) or isinstance(data, str):
         data = Path(data)
-        df = spark.read.csv(data.as_posix(), header=True)
+        if data.suffix == "csv":
+            df = spark.read.csv(data.as_posix(), header=True)
+        elif data.suffix:
+            df = spark.read.parquet(data.as_posix())
     elif isinstance(data, pd.DataFrame):
         df = spark.createDataFrame(data)
     else:
@@ -254,7 +257,7 @@ def csv_to_parquet(
     df_repartitioned = df.repartition(20)
 
     df_repartitioned.write.parquet(
-        (save_path / part).as_posix(),
+        save_path.as_posix(),
         mode=mode,
     )
     spark.stop()

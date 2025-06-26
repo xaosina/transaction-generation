@@ -21,8 +21,6 @@ data_conf:
   index_name: user_id
   time_name: hours_since_first_tx
   focus_on: 
-    - category_id
-
   test_path: 'data/megamarket-100k/test'
   train_path: 'data/megamarket-100k/train'
   val_ratio: 0.15

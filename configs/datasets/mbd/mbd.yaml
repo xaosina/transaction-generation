@@ -29,7 +29,6 @@ data_conf:
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
-    # - amount
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
   val_ratio: 0.15

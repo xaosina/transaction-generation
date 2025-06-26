@@ -9,7 +9,7 @@ model:
       num_norm: True
     pretrain: False
     frozen: False
-    checkpoint: "none"
+    checkpoint:
     batch_transforms:
       '0':
         TimeToFeatures:

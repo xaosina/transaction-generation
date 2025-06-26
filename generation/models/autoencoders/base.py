@@ -24,7 +24,7 @@ class AEConfig:
     params: Optional[dict[str, Any]] = None
     pretrain: bool = False
     frozen: bool = False
-    checkpoint: str = "none"
+    checkpoint: Optional[str] = None
     batch_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
 
 
@@ -156,7 +156,6 @@ class ReconstructorBase(BaseModel):
         self.head = Projection(2 * in_features, out_dim)
 
     def forward(self, x: Seq) -> PredBatch:
-
         x = self.projector(x)
 
         out = self.head(x).tokens
