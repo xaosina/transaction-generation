@@ -2,12 +2,10 @@ evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
     - Reconstruction
-    - PR:
-        target_key: event_type
-    - Levenshtein:
-        target_key: event_type
-    # - Accuracy:
+    # - PR:
     #     target_key: event_type
+    - Cardinality:
+        target_key: event_type
     - F1Metric:
         target_key: event_type
         average: macro
@@ -33,11 +31,11 @@ evaluator:
     #     target_key: event_type
     #     overall: True
 
-    - Density:
-        log_cols: ["amount"]
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: ["amount"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd

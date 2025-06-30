@@ -37,7 +37,7 @@ optimizer:
   name: Adam
   params:
     lr: 1.5e-3
-    weight_decay: 1.e-9
+    weight_decay: 0.e-3
 
 schedulers:
   "step":
@@ -63,30 +63,30 @@ optuna:
     request_list: 
       - 'optimizer.params.weight_decay': 1.5429769361370426e-13
         'optimizer.params.lr': 0.00016912601015410544
-        'model.encoder.params.hidden_size': 164
-        'model.encoder.params.num_layers': 3
-        'model.encoder.params.dropout': 0.1831228989111418
-        "model.preprocessor.batch_transforms.'0'.TimeToFeatures.process_type": cat
-        'model.preprocessor.num_norm': false
-        'model.preprocessor.cat_emb_dim': 41
-        'model.preprocessor.num_emb_dim': 60
+        'model.latent_encoder.params.hidden_size': 164
+        'model.latent_encoder.params.num_layers': 3
+        'model.latent_encoder.params.dropout': 0.1831228989111418
+        "model.autoencoder.batch_transforms.'0'.TimeToFeatures.process_type": cat
+        'model.autoencoder.num_norm': false
+        'model.autoencoder.cat_emb_dim': 41
+        'model.autoencoder.num_emb_dim': 60
         'loss.params.mse_weight': 0.5
         'data_conf.train_transforms.1.TimeToDiff.disable': True
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
-    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-2, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
-    - ["model.encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
-    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 7, log: False}]]
-    - ["model.encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
+    - ["model.latent_encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
+    - ["model.latent_encoder.params.num_layers", ["suggest_int", {low: 1, high: 10, log: False}]]
+    - ["model.latent_encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
 
-    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - ["model.autoencoder.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
-    - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.autoencoder.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
     - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

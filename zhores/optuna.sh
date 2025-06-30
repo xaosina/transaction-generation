@@ -6,12 +6,19 @@
 # script_name=$3
 n_gpus=1
 
-job_name=${1:-optuna_gru}
+job_name=${1:-optuna}
 
 array_range=${2:-"0-0"}
 
 n_days=${3:-6}
 login=${4:-d.osin}
+
+PATH_TO_CHECK=/gpfs/gpfs0/${login}/transaction-generation/zhores/configs/${job_name}.yaml
+
+if [ ! -e "$PATH_TO_CHECK" ]; then
+    echo "Error: The path '$PATH_TO_CHECK' does not exist."
+    exit 1
+fi
 
 # Generate the sbatch script dynamically
 sbatch <<EOT
@@ -43,10 +50,13 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \
+        --config_path zhores/configs/${job_name}.yaml \
+        --run_name ${job_name} \
         --device 'cuda:0' \
         --trainer.verbose False \
-        --run_name ${job_name} \
         --runner.run_type optuna
 
 '
 EOT
+
+# sh transaction-generation/zhores/simple.sh optuna_loss/gpt
