@@ -460,13 +460,16 @@ class Logarithm(BatchTransform):
         num_names = batch.num_features_names or []
         for name in self.names:
             if name in num_names:
-                batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(batch[name])
+                batch[name] = torch.log1p(torch.abs(batch[name])) * torch.sign(
+                    batch[name]
+                )
 
     def reverse(self, batch: GenBatch):
         num_names = batch.num_features_names or []
         for name in self.names:
             if name in num_names:
-                batch[name] = torch.expm1(torch.abs(batch[name])) * torch.sign(batch[name])
+                x = batch[name].clamp(-88, 88) # To prevent overflow
+                batch[name] = torch.expm1(torch.abs(x)) * torch.sign(x)
 
 
 @dataclass
