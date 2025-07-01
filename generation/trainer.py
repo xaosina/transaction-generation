@@ -425,7 +425,7 @@ class Trainer:
                 break
 
         logger.info("run '%s' finished successfully", self._run_name)
-        return losses
+        return loss_metrics
 
     def best_checkpoint(self) -> Path:
         """
