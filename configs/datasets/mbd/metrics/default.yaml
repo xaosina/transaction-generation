@@ -1,7 +1,10 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
-    - Reconstruction
+    - MatchedReconstruction:
+        max_shift: 0
+    - MatchedReconstruction:
+        max_shift: 32
     # - PR:
     #     target_key: event_type
     - Cardinality:

@@ -16,6 +16,7 @@ from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
 from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
+from scipy.optimize import linear_sum_assignment
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -80,40 +81,98 @@ class Reconstruction(BaseMetric):
         return "Reconstruction"
 
 
+def get_perfect_score(score, max_shift, gen_len):
+    cost = np.transpose(-score.mean(-1), (2, 0, 1))  # [B, L, L]
+    if max_shift >= 0:
+        i_indices = np.arange(gen_len)[:, None]  # L, 1
+        j_indices = np.arange(gen_len)
+        distance_from_diagonal = np.abs(i_indices - j_indices)  # L, L
+        mask_outside_band = distance_from_diagonal > max_shift
+        cost[:, mask_outside_band] = np.inf
+
+    L, B, D = score.shape[1:]
+    perfect_score = np.zeros_like(score, shape=(B, D))
+    for b in range(B):
+        workers, tasks = linear_sum_assignment(cost[b], maximize=False)
+        perfect_score[b] = score[workers, tasks, b].sum(0)  # D
+    return perfect_score.mean(0)
+
+
 @dataclass
-class EffectiveReconstruction(BaseMetric):
+class MatchedReconstruction(BaseMetric):
+    max_shift: int = 0
+
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
         results = {}
+        orig, gen = deepcopy(orig), deepcopy(gen)
 
-        cat_cards = self.data_conf.cat_cardinalities or {}
-        for col in self.data_conf.focus_on:
+        # Time to diff
+        time_name = self.data_conf.time_name
+        orig[time_name] = orig[time_name].map(lambda x: np.diff(x, 1))
+        gen[time_name] = gen[time_name].map(lambda x: np.diff(x, 1))
+        # Cut gen_len
+        gen_len = self.data_conf.generation_len
+        seq_cols = self.data_conf.focus_on
+        orig[seq_cols] = orig[seq_cols].map(lambda x: x[-gen_len:])
+        gen[seq_cols] = gen[seq_cols].map(lambda x: x[-gen_len:])
 
-            df = pd.concat(
-                (orig[col], gen[col]),
-                keys=["gt", "pred"],
-                axis=1,
-            ).map(lambda x: x[-self.data_conf.generation_len :])
+        # Prepare num arrays
+        r2 = np.empty((gen_len, gen_len, orig.shape[0], 0))
+        if self.data_conf.focus_num:
+            true_num = orig[self.data_conf.focus_num].values  # B, D
+            pred_num = gen[self.data_conf.focus_num].values  # B, D
 
-            results[col] = df.apply(
-                self._compute_accuracy if col in cat_cards else self._compute_mse,
-                axis=1,
-            ).mean()
+            B, D = true_num.shape
+            true_num = np.transpose(
+                np.concatenate(true_num.ravel()).reshape((B, D, gen_len)),
+                (2, 0, 1),
+            )  # [gen_len, B, D]
+            pred_num = np.transpose(
+                np.concatenate(pred_num.ravel()).reshape((B, D, gen_len)),
+                (2, 0, 1),
+            )  # [gen_len, B, D]
+
+            denominator = ((true_num - true_num.mean(0)) ** 2).sum(
+                axis=0, dtype=np.float64
+            ) # B, D
+            nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
+            denominator[nominator.sum(0).sum(0) == 0] = 1
+            nominator[:, :, (denominator == 0)] = 1 / gen_len
+            denominator[denominator == 0] = 1
+            
+            r2 = 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
+
+        # Prepare cat arrays
+        accuracy = np.empty((gen_len, gen_len, orig.shape[0], 0))
+        if self.data_conf.focus_cat:
+            true_cat = orig[self.data_conf.focus_cat].values  # B, D
+            pred_cat = gen[self.data_conf.focus_cat].values  # B, D
+
+            B, D = true_cat.shape
+            true_cat = np.transpose(
+                np.concatenate(true_cat.ravel()).reshape((B, D, gen_len)),
+                (2, 0, 1),
+            )  # [gen_len, B, D]
+            pred_cat = np.transpose(
+                np.concatenate(pred_cat.ravel()).reshape((B, D, gen_len)),
+                (2, 0, 1),
+            )  # [gen_len, B, D]
+            accuracy = (pred_cat[:, None] == true_cat[None, :]) / gen_len  # [L, L, B, D]
+
+        full_score = np.concatenate([r2, accuracy], axis=-1)  # [L, L, B, D]
+        perfect_score = get_perfect_score(full_score, self.max_shift, gen_len)
+        results = dict(
+            zip(self.data_conf.focus_num + self.data_conf.focus_cat, perfect_score)
+        )
+
         return {
             "overall": np.mean(list(results.values())),
             **results,
         }
 
-    def _compute_mse(self, row):
-        gt, pred = row["gt"], row["pred"]
-        return r2_score(gt, pred)
-
-    def _compute_accuracy(self, row):
-        gt, pred = row["gt"], row["pred"]
-        return accuracy_score(gt, pred)
-
     def __repr__(self):
-        return "Reconstruction"
+        return f"MatchedReconstruction {self.max_shift}"
 
 
 @dataclass
@@ -206,7 +265,7 @@ class Precision(PR):
         gt, pred = row["gt"], row["pred"]
         stats = self.get_statistics(gt, pred)
         perfs = stats.values()
-        if self.average == 'macro':
+        if self.average == "macro":
             ret = sum(m["Precision"] for m in perfs) / len(perfs)
         else:
             total_tp = sum(m["tp"] for m in perfs)
@@ -222,11 +281,12 @@ class Precision(PR):
 @dataclass
 class Recall(PR):
     average: str = "macro"
+
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         stats = self.get_statistics(gt, pred)
         perfs = stats.values()
-        if self.average == 'macro':
+        if self.average == "macro":
             ret = sum(m["Recall"] for m in perfs) / len(perfs)
         else:
             total_tp = sum(m["tp"] for m in perfs)
@@ -426,6 +486,7 @@ class CardinalityCoverage(GenVsHistoryMetric):
     def __repr__(self):
         return self.overall * "Overall " + f"CardinalityCoverage on {self.target_key}"
 
+
 @dataclass
 class Cardinality(GenVsHistoryMetric):
     def get_scores(self, row):
@@ -434,6 +495,7 @@ class Cardinality(GenVsHistoryMetric):
 
     def __repr__(self):
         return self.overall * "Overall " + f"Cardinality on {self.target_key}"
+
 
 @dataclass
 class NoveltyScore(GenVsHistoryMetric):

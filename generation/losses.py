@@ -404,10 +404,8 @@ class MatchedLoss(Module):
             distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
             mask_outside_band = distance_from_diagonal > self.max_shift
             cost.masked_fill_(mask_outside_band, torch.inf)
-        breakpoint()
-        assignment = batch_linear_assignment(cost).T # L, B
-        assignment = batch_linear_assignment(cost.to(device="cpu")).T # L, B
-        
+
+        assignment = batch_linear_assignment(cost).T # L, B        
         
         assignment = assignment.unsqueeze(-1) # L, B, 1
 

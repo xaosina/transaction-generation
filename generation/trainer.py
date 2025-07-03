@@ -57,6 +57,7 @@ class Trainer:
         device: str = "cpu",
         profiling: bool = False,
         verbose: bool = True,
+        grad_clip: float = 1,
     ):
         """Initialize trainer.
 
@@ -108,6 +109,7 @@ class Trainer:
         self._ckpt_resume = ckpt_resume
         self._device = device
         self._verbose = verbose
+        self._grad_clip = grad_clip
 
         self._model = None
         if model is not None:
@@ -312,6 +314,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
                 self._opt.step()
 
                 self._opt.zero_grad()
@@ -329,7 +334,10 @@ class Trainer:
 
     @torch.inference_mode()
     def validate(
-        self, loader: Iterable[GenBatch] | None = None, remove=True, another_metrics=None
+        self,
+        loader: Iterable[GenBatch] | None = None,
+        remove=True,
+        another_metrics=None,
     ) -> dict[str, Any]:
         assert self._model is not None
         if loader is None:
