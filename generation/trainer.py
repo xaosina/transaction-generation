@@ -57,6 +57,7 @@ class Trainer:
         device: str = "cpu",
         profiling: bool = False,
         verbose: bool = True,
+        grad_clip: float = 1,
     ):
         """Initialize trainer.
 
@@ -108,6 +109,7 @@ class Trainer:
         self._ckpt_resume = ckpt_resume
         self._device = device
         self._verbose = verbose
+        self._grad_clip = grad_clip
 
         self._model = None
         if model is not None:
@@ -163,7 +165,8 @@ class Trainer:
                 kv = it.split("__")
                 assert len(kv) == 2, f"Failed to parse filename: {p.name}"
                 k = kv[0]
-                v = -float(kv[1]) if ("loss" in k) or ("mse" in k) else float(kv[1])
+                # v = -float(kv[1]) if ("loss" in k) or ("mse" in k) else float(kv[1])
+                v = float(kv[1])
                 metrics[k] = v
             return metrics[key]
 
@@ -300,7 +303,7 @@ class Trainer:
                     pred = self._model(batch)
 
                 loss_dict = self._loss(batch, pred)
-                loss = loss_dict['loss']
+                loss = loss_dict["loss"]
                 log_losses.update(loss_dict)
 
                 if torch.isnan(loss).any():
@@ -311,6 +314,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
                 self._opt.step()
 
                 self._opt.zero_grad()
@@ -321,14 +327,17 @@ class Trainer:
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
                 self._last_epoch + 1,
-                log_losses.mean()['loss'],
+                log_losses.mean()["loss"],
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
-        return {"loss_ema": loss_ema } | log_losses.mean()
+        return {"loss_ema": loss_ema} | log_losses.mean()
 
     @torch.inference_mode()
     def validate(
-        self, loader: Iterable[GenBatch] | None = None, remove=True
+        self,
+        loader: Iterable[GenBatch] | None = None,
+        remove=True,
+        another_metrics=None,
     ) -> dict[str, Any]:
         assert self._model is not None
         if loader is None:
@@ -342,7 +351,7 @@ class Trainer:
 
         self._metric_values = self._sample_evaluator.evaluate(
             self._model, loader, remove=remove
-        )
+        ) | (another_metrics or {})
         logger.info(
             "Epoch %04d: metrics: %s",
             self._last_epoch + 1,
@@ -397,11 +406,12 @@ class Trainer:
 
             losses = self.train(train_iters)
             if self._sched:
-                self._sched.step(loss=losses["loss_ema"])
+                self._sched.step(loss=losses.pop("loss_ema"))
 
             self._metric_values = None
+            loss_metrics = {k: -v for k, v in losses.items()}
             if self._sample_evaluator is not None:
-                self.validate()
+                self.validate(another_metrics=loss_metrics)
 
             self._last_epoch += 1
             self.save_ckpt()
@@ -423,7 +433,7 @@ class Trainer:
                 break
 
         logger.info("run '%s' finished successfully", self._run_name)
-        return losses
+        return loss_metrics
 
     def best_checkpoint(self) -> Path:
         """

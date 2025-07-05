@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -23,15 +23,15 @@ data_conf:
   train_path: 'data/shakespeare/preprocessed/train'
   val_ratio: 0.15
   num_workers: 3
-  train_resamples: 3
+  train_resamples: 5
   batch_size: 128
 
   min_history_len: &min_history_len 32
-  generation_len: &generation_len 4
-  max_seq_len:  &max_seq_len 48
+  generation_len: &generation_len 32
+  max_seq_len:  &max_seq_len 512
   padding_value: 0
 
-  train_random_end: index
+  train_random_end: none
   val_random_end: time
   loader_transforms:
   train_transforms:

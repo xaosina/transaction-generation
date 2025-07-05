@@ -1,5 +1,4 @@
 config_factory: [datasets/megamarket/megamarket,methods/gru,datasets/megamarket/metrics/default]
-
 # Runner params:
 log_dir: log/generation
 device: "cuda:0"

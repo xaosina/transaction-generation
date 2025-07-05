@@ -47,6 +47,17 @@ class DataConfig:
         if self.num_names is not None:
             seq_cols += self.num_names
         return seq_cols
+    
+    @property
+    def focus_num(self):
+        all_num = [self.time_name]
+        all_num += (self.num_names or [])
+        return [col for col in all_num if col in self.focus_on]
+    
+    @property
+    def focus_cat(self):
+        cat_d = self.cat_cardinalities or {}
+        return [col for col in cat_d if col in self.focus_on]
 
     def __post_init__(self):
         time_name = self.time_name

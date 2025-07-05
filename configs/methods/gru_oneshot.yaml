@@ -54,7 +54,7 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: target
+  name: matched
   params:
     mse_weight: 0.5
     # max_shift: -1

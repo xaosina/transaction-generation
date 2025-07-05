@@ -1,9 +1,12 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
-    - Reconstruction
-    - Levenshtein:
-        target_key: char
+    - MatchedReconstruction:
+        max_shift: 0
+    - MatchedReconstruction:
+        max_shift: 32
+    # - Levenshtein:
+    #     target_key: char
     - F1Metric:
         target_key: char
         average: macro
@@ -13,11 +16,11 @@ evaluator:
     - Cardinality:
         target_key: char
 
-    - Density:
-        log_cols: []
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: []
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd

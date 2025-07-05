@@ -1,11 +1,15 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
-    - Reconstruction
+    - KLDiv
     - Levenshtein:
         target_key: event_type
-    # - Accuracy:
-    #     target_key: event_type
+    - MatchedReconstruction:
+        max_shift: 0
+    - MatchedReconstruction:
+        max_shift: 32
+    - Cardinality:
+        target_key: event_type
     - F1Metric:
         target_key: event_type
         average: macro
