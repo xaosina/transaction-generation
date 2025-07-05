@@ -16,6 +16,7 @@ from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
 from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
+from scipy.stats import entropy
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -116,6 +117,56 @@ class EffectiveReconstruction(BaseMetric):
         return "Reconstruction"
 
 
+class KLDiv(BaseMetric):
+
+    EPS = 1e-8  # сглаживание, чтобы не было нулевых вероятностей
+    N_BINS = 50
+
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+
+        cat_cards = self.data_conf.cat_cardinalities or {}
+        results = {}
+
+        for col in self.data_conf.focus_on:
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+
+            results[col] = df.apply(
+                lambda row: self._compute_kl(row, bins = cat_cards.get(col, None)),
+                axis=1,
+            ).mean()
+
+        return {"overall": np.mean(list(results.values())), **results}
+
+    def _compute_kl(self, row, bins=None):
+        if bins is None:
+            bins = self.N_BINS
+        """KL(P‖Q) для двух выборок через гистограммные счётчики."""
+        gt, pred = row["gt"], row["pred"]
+
+        # общий диапазон
+        range_ = (
+            min(gt.min(), pred.min()), max(gt.max(), pred.max())
+        ) if bins is not None else (0, bins)
+
+        p, _ = np.histogram(gt, bins=self.N_BINS, range=range_, density=False)
+        q, _ = np.histogram(pred, bins=self.N_BINS, range=range_, density=False)
+
+        p = p.astype(float) + self.EPS
+        q = q.astype(float) + self.EPS
+        p /= p.sum()
+        q /= q.sum()
+        return entropy(p, q)   
+
+    def __repr__(self):
+        return "KLDiv"
+
+
 @dataclass
 class BinaryMetric(BaseMetric):
     target_key: str
@@ -206,7 +257,7 @@ class Precision(PR):
         gt, pred = row["gt"], row["pred"]
         stats = self.get_statistics(gt, pred)
         perfs = stats.values()
-        if self.average == 'macro':
+        if self.average == "macro":
             ret = sum(m["Precision"] for m in perfs) / len(perfs)
         else:
             total_tp = sum(m["tp"] for m in perfs)
@@ -222,11 +273,12 @@ class Precision(PR):
 @dataclass
 class Recall(PR):
     average: str = "macro"
+
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         stats = self.get_statistics(gt, pred)
         perfs = stats.values()
-        if self.average == 'macro':
+        if self.average == "macro":
             ret = sum(m["Recall"] for m in perfs) / len(perfs)
         else:
             total_tp = sum(m["tp"] for m in perfs)
@@ -426,6 +478,7 @@ class CardinalityCoverage(GenVsHistoryMetric):
     def __repr__(self):
         return self.overall * "Overall " + f"CardinalityCoverage on {self.target_key}"
 
+
 @dataclass
 class Cardinality(GenVsHistoryMetric):
     def get_scores(self, row):
@@ -434,6 +487,7 @@ class Cardinality(GenVsHistoryMetric):
 
     def __repr__(self):
         return self.overall * "Overall " + f"Cardinality on {self.target_key}"
+
 
 @dataclass
 class NoveltyScore(GenVsHistoryMetric):

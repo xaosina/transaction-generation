@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'KLDiv overall'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -26,7 +26,7 @@ data_conf:
   val_ratio: 0.15
   num_workers: 4
   train_resamples: 1
-  batch_size: 32
+  batch_size: 16
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32

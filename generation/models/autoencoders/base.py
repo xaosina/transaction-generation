@@ -159,20 +159,20 @@ class ReconstructorBase(BaseModel):
         x = self.projector(x)
 
         out = self.head(x).tokens
-        time = out[:, :, 0]
+        time = out[..., 0]
         start_id = 1
 
         num_features = None
         if self.num_names:
-            num_features = out[:, :, 1 : len(self.num_names) + 1]
+            num_features = out[..., 1 : len(self.num_names) + 1]
             start_id += len(self.num_names)
         cat_features = None
         if self.cat_cardinalities:
             cat_features = {}
             for cat_name, cat_dim in self.cat_cardinalities.items():
-                cat_features[cat_name] = out[:, :, start_id : start_id + cat_dim]
+                cat_features[cat_name] = out[..., start_id : start_id + cat_dim]
                 start_id += cat_dim
-        assert start_id == out.shape[2]
+        assert start_id == out.shape[-1], f'{start_id}, {out.shape}'
         return PredBatch(
             lengths=x.lengths,
             time=time,

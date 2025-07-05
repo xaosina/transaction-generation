@@ -1,7 +1,7 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
-    - Reconstruction
+    - KLDiv
     - Levenshtein:
         target_key: category_id
     # - Accuracy:

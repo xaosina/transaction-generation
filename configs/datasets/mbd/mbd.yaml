@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'KLDiv overall'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -29,10 +29,11 @@ data_conf:
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
+    ["amount", "event_type"]
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'
   val_ratio: 0.15
-  num_workers: 4
+  num_workers: 0
   train_resamples: 1
   batch_size: 128
 

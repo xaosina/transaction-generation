@@ -524,7 +524,8 @@ class ForwardFillNans(BatchTransform):
                 batch.num_features[i + 1],
                 batch.num_features[i],
             )
-
+    def reverse(self, batch):
+        pass
 
 @dataclass
 class FillNans(BatchTransform):
@@ -546,6 +547,9 @@ class FillNans(BatchTransform):
 
         for name, val in self.fill_value.items():
             batch[name].nan_to_num_(nan=val)
+    
+    def reverse(self, batch):
+        pass
 
 
 class ContrastiveTarget(BatchTransform):
@@ -985,6 +989,19 @@ class NGramTransform(NewFeatureTransform):
             batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)
             batch.target_time = torch.tensor(target_times, dtype=float)
 
+
+@dataclass
+class ShuffleHistory(BatchTransform):
+
+    shuffle: bool = False
+
+    def __call__(self, batch: GenBatch):
+        if not self.shuffle:
+            return
+        breakpoint()
+
+    def reverse(self, batch: GenBatch):
+        pass
 
 @dataclass
 class ShuffleUsers(BatchTransform):
