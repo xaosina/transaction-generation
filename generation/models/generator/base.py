@@ -216,9 +216,10 @@ class OneShotDistributionGenerator(BaseGenerator):
         )
 
         self.gen_len = data_conf.generation_len
-        self.num_projection = torch.nn.Linear(
-            len(data_conf.num_names), len(data_conf.num_names) * 2
-        )
+        if data_conf.num_names is not None:
+            self.num_projection = torch.nn.Linear(
+                len(data_conf.num_names), len(data_conf.num_names) * 2
+            )
         self.time_projection = torch.nn.Linear(1, 2)
 
     def forward(self, x: GenBatch) -> PredBatch:
@@ -242,28 +243,64 @@ class OneShotDistributionGenerator(BaseGenerator):
         if x.num_features is not None:
             x.num_features = self.num_projection(x.num_features)
         return x
+    
+    def scale_to_gen_len(self, probs: torch.tensor, gen_len: int):
+        scaled = probs * gen_len
+        integer_parts = torch.floor(scaled).int()
+        fractional_parts = scaled - integer_parts
+        remaining = gen_len - torch.sum(integer_parts, dim=1, keepdim=True)
+
+        _, sorted_indices = fractional_parts.sort(dim=1, descending=True)
+        
+        arange = torch.arange(probs.size(1), device=probs.device).unsqueeze(0)
+        mask_sorted = arange < remaining
+
+
+        mask_original = torch.zeros_like(mask_sorted)
+        mask_original.scatter_(1, sorted_indices, mask_sorted)
+        
+        return integer_parts + mask_original.long()
+    
+    def counts_to_indices(self, counts: torch.Tensor) -> torch.Tensor:
+        """
+        counts : (B, K)  — целые, сумма каждой строки одинаковая (gen_len)
+        return : (B, gen_len) — развёрнутый список категорий для каждой строки
+        """
+        device = counts.device
+        arange = torch.arange(counts.size(1), device=device)
+
+        idx_rows = [
+            torch.repeat_interleave(arange, row)
+            for row in counts
+        ]
+        return torch.stack(idx_rows)
+
 
     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
         cat_features = list(tensor.cat_features.keys()) or []
 
         for cat_name in cat_features:
             params = tensor.cat_features[cat_name]
-            dist = torch.distributions.Categorical(logits=params)
-            tensor.cat_features[cat_name] = dist.sample((gen_len,))
+            probs = torch.nn.functional.softmax(params, dim=-1)
+            scaled = self.scale_to_gen_len(probs, gen_len)
 
+            assert all(scaled.sum(dim=1) == gen_len)
+
+            tensor.cat_features[cat_name] = self.counts_to_indices(scaled).T
         num_names = tensor.num_features_names or []
-        num_features = []
-        for name in num_names:
-            idx = 2 * tensor.num_features_names.index(name)
-            idxs = [idx, idx + 1]
-            alpha_raw, beta_raw = tensor.num_features[:, idxs].unbind(dim=1)
-            # alpha = torch.nn.functional.softmax(alpha_raw)
-            beta = torch.nn.functional.softplus(beta_raw)
+        
+        if len(num_names) > 0:
+            num_features = []
+            for name in num_names:
+                idx = 2 * tensor.num_features_names.index(name)
+                idxs = [idx, idx + 1]
+                alpha_raw, beta_raw = tensor.num_features[:, idxs].unbind(dim=1)
+                # alpha = torch.nn.functional.softmax(alpha_raw)
+                beta = torch.nn.functional.softplus(beta_raw)
 
-            dist = torch.distributions.Normal(alpha_raw, beta)
-            num_features.append(dist.sample((gen_len,)))
-
-        tensor.num_features = torch.stack(num_features, dim=2)
+                dist = torch.distributions.Normal(alpha_raw, beta)
+                num_features.append(dist.sample((gen_len,)))
+            tensor.num_features = torch.stack(num_features, dim=2)
         alpha_raw, beta_raw = tensor.time.unbind(dim=1)
         # alpha = torch.nn.functional.softplus(alpha_raw)
         beta = torch.nn.functional.softplus(beta_raw)
@@ -292,6 +329,8 @@ class OneShotDistributionGenerator(BaseGenerator):
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return pred  # Return GenBatch of size [gen_len, B, D]
+
+
 
 
 class OneShotGaussianGenerator(BaseGenerator):
