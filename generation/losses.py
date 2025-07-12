@@ -567,15 +567,16 @@ class MatchedLoss(Module):
             cost += res.to(torch.float32).mean(3)  # [L, L, B]
         
         # Step 2: calculate assignment
+        cost_device = cost.device
         cost = cost.permute((2, 0, 1))  # [B, L, L]
         if self.max_shift >= 0:
-            i_indices = torch.arange(L, device=cost.device)[:, None] # L, 1
-            j_indices = torch.arange(L, device=cost.device)
+            i_indices = torch.arange(L, device=cost_device)[:, None] # L, 1
+            j_indices = torch.arange(L, device=cost_device)
             distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
             mask_outside_band = distance_from_diagonal > self.max_shift
             cost.masked_fill_(mask_outside_band, torch.inf)
 
-        assignment = batch_linear_assignment(cost).T # L, B        
+        assignment = batch_linear_assignment(cost.cpu()).T.to(cost_device) # L, B        
         
         assignment = assignment.unsqueeze(-1) # L, B, 1
 
