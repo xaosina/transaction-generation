@@ -3,20 +3,31 @@ evaluator:
   metrics:
     - Reconstruction
     - Levenshtein:
-        target_key: track_id
+        target_key: artist_id
     # - Accuracy:
     #     target_key: event_type
     - F1Metric:
-        target_key: track_id
+        target_key: artist_id
         average: macro
     - F1Metric:
-        target_key: track_id
+        target_key: artist_id
         average: micro
+    - Precision:
+        target_key: artist_id
+        average: macro
+    - Precision:
+        target_key: artist_id
+        average: micro
+    - Recall:
+        target_key: artist_id
+        average: macro
+    - Recall:
+        target_key: artist_id
+        average: micro
+    # - BatchCutMetric
 
-    - BatchCutMetric
-
-    - Density:
-        log_cols: []
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: []
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False

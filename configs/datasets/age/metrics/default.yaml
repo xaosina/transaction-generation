@@ -1,21 +1,34 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
+    - KLDiv
+    - JSDiv
+    - Levenshtein:
+        target_key: small_group
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:
         max_shift: 32
-    - Levenshtein:
+    - Cardinality:
         target_key: small_group
-    # - Accuracy:
-    #     target_key: small_group
     - F1Metric:
         target_key: small_group
         average: macro
     - F1Metric:
         target_key: small_group
         average: micro
-
+    - Precision:
+        target_key: small_group
+        average: macro
+    - Precision:
+        target_key: small_group
+        average: micro
+    - Recall:
+        target_key: small_group
+        average: macro
+    - Recall:
+        target_key: small_group
+        average: micro
     # - Gini:
     #     target_key: small_group
     # - ShannonEntropy:
@@ -34,11 +47,11 @@ evaluator:
     #     target_key: small_group
     #     overall: True
 
-    - Density:
-        log_cols: ["amount_rur"]
-        with_timediff: True
-        save_details: True
-        verbose: False
+    # - Density:
+    #     log_cols: ["amount_rur"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False
 
     # - Detection:
     #     dataset_config: detection/mbd

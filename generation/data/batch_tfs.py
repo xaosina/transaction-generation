@@ -584,7 +584,8 @@ class ForwardFillNans(BatchTransform):
                 batch.num_features[i + 1],
                 batch.num_features[i],
             )
-
+    def reverse(self, batch):
+        pass
 
 @dataclass
 class FillNans(BatchTransform):
@@ -606,6 +607,9 @@ class FillNans(BatchTransform):
 
         for name, val in self.fill_value.items():
             batch[name].nan_to_num_(nan=val)
+    
+    def reverse(self, batch):
+        pass
 
 
 class ContrastiveTarget(BatchTransform):

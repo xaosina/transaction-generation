@@ -20,7 +20,7 @@ data_conf:
   - ["level_3", 202]
   - ["level_4", 789]
   - ["segment_id", 120]
-  - ["gender": 4]
+  - ["gender", 4]
 
   num_names:
     - age

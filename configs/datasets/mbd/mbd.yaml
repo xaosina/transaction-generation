@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: loss #'Reconstruction overall'
+  ckpt_track_metric: 'F1_macro on event_type' #'Reconstruction overall'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -102,6 +102,6 @@ data_conf:
         feature_counts: 55
         max_l: *max_seq_len
         disable: true
-    "shuffle_users":
-      ShuffleUsers:
-        shuffle: false
+    # "shuffle_users":
+    #   ShuffleUsers:
+    #     shuffle: false

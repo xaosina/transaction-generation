@@ -40,8 +40,8 @@ def rse(pred, true):
     userwise_mean = true.mean(dim=0)  # B, [D]
     tot = (true - userwise_mean) ** 2  # L, B, [D]
     userwise_tot = tot.sum(dim=0)  # B, [D]
-
-    rse = userwise_res / userwise_tot
+    eps = 1e-8
+    rse = userwise_res / (userwise_tot + eps)
     return rse.sum(), rse.numel()
 
 
@@ -345,6 +345,176 @@ class TargetLoss(Module):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
 
 
+
+class DistLoss(Module):
+    def __init__(
+        self,
+        data_conf: LatentDataConfig,
+        mse_weight: float = 0.5,
+        ignore_index: int = -100,
+    ):
+        super().__init__()
+        assert 0 <= mse_weight <= 1
+        self.data_conf = data_conf
+        self.mse_weight = mse_weight
+        self._ignore_index = ignore_index
+
+    def _compute_mse(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+        EPS = 1e-6
+        mse_sum = 0.0
+        mse_count = 0
+
+        data_conf = self.data_conf
+        num_names = y_pred.num_features_names or []
+        num_names = list(set(data_conf.focus_on) & set(num_names))
+        
+        if data_conf.time_name in data_conf.focus_on:
+            pred_time = y_pred.time
+            true_time = y_true.target_time
+            alpha_raw, beta_raw = pred_time.unbind(dim=1)
+            # alpha = torch.nn.functional.softplus(alpha_raw)
+            beta = torch.nn.functional.softplus(beta_raw)
+            dist = torch.distributions.Normal(alpha_raw, beta)
+            mse_sum += -dist.log_prob(true_time + EPS).mean()
+            mse_count += 1
+
+        num_names = num_names or []
+        for name in num_names:
+            # breakpoint()
+            id_true = y_true.num_features_names.index(name)
+            id_pred = y_pred.num_features_names.index(name)
+            true_feature_ids = [id_true, id_true + 1]
+
+            pred_feature_ids = [id_pred, id_pred + 1]
+            pred_num = y_pred.num_features[:, pred_feature_ids]
+            true_num = y_true.target_num_features[:, true_feature_ids]
+            alpha, beta = pred_num.unbind(dim=-1)
+            # alpha = torch.nn.functional.softmax(alpha)
+            beta = torch.nn.functional.softplus(beta)
+
+            dist = torch.distributions.Normal(alpha, beta)
+            mse_sum += -dist.log_prob(true_num + EPS).mean()
+            mse_count += 1
+
+        return (mse_sum / mse_count) if mse_count != 0 else torch.tensor(0.0)
+
+    def _compute_ce(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+        if not y_pred.cat_features:
+            return torch.tensor(0.0, device=y_true.time.device)
+        data_conf = self.data_conf
+        cat_names = y_pred.cat_features or {}
+        cat_names = list(set(data_conf.focus_on) & set(cat_names))
+
+        total_ce = 0.0
+        ce_count = 0
+        for key in cat_names:
+            # breakpoint()
+            true_id = y_true.cat_features_names.index(key)
+            true_cat = y_true.target_cat_features[:, :, true_id].clone()
+
+            pred_cat = y_pred.cat_features[key].permute(0, 1)  # [B, C, L]
+            # Compute loss
+            dist = torch.distributions.Categorical(logits=pred_cat)
+            total_ce += -dist.log_prob(true_cat).mean()
+            ce_count += 1
+
+
+        return (total_ce / ce_count) if ce_count != 0 else torch.tensor(0.0)
+
+    def __call__(self, y_true, y_pred) -> torch.Tensor:
+        mse_loss = self._compute_mse(y_true, y_pred)
+        ce_loss = self._compute_ce(y_true, y_pred)
+        return  {'loss': self.combine_losses(mse_loss, ce_loss)}
+
+    def combine_losses(self, mse_loss, ce_loss):
+        return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
+
+
+class GaussianDistLoss(Module):
+
+    EPS = 1e-6
+    
+    def __init__(
+        self,
+        data_conf: LatentDataConfig,
+        mse_weight: float = 0.5,
+        ignore_index: int = -100,
+    ):
+        super().__init__()
+        assert 0 <= mse_weight <= 1
+        self.data_conf = data_conf
+        self.mse_weight = mse_weight
+        self._ignore_index = ignore_index
+
+    def get_numerical_loss(self, y_true: torch.tensor, y_pred:torch.tensor):
+        pi_logits, mu_raw, log_sigma = y_pred.unbind(dim=-1)
+        pi = torch.nn.functional.softmax(pi_logits, dim=-1)
+        sigma = torch.nn.functional.softplus(log_sigma).clamp(1e-3, 5)
+        component = torch.distributions.Normal(mu_raw, sigma)
+        mixing = torch.distributions.Categorical(probs=pi)
+        dist = torch.distributions.MixtureSameFamily(mixing, component)
+        return -dist.log_prob(y_true).mean()
+
+    def _compute_mse(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+        mse_sum = 0.0
+        mse_count = 0
+
+        data_conf = self.data_conf
+        num_names = y_pred.num_features_names or []
+        num_names = list(set(data_conf.focus_on) & set(num_names))
+        
+        if data_conf.time_name in data_conf.focus_on:
+            pred_time = y_pred.time
+            true_time = y_true.target_time
+            mse_sum += self.get_numerical_loss(true_time, pred_time)
+            mse_count += 1
+
+        num_names = num_names or []
+        for name in num_names:
+            id_true = y_true.num_features_names.index(name)
+            id_pred = y_pred.num_features_names.index(name)
+
+            true_num = y_true.target_num_features[..., id_true]
+            pred_num = y_pred.num_features[:, id_pred, ...]
+            
+            mse_sum += self.get_numerical_loss(true_num, pred_num)
+            mse_count += 1
+
+        return (mse_sum / mse_count) if mse_count != 0 else torch.tensor(0.0)
+
+    def _compute_ce(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+        if not y_pred.cat_features:
+            return torch.tensor(0.0, device=y_true.time.device)
+        data_conf = self.data_conf
+        cat_names = y_pred.cat_features or {}
+        cat_names = list(set(data_conf.focus_on) & set(cat_names))
+
+        total_ce = 0.0
+        ce_count = 0
+        for key in cat_names:
+            # breakpoint()
+            true_id = y_true.cat_features_names.index(key)
+            true_cat = y_true.target_cat_features[:, :, true_id].clone()
+
+            pred_cat = y_pred.cat_features[key]
+            # Compute loss
+            dist = torch.distributions.Categorical(logits=pred_cat)
+            total_ce += -dist.log_prob(true_cat).mean()
+            ce_count += 1
+
+
+        return (total_ce / ce_count) if ce_count != 0 else torch.tensor(0.0)
+
+    def __call__(self, y_true, y_pred) -> torch.Tensor:
+        mse_loss = self._compute_mse(y_true, y_pred)
+        ce_loss = self._compute_ce(y_true, y_pred)
+        return  {'loss': self.combine_losses(mse_loss, ce_loss)}
+
+    def combine_losses(self, mse_loss, ce_loss):
+        return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
+
+
+
 class MatchedLoss(Module):
     def __init__(
         self,
@@ -402,15 +572,16 @@ class MatchedLoss(Module):
             cost += res.to(torch.float32).mean(3)  # [L, L, B]
         
         # Step 2: calculate assignment
+        cost_device = cost.device
         cost = cost.permute((2, 0, 1))  # [B, L, L]
         if self.max_shift >= 0:
-            i_indices = torch.arange(L, device=cost.device)[:, None] # L, 1
-            j_indices = torch.arange(L, device=cost.device)
+            i_indices = torch.arange(L, device=cost_device)[:, None] # L, 1
+            j_indices = torch.arange(L, device=cost_device)
             distance_from_diagonal = torch.abs(i_indices - j_indices) # L, L
             mask_outside_band = distance_from_diagonal > self.max_shift
             cost.masked_fill_(mask_outside_band, torch.inf)
 
-        assignment = batch_linear_assignment(cost).T # L, B        
+        assignment = batch_linear_assignment(cost.cpu().detach()).T.to(cost_device) # L, B        
         
         assignment = assignment.unsqueeze(-1) # L, B, 1
 
@@ -452,6 +623,10 @@ def get_loss(data_conf: LatentDataConfig, config: LossConfig):
         return BaselineLoss(data_conf, **config.params)
     elif name == "target":
         return TargetLoss(data_conf, **config.params)
+    elif name == "distloss":
+        return DistLoss(data_conf, **config.params)
+    elif name == "gaussian_distloss":
+        return GaussianDistLoss(data_conf, **config.params)
     elif name == "matched":
         return MatchedLoss(data_conf, **config.params)
     elif name == "tail":

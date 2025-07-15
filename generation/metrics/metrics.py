@@ -16,6 +16,7 @@ from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
 from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
+from scipy.stats import entropy
 from scipy.optimize import linear_sum_assignment
 
 from ..data.data_types import DataConfig
@@ -174,6 +175,108 @@ class MatchedReconstruction(BaseMetric):
     def __repr__(self):
         return f"MatchedReconstruction {self.max_shift}"
 
+
+class KLDiv(BaseMetric):
+
+    EPS = 1e-8  # сглаживание, чтобы не было нулевых вероятностей
+    N_BINS = 50
+
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+
+        cat_cards = self.data_conf.cat_cardinalities or {}
+        results = {}
+
+        for col in self.data_conf.focus_on:
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+
+            results[col] = df.apply(
+                lambda row: self._compute_kl(row, bins = cat_cards.get(col, None)),
+                axis=1,
+            ).mean()
+
+        return {"overall": np.mean(list(results.values())), **results}
+
+    def _compute_kl(self, row, bins=None):
+        if bins is None:
+            bins = self.N_BINS
+
+        gt, pred = row["gt"], row["pred"]
+
+        # общий диапазон
+        range_ = (
+            min(gt.min(), pred.min()), max(gt.max(), pred.max())
+        ) if bins is not None else (0, bins)
+
+        p, _ = np.histogram(gt, bins=self.N_BINS, range=range_, density=False)
+        q, _ = np.histogram(pred, bins=self.N_BINS, range=range_, density=False)
+
+        p = p.astype(float) + self.EPS
+        q = q.astype(float) + self.EPS
+        p /= p.sum()
+        q /= q.sum()
+        return entropy(p, q)   
+
+    def __repr__(self):
+        return "KLDiv"
+
+
+
+class JSDiv(BaseMetric):
+
+    EPS = 1e-8 
+    N_BINS = 50
+
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+
+        cat_cards = self.data_conf.cat_cardinalities or {}
+        results = {}
+
+        for col in self.data_conf.focus_on:
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+
+            results[col] = df.apply(
+                lambda row: self._compute_kl(row, bins = cat_cards.get(col, None)),
+                axis=1,
+            ).mean()
+
+        return {"overall": np.mean(list(results.values())), **results}
+
+    def _compute_kl(self, row, bins=None):
+        if bins is None:
+            bins = self.N_BINS
+
+        gt, pred = row["gt"], row["pred"]
+
+        range_ = (
+            min(gt.min(), pred.min()), max(gt.max(), pred.max())
+        ) if bins is not None else (0, bins)
+
+        p, _ = np.histogram(gt, bins=self.N_BINS, range=range_, density=False)
+        q, _ = np.histogram(pred, bins=self.N_BINS, range=range_, density=False)
+
+        p = p.astype(float) + self.EPS
+        q = q.astype(float) + self.EPS
+        p /= p.sum()
+        q /= q.sum()
+
+        m = 0.5 * (p + q)
+
+        return 0.5 * entropy(p, m) + 0.5 * entropy(q, m)   
+
+    def __repr__(self):
+        return "JSDiv"
 
 @dataclass
 class BinaryMetric(BaseMetric):

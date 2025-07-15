@@ -29,7 +29,7 @@ data_conf:
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len:  &max_seq_len 1024
+  max_seq_len:  &max_seq_len 512
   padding_value: 0
 
   train_random_end: none
@@ -43,6 +43,13 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/taobao/preprocessed/ngrams-mapper-9995.pt'
+        feature_name: behavior_type
+        feature_counts: 5
+        max_l: *max_seq_len
+        disable: true
     "3":
       CutTargetSequence:
         target_len: 0
@@ -54,7 +61,14 @@ data_conf:
         scale: 14.0
     "1":
       TimeToDiff:
-        disable: False
+        disable: false
     "3":
       CutTargetSequence:
         target_len: *generation_len
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/taobao/preprocessed/ngrams-mapper-9995.pt'
+        feature_name: behavior_type
+        feature_counts: 5
+        max_l: *max_seq_len
+        disable: true

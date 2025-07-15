@@ -16,7 +16,7 @@ data_conf:
     - ["session_id", 5548182]
     - ["track_id", 1148858]
     - ["artist_id", 210042]
-    - ["cluster_id", 129]
+
   index_name: user_id
   num_names: 
     ["play_duration"]
@@ -65,9 +65,9 @@ data_conf:
         disable: false
     "ngrams":
       NGramTransform:
-        model_path: 'data/zvuk-50k/ngrams-mapper-32.pt'
-        feature_name: track_id
-        feature_counts: 0
+        model_path: 'data/zvuk-100k/ngrams-mapper-32.pt'
+        feature_name: artist_id
+        feature_counts: 210042
         max_l: *max_seq_len
         disable: true
 
@@ -84,8 +84,8 @@ data_conf:
         target_len: *generation_len
     "ngrams":
       NGramTransform:
-        model_path: 'data/zvuk-50k/ngrams-mapper-32.pt'
-        feature_name: track_id
-        feature_counts: 0
+        model_path: 'data/zvuk-100k/ngrams-mapper-32.pt'
+        feature_name: artist_id
+        feature_counts: 210042
         max_l: *max_seq_len
         disable: true

@@ -1,12 +1,14 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
+    - KLDiv
+    - JSDiv
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:
         max_shift: 32
-    # - Levenshtein:
-    #     target_key: char
+    - Levenshtein:
+        target_key: char
     - F1Metric:
         target_key: char
         average: macro
@@ -15,7 +17,18 @@ evaluator:
         average: micro
     - Cardinality:
         target_key: char
-
+    - Precision:
+        target_key: char
+        average: macro
+    - Precision:
+        target_key: char
+        average: micro
+    - Recall:
+        target_key: char
+        average: macro
+    - Recall:
+        target_key: char
+        average: micro
     # - Density:
     #     log_cols: []
     #     with_timediff: True
