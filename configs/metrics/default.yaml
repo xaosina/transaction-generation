@@ -1,0 +1,23 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  metrics:
+    - KLDiv
+    - JSDiv
+    - Levenshtein
+    - MatchedReconstruction:
+        max_shift: 0
+    - MatchedReconstruction:
+        max_shift: 32
+    - Cardinality
+    - F1Metric:
+        average: macro
+    - F1Metric:
+        average: micro
+    - Precision:
+        average: macro
+    - Precision:
+        average: micro
+    - Recall:
+        average: macro
+    - Recall:
+        average: micro

@@ -54,6 +54,12 @@ data_conf:
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
+    "3":
+      CutTargetSequence:
+        target_len: 0
 
   val_transforms:
     "0":

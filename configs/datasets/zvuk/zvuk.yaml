@@ -13,8 +13,7 @@ log_dir: log/generation/zvuk
 # DATA
 data_conf:
   cat_cardinalities:
-    - ["session_id", 5548182]
-    - ["track_id", 1148858]
+    # - ["track_id", 1148858]
     - ["artist_id", 210042]
 
   index_name: user_id
@@ -70,7 +69,13 @@ data_conf:
         feature_counts: 210042
         max_l: *max_seq_len
         disable: true
-
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
+    "3":
+      CutTargetSequence:
+        target_len: 0
+        
   val_transforms:
     "0":
       RescaleTime:
