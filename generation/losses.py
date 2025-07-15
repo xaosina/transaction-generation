@@ -264,6 +264,11 @@ class VAELoss(BaseLoss):
         self._beta = value
 
 
+class DummyLoss(Module):
+    def __call__(self, y_true: GenBatch, data) -> torch.Tensor:
+        return {'loss': data}
+
+
 class TargetLoss(Module):
     def __init__(
         self,
@@ -455,5 +460,7 @@ def get_loss(data_conf: LatentDataConfig, config: LossConfig):
         return VAELoss(data_conf, init_beta=1.0, **config.params)
     elif name == "no_order_loss":
         return NoOrderLoss(data_conf, **config.params)
+    elif name == "dummy":
+        return DummyLoss()
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")
