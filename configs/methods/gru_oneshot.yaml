@@ -54,10 +54,10 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: matched
+  name: target
   params:
     mse_weight: 0.5
-    max_shift: -1
+    # max_shift: -1
 
 optuna:
   params:
