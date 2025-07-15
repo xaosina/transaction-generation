@@ -22,6 +22,7 @@ data_conf:
     ["play_duration"]
   time_name: hours_since_first_tx
   focus_on: 
+    ["artist_id"]
   test_path: 'data/zvuk-100k/test'
   train_path: 'data/zvuk-100k/train'
   val_ratio: 0.15

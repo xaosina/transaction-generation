@@ -1,6 +1,8 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
+    - KLDiv
+    - JSDiv
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:

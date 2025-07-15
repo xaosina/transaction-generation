@@ -1,14 +1,16 @@
 evaluator:
   devices: ["cuda:1", "cuda:2"]
   metrics:
+    - KLDiv
+    - JSDiv
+    - Levenshtein:
+        target_key: small_group
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:
         max_shift: 32
-    - Levenshtein:
+    - Cardinality:
         target_key: small_group
-    # - Accuracy:
-    #     target_key: small_group
     - F1Metric:
         target_key: small_group
         average: macro
