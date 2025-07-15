@@ -155,11 +155,12 @@ class LocalShuffle(BatchTransform):
         L, B = batch.time.shape
         # Step 1: reinforce max_shift
         cost = torch.randn(B, L, L, device=batch.time.device)  # [B, L, L]
-        i_indices = torch.arange(L, device=cost.device)[:, None]  # L, 1
-        j_indices = torch.arange(L, device=cost.device)
-        distance_from_diagonal = torch.abs(i_indices - j_indices)  # L, L
-        mask_outside_band = distance_from_diagonal > self.max_shift
-        cost.masked_fill_(mask_outside_band, torch.inf)
+        if self.max_shift >= 0:
+            i_indices = torch.arange(L, device=cost.device)[:, None]  # L, 1
+            j_indices = torch.arange(L, device=cost.device)
+            distance_from_diagonal = torch.abs(i_indices - j_indices)  # L, L
+            mask_outside_band = distance_from_diagonal > self.max_shift
+            cost.masked_fill_(mask_outside_band, torch.inf)
 
         # Step 2: Dont use padding tokens
         mask = torch.arange(L, device=batch.time.device) >= batch.lengths[:, None]

@@ -54,18 +54,18 @@ class GenerationTrainer(Runner):
             device=cfg.device,
             **asdict(cfg.trainer),
         )
-        losses_dict = trainer.run()
+        trainer.run()
         trainer.load_best_model()
 
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
-        val_metrics = trainer.validate(val_loader, remove=True)
-        train_metrics = trainer.validate(train_loader, remove=True)
-        test_metrics = trainer.validate(test_loader, remove=True)
+        val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
+        train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        test_metrics = trainer.validate(test_loader, get_loss=False, get_metrics=True)
 
         val_metrics = {k: v for k, v in val_metrics.items()}
-        train_metrics = {"train_" + k: v for k, v in train_metrics.items()} | losses_dict
+        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
         return dict(**train_metrics, **val_metrics, **test_metrics)
