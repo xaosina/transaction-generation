@@ -126,8 +126,11 @@ class Trainer:
 
         self._opt = optimizer
         self._sched = scheduler
-        self._train_loader = deepcopy(train_loader)
-        self._val_loader = deepcopy(val_loader)
+        self._train_loader = train_loader
+        self._val_loader = val_loader
+
+        self._train_collator = deepcopy(train_loader.collate_fn)
+        self._train_random_end = deepcopy(train_loader.dataset.random_end)
 
         self._metric_values: dict[str, Any] | None = None
         self._last_iter = 0
@@ -317,9 +320,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                torch.nn.utils.clip_grad_norm_(
-                    self._model.parameters(), max_norm=self._grad_clip
-                )
+                # torch.nn.utils.clip_grad_norm_(
+                #     self._model.parameters(), max_norm=self._grad_clip
+                # )
                 self._opt.step()
 
                 self._opt.zero_grad()
@@ -354,16 +357,17 @@ class Trainer:
         self._metric_values = {}
 
         if get_loss:
-            loss_loader = deepcopy(loader)
-            loss_loader.collate_fn = self._train_loader.collate_fn
-            loss_loader.dataset.random_end = self._train_loader.dataset.random_end
+            orig_collate, orig_random_end = loader.collate_fn, loader.dataset.random_end
+            loader.collate_fn = self._train_collator
+            loader.dataset.random_end = self._train_random_end
             log_losses: MeanDict = MeanDict()
             with torch.no_grad():
-                for batch in tqdm(loss_loader, disable=not self._verbose):
+                for batch in tqdm(loader, disable=not self._verbose):
                     batch.to(self._device)
                     pred = self._model(batch)
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
+            loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
             self._metric_values |= {k: -v for k, v in log_losses.mean().items()}
 
         if get_metrics:

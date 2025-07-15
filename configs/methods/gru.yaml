@@ -4,7 +4,7 @@ model:
   autoencoder:
     name: BaselineAE
     params:
-      cat_emb_dim: 16
+      cat_emb_dim: 32
       num_emb_dim: 64
       num_norm: True
     pretrain: False
@@ -37,7 +37,7 @@ optimizer:
   name: Adam
   params:
     lr: 1.5e-3
-    weight_decay: 0.e-3
+    weight_decay: 1.e-3
 
 schedulers:
   "step":

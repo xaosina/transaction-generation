@@ -580,8 +580,8 @@ class GenVsHistoryMetric(BaseMetric):
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
-        score = 1 - (1 + abs(gen_score - orig_score))
-        return {"score": score, "gen": gen_score, "orig": orig_score}
+        # score = 1 - (1 + abs(gen_score - orig_score))
+        return {"gen": gen_score, "orig": orig_score} #"score": score, 
 
 
 @dataclass

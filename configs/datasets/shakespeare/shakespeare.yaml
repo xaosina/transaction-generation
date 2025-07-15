@@ -18,6 +18,7 @@ data_conf:
   index_name: speach_id
   time_name: char_number
   focus_on: ["char"]
+  target_token: char
 
   test_path: 'data/shakespeare/preprocessed/test'
   train_path: 'data/shakespeare/preprocessed/train'
