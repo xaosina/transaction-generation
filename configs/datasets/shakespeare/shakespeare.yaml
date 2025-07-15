@@ -42,6 +42,9 @@ data_conf:
     "1":
       TimeToDiff:
         disable: false
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
     "3":
       CutTargetSequence:
         target_len: 0

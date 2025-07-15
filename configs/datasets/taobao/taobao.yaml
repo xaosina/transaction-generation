@@ -50,6 +50,9 @@ data_conf:
         feature_counts: 5
         max_l: *max_seq_len
         disable: true
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
     "3":
       CutTargetSequence:
         target_len: 0
