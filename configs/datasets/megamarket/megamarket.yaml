@@ -15,23 +15,24 @@ data_conf:
   cat_cardinalities:
     - ["category_id", 9844]
     - ["event", 5]
-    - ["item_id", 1447254]
+    # - ["item_id", 1447254]
   num_names:
     - price
   index_name: user_id
   time_name: hours_since_first_tx
   focus_on: 
-    ["category_id"]
+
+
   test_path: 'data/megamarket-100k/test'
   train_path: 'data/megamarket-100k/train'
   val_ratio: 0.15
   num_workers: 4
   train_resamples: 1
-  batch_size: 16
+  batch_size: 128
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: &max_seq_len 128
+  max_seq_len: &max_seq_len 512
   padding_value: 0
 
   train_random_end: none
@@ -79,7 +80,7 @@ data_conf:
     #     untouched_slice: [None, None]
     "2":
       CutTargetSequence:
-        target_len: *generation_len
+        target_len: ${data_conf.generation_len}
     
     "ngrams":
       NGramTransform:

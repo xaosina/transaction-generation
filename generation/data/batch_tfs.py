@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 import pickle
+from torch_linear_assignment import batch_linear_assignment
 
 import numpy as np
 import torch
@@ -134,6 +135,60 @@ class ShuffleBatch(BatchTransform):
 
         if not batch.monotonic_time:
             batch.time = batch.time[permutation_within_len, i_batch]
+
+    def reverse(self, batch: GenBatch):
+        pass
+
+
+@dataclass
+class LocalShuffle(BatchTransform):
+    """Randomly permutes events in a sequence batch, allows up to max_shift from initial position
+    Attributes:
+        max_shift (int): allowed shift from initial position
+    """
+
+    max_shift: int = 0
+
+    def __call__(self, batch: GenBatch):
+        if self.max_shift == 0:
+            return
+        L, B = batch.time.shape
+        # Step 1: reinforce max_shift
+        cost = torch.randn(B, L, L, device=batch.time.device)  # [B, L, L]
+        i_indices = torch.arange(L, device=cost.device)[:, None]  # L, 1
+        j_indices = torch.arange(L, device=cost.device)
+        distance_from_diagonal = torch.abs(i_indices - j_indices)  # L, L
+        mask_outside_band = distance_from_diagonal > self.max_shift
+        cost.masked_fill_(mask_outside_band, torch.inf)
+
+        # Step 2: Dont use padding tokens
+        mask = torch.arange(L, device=batch.time.device) >= batch.lengths[:, None]
+        mask = mask[:, None] | mask[:, :, None]
+        mask[:, torch.arange(L), torch.arange(L)] = False
+        cost[mask] = torch.inf
+
+        # Step 3: permute everything
+        assignment = batch_linear_assignment(cost).T  # L, B
+
+        def reorder_tensor(tensor, order):
+            if tensor.ndim == 3:
+                order = order.unsqueeze(-1)
+            return tensor.gather(0, order.expand(tensor.shape))
+
+        if batch.cat_features is not None:
+            batch.cat_features = reorder_tensor(batch.cat_features, assignment)
+
+        if batch.num_features is not None:
+            batch.num_features = reorder_tensor(batch.num_features, assignment)
+
+        if batch.cat_mask is not None:
+            batch.cat_mask = reorder_tensor(batch.cat_mask, assignment)
+
+        if batch.num_mask is not None:
+            batch.num_mask = reorder_tensor(batch.num_mask, assignment)
+
+        if not batch.monotonic_time:
+            batch.time = reorder_tensor(batch.time, assignment)
 
     def reverse(self, batch: GenBatch):
         pass
@@ -335,7 +390,9 @@ class TimeToDiff(BatchTransform):
             return
         assert isinstance(batch.time, torch.Tensor)
         _, B = batch.time.shape
-        batch.time = batch.time.diff(dim=0, prepend=torch.zeros(1, B))
+        batch.time = batch.time.diff(
+            dim=0, prepend=torch.zeros(1, B, device=batch.time.device)
+        )
         batch.monotonic_time = False
 
     def reverse(self, batch: GenBatch):
@@ -468,7 +525,7 @@ class Logarithm(BatchTransform):
         num_names = batch.num_features_names or []
         for name in self.names:
             if name in num_names:
-                x = batch[name].clamp(-88, 88) # To prevent overflow
+                x = batch[name].clamp(-88, 88)  # To prevent overflow
                 batch[name] = torch.expm1(torch.abs(x)) * torch.sign(x)
 
 
@@ -992,19 +1049,6 @@ class NGramTransform(NewFeatureTransform):
             batch.target_cat_features = torch.tensor(target_cat_features, dtype=float)
             batch.target_time = torch.tensor(target_times, dtype=float)
 
-
-@dataclass
-class ShuffleHistory(BatchTransform):
-
-    shuffle: bool = False
-
-    def __call__(self, batch: GenBatch):
-        if not self.shuffle:
-            return
-        breakpoint()
-
-    def reverse(self, batch: GenBatch):
-        pass
 
 @dataclass
 class ShuffleUsers(BatchTransform):

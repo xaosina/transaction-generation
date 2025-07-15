@@ -38,6 +38,7 @@ class DataConfig:
     padding_value: float = 0
     # List of features to focus on in loss and metrics. If None->focus on all
     focus_on: Optional[list[str]] = None
+    target_token: str = "event_type"
 
     @property
     def seq_cols(self):

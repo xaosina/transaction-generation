@@ -36,7 +36,7 @@ data_conf:
   index_name: client_id
   time_name: transaction_datetime
   focus_on:
-    ["level_2"]
+
   test_path: 'data/retail/preprocessed/test'
   train_path: 'data/retail/preprocessed/train'
   val_ratio: 0.15
