@@ -58,7 +58,7 @@ loss:
 
 optuna:
   params:
-    n_trials: 70
+    n_trials: 100
     n_startup_trials: 3
     request_list: 
       - 'optimizer.params.weight_decay': 1.5429769361370426e-13
