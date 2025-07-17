@@ -6,7 +6,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 import pickle
-from torch_linear_assignment import batch_linear_assignment
+try:
+    from torch_linear_assignment import batch_linear_assignment
+except Exception:
+    print('No module batch_linear_assignment was installed')
 
 import numpy as np
 import torch
