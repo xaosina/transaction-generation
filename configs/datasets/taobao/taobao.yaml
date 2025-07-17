@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 10
   profiling: false

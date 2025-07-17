@@ -1,0 +1,13 @@
+runner:
+  name: GenerationTrainer
+  run_type: optuna
+  seed_keys:
+    - "common_seed"
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list:
+
+trainer:
+  verbose: False
+  ckpt_track_metric: loss

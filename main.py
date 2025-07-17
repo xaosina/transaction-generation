@@ -17,8 +17,11 @@ def pop_arg(args, key):
     new_args = []
     value = None
     while i < len(args):
-        if args[i] == key:
+        if args[i] == key:    
             value = args[i + 1]
+            if key == "--config_factory":
+                assert value[0] == "[" and value[-1] == "]", "Wrong factory format"
+                value = value[1:-1].split(",")
             i += 2
         else:
             new_args += [args[i]]
