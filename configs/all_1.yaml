@@ -1,2 +1,2 @@
 data_conf:
-  focus_on: ${data_conf.target_token}
+  focus_on: ["<target_token>"]

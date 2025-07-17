@@ -48,13 +48,13 @@ class DataConfig:
         if self.num_names is not None:
             seq_cols += self.num_names
         return seq_cols
-    
+
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += (self.num_names or [])
+        all_num += self.num_names or []
         return [col for col in all_num if col in self.focus_on]
-    
+
     @property
     def focus_cat(self):
         cat_d = self.cat_cardinalities or {}
@@ -74,8 +74,14 @@ class DataConfig:
         if (time_name in cat_names | num_names) or (cat_names & num_names):
             raise ValueError("Conflict. time_name, num_names and cat_names intersect.")
 
-        if self.focus_on and not set(self.focus_on).issubset(self.seq_cols):
-            raise ValueError("focus_on must be a subset of seq_cols")
+        if self.focus_on:
+            new_focus = [
+                f if f != "<target_token>" else self.target_token
+                for f in self.focus_on
+            ]
+            object.__setattr__(self, "focus_on", new_focus)
+            if not set(self.focus_on).issubset(self.seq_cols):
+                raise ValueError("focus_on must be a subset of seq_cols")
         elif self.focus_on is None:
             object.__setattr__(self, "focus_on", self.seq_cols)
 

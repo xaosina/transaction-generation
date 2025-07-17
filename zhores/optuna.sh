@@ -46,3 +46,4 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
 EOT
 
 # sh transaction-generation/zhores/simple.sh optuna_loss/gpt
+# python main.py --run_name optuna_all_1/gru --config_factory [start,datasets/age/age,methods/gru,metrics/default,optuna,all_1]
