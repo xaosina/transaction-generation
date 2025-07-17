@@ -55,7 +55,7 @@ schedulers:
 loss:
   name: baseline
   params:
-    mse_weight: 0.07
+    mse_weight: 0.5
 
 optuna:
   params:
@@ -71,8 +71,8 @@ optuna:
         'model.autoencoder.num_norm': false
         'model.autoencoder.cat_emb_dim': 41
         'model.autoencoder.num_emb_dim': 60
-        'loss.params.mse_weight': 0.5
         'data_conf.train_transforms.1.TimeToDiff.disable': True
+        # 'loss.params.mse_weight': 0.5
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
@@ -93,4 +93,4 @@ optuna:
     - ["model.autoencoder.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
     - ["model.autoencoder.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
-    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
+    # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

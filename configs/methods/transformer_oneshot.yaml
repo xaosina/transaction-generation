@@ -62,7 +62,7 @@ schedulers:
 loss:
   name: matched
   params:
-    mse_weight: 0.07
+    mse_weight: 0.5
 
 optuna:
   params:
@@ -89,4 +89,4 @@ optuna:
     - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
     - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
-    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
+    # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
