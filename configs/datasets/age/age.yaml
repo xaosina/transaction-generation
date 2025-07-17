@@ -19,6 +19,7 @@ data_conf:
   index_name: client_id
   time_name: trans_date
   focus_on:
+  target_token: "small_group"
 
   test_path: 'data/age/preprocessed/test'
   train_path: 'data/age/preprocessed/train'

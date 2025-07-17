@@ -19,6 +19,7 @@ data_conf:
   index_name: user_id
   time_name: time_since_tuesday
   focus_on:
+  target_token: "item_category"
 
   test_path: 'data/taobao/preprocessed/test'
   train_path: 'data/taobao/preprocessed/train'
