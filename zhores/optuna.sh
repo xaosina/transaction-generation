@@ -14,7 +14,7 @@ login=${5:-d.osin}
 sbatch <<EOT
 #!/bin/bash
 
-#SBATCH --job-name=optuna_all_1/${dataset}/${method}
+#SBATCH --job-name=1to1/optuna/${dataset}/${method}
 
 #SBATCH --partition=ais-gpu
 
@@ -24,7 +24,7 @@ sbatch <<EOT
 
 #SBATCH --array=${array_range}
 
-#SBATCH --output=outputs/optuna_all_1/${dataset}/${method}/%j_%a.txt
+#SBATCH --output=outputs/1to1/optuna/${dataset}/${method}/%j_%a.txt
 
 #SBATCH --time=${n_days}-00
 
@@ -40,10 +40,10 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \
-        --run_name optuna_all_1/${method} \
-        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},metrics/default,optuna,all_1]
+        --run_name 1to1/optuna/${method} \
+        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},metrics/default,optuna,1to1]
 '
 EOT
 
 # sh transaction-generation/zhores/simple.sh optuna_loss/gpt
-# python main.py --run_name optuna_all_1/gru --config_factory [start,datasets/age/age,methods/gru,metrics/default,optuna,all_1]
+# python main.py --run_name optuna/gru --config_factory [start,datasets/age/age,methods/gru,metrics/default,optuna]

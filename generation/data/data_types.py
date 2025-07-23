@@ -40,6 +40,7 @@ class DataConfig:
     padding_value: float = 0
     # List of features to focus on in loss and metrics. If None->focus on all
     focus_on: Optional[list[str]] = None
+    drop_nonfocus: bool = False
     target_token: str = "event_type"
 
     @property
@@ -66,24 +67,28 @@ class DataConfig:
         time_name = self.time_name
         num_names = set(self.num_names or [])
         if isinstance(self.cat_cardinalities, list):
-            cat_dict = {
-                self.cat_cardinalities[i][0]: self.cat_cardinalities[i][1]
-                for i in range(len(self.cat_cardinalities))
-            }
+            cat_dict = {c[0]: c[1] for c in self.cat_cardinalities}
             object.__setattr__(self, "cat_cardinalities", cat_dict)
         cat_names = set(self.cat_cardinalities or {})
 
         if (time_name in cat_names | num_names) or (cat_names & num_names):
             raise ValueError("Conflict. time_name, num_names and cat_names intersect.")
 
-        if self.focus_on:
+        focus = self.focus_on
+        if focus:
             new_focus = [
-                f if f != "<target_token>" else self.target_token for f in self.focus_on
+                f if f != "<target_token>" else self.target_token for f in focus
             ]
             object.__setattr__(self, "focus_on", new_focus)
-            if not set(self.focus_on).issubset(self.seq_cols):
+            if not set(new_focus).issubset(self.seq_cols):
                 raise ValueError("focus_on must be a subset of seq_cols")
-        elif self.focus_on is None:
+            if self.drop_nonfocus:
+                new_cat, new_num = self.cat_cardinalities or {}, self.num_names or []
+                new_cat = {k: v for k, v in new_cat.items() if k in new_focus}
+                new_num = [n for n in new_num if n in new_focus]
+                object.__setattr__(self, "cat_cardinalities", new_cat or None)
+                object.__setattr__(self, "num_names", new_num or None)
+        elif focus is None:
             object.__setattr__(self, "focus_on", self.seq_cols)
 
 

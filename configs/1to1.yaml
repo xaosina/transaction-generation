@@ -1,5 +1,6 @@
 data_conf:
   focus_on: ["<target_token>"]
+  drop_nonfocus: True
 
 model:
   autoencoder:
