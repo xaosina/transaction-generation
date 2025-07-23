@@ -104,7 +104,7 @@ class LatentDataConfig:
         seq_cols = set(list(self.cat_cardinalities or {}) + (self.num_names or []))
         set_focus = set(self.focus_on)
         assert (
-            seq_cols < set_focus
+            seq_cols <= set_focus
         ), f"Can't use this features autoregressivly and NOT focus on them: {seq_cols - set_focus}"
 
 

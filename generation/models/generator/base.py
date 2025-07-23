@@ -66,7 +66,7 @@ class AutoregressiveGenerator(BaseGenerator):
             model_config.latent_encoder.name, encoder_params
         )
 
-        data_conf.check_focus_on(self.autoencoder.params["use_time"])
+        data_conf.check_focus_on(self.autoencoder.encoder.use_time)
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
