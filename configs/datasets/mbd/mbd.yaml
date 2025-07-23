@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/mbd
-
 # DATA
 data_conf:
+  dataset_name: mbd
   cat_cardinalities:
     - ["src_type32", 88]
     - ["src_type11", 47]

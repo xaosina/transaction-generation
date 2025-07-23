@@ -66,6 +66,8 @@ class AutoregressiveGenerator(BaseGenerator):
             model_config.latent_encoder.name, encoder_params
         )
 
+        data_conf.check_focus_on(self.autoencoder.params["use_time"])
+
     def forward(self, x: GenBatch) -> PredBatch:
         """
         Forward pass of the Auto-regressive Transformer
@@ -78,7 +80,14 @@ class AutoregressiveGenerator(BaseGenerator):
         x = self.autoencoder.decoder(x)
         return x
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(
+        self,
+        hist: GenBatch,
+        gen_len: int,
+        with_hist=False,
+        topk=1,
+        temperature=1.0,
+    ) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 
@@ -93,7 +102,7 @@ class AutoregressiveGenerator(BaseGenerator):
                 x = self.autoencoder.encoder(hist)
                 x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
                 x = self.autoencoder.decoder.generate(
-                    x
+                    x, topk=topk, temperature=temperature
                 )  # GenBatch with sizes [1, B, D] for cat, num
                 hist.append(x)  # Append GenBatch, result is [L+1, B, D]
         if with_hist:
@@ -166,7 +175,9 @@ class OneShotGenerator(BaseGenerator):
         x = self.autoencoder.decoder(x)
         return x
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(
+        self, hist: GenBatch, gen_len: int, with_hist=False, topk=1, temperature=1.0
+    ) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 
@@ -180,7 +191,7 @@ class OneShotGenerator(BaseGenerator):
         hist = deepcopy(hist)
 
         with torch.no_grad():
-            pred = self.forward(hist).to_batch()
+            pred = self.forward(hist).to_batch(topk, temperature)
         if with_hist:
             hist.append(pred)
             return hist  # Return GenBatch of size [L + gen_len, B, D]
@@ -243,7 +254,7 @@ class OneShotDistributionGenerator(BaseGenerator):
         if x.num_features is not None:
             x.num_features = self.num_projection(x.num_features)
         return x
-    
+
     def scale_to_gen_len(self, probs: torch.tensor, gen_len: int):
         scaled = probs * gen_len
         integer_parts = torch.floor(scaled).int()
@@ -251,16 +262,15 @@ class OneShotDistributionGenerator(BaseGenerator):
         remaining = gen_len - torch.sum(integer_parts, dim=1, keepdim=True)
 
         _, sorted_indices = fractional_parts.sort(dim=1, descending=True)
-        
+
         arange = torch.arange(probs.size(1), device=probs.device).unsqueeze(0)
         mask_sorted = arange < remaining
 
-
         mask_original = torch.zeros_like(mask_sorted)
         mask_original.scatter_(1, sorted_indices, mask_sorted)
-        
+
         return integer_parts + mask_original.long()
-    
+
     def counts_to_indices(self, counts: torch.Tensor) -> torch.Tensor:
         """
         counts : (B, K)  — целые, сумма каждой строки одинаковая (gen_len)
@@ -269,12 +279,8 @@ class OneShotDistributionGenerator(BaseGenerator):
         device = counts.device
         arange = torch.arange(counts.size(1), device=device)
 
-        idx_rows = [
-            torch.repeat_interleave(arange, row)
-            for row in counts
-        ]
+        idx_rows = [torch.repeat_interleave(arange, row) for row in counts]
         return torch.stack(idx_rows)
-
 
     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
         cat_features = list(tensor.cat_features.keys()) or []
@@ -288,7 +294,7 @@ class OneShotDistributionGenerator(BaseGenerator):
 
             tensor.cat_features[cat_name] = self.counts_to_indices(scaled).T
         num_names = tensor.num_features_names or []
-        
+
         if len(num_names) > 0:
             num_features = []
             for name in num_names:
@@ -323,14 +329,12 @@ class OneShotDistributionGenerator(BaseGenerator):
         hist = deepcopy(hist)
 
         with torch.no_grad():
-            pred = self.sample(self.forward(hist), gen_len).to_batch()
+            pred = self.sample(self.forward(hist), gen_len)
         if with_hist:
             hist.append(pred)
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return pred  # Return GenBatch of size [gen_len, B, D]
-
-
 
 
 class OneShotGaussianGenerator(BaseGenerator):
@@ -392,7 +396,9 @@ class OneShotGaussianGenerator(BaseGenerator):
             x.time = x.time.reshape(B, self.K, self.PARAMS_NUMBER)
         if x.num_features is not None:
             x.num_features = self.num_projection(x.num_features)
-            x.num_features = x.num_features.reshape(B, len(x.num_features_names), self.K, self.PARAMS_NUMBER)
+            x.num_features = x.num_features.reshape(
+                B, len(x.num_features_names), self.K, self.PARAMS_NUMBER
+            )
         return x
 
     def sample_numfeature(self, tensor, gen_len):
@@ -420,7 +426,7 @@ class OneShotGaussianGenerator(BaseGenerator):
             sampled = self.sample_numfeature(tensor.num_features[:, idx, ...], gen_len)
             num_features.append(sampled)
 
-        tensor.num_features = torch.stack(num_features, dim=2) # L, B, NUM_FEATURES
+        tensor.num_features = torch.stack(num_features, dim=2)  # L, B, NUM_FEATURES
 
         tensor.time = self.sample_numfeature(tensor.time, gen_len)
 

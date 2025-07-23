@@ -6,13 +6,11 @@ model:
       cat_emb_dim: 768
       num_emb_dim: 64
       num_norm: True
+      use_time: True
     pretrain: False
     frozen: False
     checkpoint:
     batch_transforms:
-      '0':
-        TimeToFeatures:
-          process_type: "cat"
       'set_features':
         Identity
         # HideFeaturesFromTrain:
@@ -31,8 +29,7 @@ model:
       dropout: 0.2
       bias: True
 
-data_conf.max_seq_len: 512
-
+# data_conf.max_seq_len: 512
 
 optimizer:
   name: Adam
@@ -60,17 +57,16 @@ loss:
 optuna:
   params:
     n_trials: 100
-    n_startup_trials: 3
+    n_startup_trials: 10
     request_list: 
       - 'optimizer.params.weight_decay': 1.5429769361370426e-13
         'optimizer.params.lr': 0.00016912601015410544
         'model.latent_encoder.params.hidden_size': 164
         'model.latent_encoder.params.num_layers': 3
         'model.latent_encoder.params.dropout': 0.1831228989111418
-        "model.autoencoder.batch_transforms.'0'.TimeToFeatures.process_type": cat
-        'model.autoencoder.num_norm': false
-        'model.autoencoder.cat_emb_dim': 41
-        'model.autoencoder.num_emb_dim': 60
+        'model.autoencoder.params.num_norm': false
+        'model.autoencoder.params.cat_emb_dim': 41
+        'model.autoencoder.params.num_emb_dim': 60
         'data_conf.train_transforms.1.TimeToDiff.disable': True
         # 'loss.params.mse_weight': 0.5
     target_metric: ${trainer.ckpt_track_metric}
@@ -84,13 +80,12 @@ optuna:
     - ["model.latent_encoder.params.dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
     - ["model.latent_encoder.params.bias", [suggest_categorical, {choices: [True, False]}]]
 
-
-    - ["model.autoencoder.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    # - ["model.autoencoder.params.use_time", ["suggest_categorical", {choices: [True, False]}]]
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
-    - ["model.autoencoder.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.autoencoder.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.autoencoder.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.autoencoder.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
     # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

@@ -59,9 +59,7 @@ model:
     cat_emb_dim: 4
     num_emb_dim: 4
     num_norm: True
-    batch_transforms:
-      - TimeToFeatures:
-          process_type: "cat"
+    use_time: True
   vae:
     num_layers: 2
     d_token: 6

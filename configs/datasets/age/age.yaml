@@ -8,9 +8,8 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/age
-
 data_conf:
+  dataset_name: age
   cat_cardinalities:
     - ["age", 5]
     - ["small_group", 203]

@@ -272,11 +272,9 @@ if __name__ == "__main__":
         index_name="RecordID",
         train_transforms=[
             {"RescaleTime": {"loc": 0.0, "scale": 48.0}},
-            {"TimeToFeatures": {"process_type": "diff"}},
         ],
         val_transforms=[
             {"RescaleTime": {"loc": 0.0, "scale": 48.0}},
-            {"TimeToFeatures": {"process_type": "diff"}},
             {"CutTargetSequence": {"target_len": 32}},
         ],
     )

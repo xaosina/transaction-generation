@@ -17,7 +17,7 @@ def pop_arg(args, key):
     new_args = []
     value = None
     while i < len(args):
-        if args[i] == key:    
+        if args[i] == key:
             value = args[i + 1]
             if key == "--config_factory":
                 assert value[0] == "[" and value[-1] == "]", "Wrong factory format"
@@ -32,6 +32,8 @@ def pop_arg(args, key):
 def run_config_factory(config_path, config_factory):
     if config_factory is not None:
         config_paths = [f"configs/{name}.yaml" for name in config_factory]
+    else:
+        config_paths = []
     config_paths += [config_path or "config.yaml"]
     configs = [OmegaConf.load(path) for path in config_paths]
     merged_config = OmegaConf.merge(*configs)

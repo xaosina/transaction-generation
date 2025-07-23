@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/megamarket
-
 # DATA
 data_conf:
+  dataset_name: megamarket
   cat_cardinalities:
     - ["category_id", 9844]
     - ["event", 5]

@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional, Sequence
 
+import torch
 import torch.nn as nn
 from ebes.model.preprocess import Batch2Seq, SeqBatchNorm
 from ebes.types import Seq
@@ -46,6 +47,7 @@ class BaselineAE(BaseAE):
             cat_emb_dim=ae_config.params["cat_emb_dim"],
             num_emb_dim=ae_config.params["num_emb_dim"],
             num_norm=ae_config.params["num_norm"],
+            use_time=ae_config.params["use_time"],
             batch_transforms=ae_config.batch_transforms,
         )
 
@@ -58,7 +60,7 @@ class BaselineAE(BaseAE):
         raise "No need to train a GroundTruthGenerator."
 
 
-class Batch2TransformedSeq(Batch2Seq):
+class Batch2TransformedSeq(nn.Module):
     def __init__(
         self,
         cat_cardinalities: Mapping[str, int],
@@ -66,9 +68,10 @@ class Batch2TransformedSeq(Batch2Seq):
         cat_emb_dim: int | None = None,
         num_emb_dim: int | None = None,
         num_norm: bool = False,
+        use_time: bool = True,
         batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
     ):
-        super(Batch2Seq, self).__init__()
+        super().__init__()
         # Establish initial features
         cat_cardinalities = cat_cardinalities if cat_cardinalities is not None else {}
         if num_features is not None:
@@ -93,6 +96,9 @@ class Batch2TransformedSeq(Batch2Seq):
                     for k, v in cat_cardinalities.items()
                     if k not in tfs.cat_names_removed
                 }
+        self.use_time = use_time
+        if use_time:
+            num_count += 1
 
         self._out_dim = 0
         self._cat_embs = nn.ModuleDict()
@@ -127,16 +133,61 @@ class Batch2TransformedSeq(Batch2Seq):
             )
         self._out_dim += num_emb_dim * num_count
 
-    def forward(
-        self, batch: GenBatch, copy=True
-    ) -> Seq:  # of shape (len, batch_size, )
+    @property
+    def output_dim(self):
+        return self._out_dim
+
+    def forward(self, batch: GenBatch, copy=True) -> Seq:  # of shape (len, batch_size, )
         if copy:
             batch = deepcopy(batch)
 
         if self.batch_transforms is not None:
             for tf in self.batch_transforms:
                 tf(batch)
-        return super().forward(batch, copy=False)
+
+        if not isinstance(batch.time, torch.Tensor):
+            raise ValueError(
+                "`time` field in batch must be a Tensor. "
+                "Consider proper time preprocessing"
+            )
+
+        embs = []
+        masks = []
+        if batch.cat_features_names:
+            for i, cf in enumerate(batch.cat_features_names):
+                embs.append(self._cat_embs[cf](batch[cf]))
+                if batch.cat_mask is not None:
+                    mask = batch.cat_mask[:, :, i].unsqueeze(2)
+                    mask = torch.repeat_interleave(
+                        mask, self._cat_embs[cf].embedding_dim, 2
+                    )
+                    masks.append(mask)
+        
+        x = []
+        if batch.num_features is not None:
+            x += [batch.num_features]
+        if self.use_time:
+            x += [batch.time[..., None]]
+        if x:
+            x = torch.cat(x, dim=2)
+            if self.batch_norm:
+                x = self.batch_norm(x, batch.lengths)
+            x = x.permute(1, 2, 0)  # batch, features, len
+            x = self._num_emb(x)
+            embs.append(x.permute(2, 0, 1))
+            if batch.num_mask is not None:
+                masks.append(
+                    torch.repeat_interleave(
+                        batch.num_mask,
+                        self._num_emb.out_channels // self._num_emb.in_channels,
+                        dim=2,
+                    )
+                )
+
+        tokens = torch.cat(embs, dim=2)
+        masks = torch.cat(masks, dim=2) if len(masks) > 0 else None
+        return Seq(tokens=tokens, lengths=batch.lengths, time=batch.time, masks=masks)
+
 
 
 class ReconstructorBase(BaseModel):
@@ -172,7 +223,7 @@ class ReconstructorBase(BaseModel):
             for cat_name, cat_dim in self.cat_cardinalities.items():
                 cat_features[cat_name] = out[..., start_id : start_id + cat_dim]
                 start_id += cat_dim
-        assert start_id == out.shape[-1], f'{start_id}, {out.shape}'
+        assert start_id == out.shape[-1], f"{start_id}, {out.shape}"
         return PredBatch(
             lengths=x.lengths,
             time=time,
@@ -181,8 +232,8 @@ class ReconstructorBase(BaseModel):
             cat_features=cat_features,
         )
 
-    def generate(self, x: Seq) -> GenBatch:
-        return self.forward(x).to_batch()
+    def generate(self, x: Seq, topk=1, temperature=1.0) -> GenBatch:
+        return self.forward(x).to_batch(topk, temperature)
 
 
 @dataclass(frozen=True)

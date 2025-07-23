@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/zvuk
-
 # DATA
 data_conf:
+  dataset_name: zvuk
   cat_cardinalities:
     # - ["track_id", 1148858]
     - ["artist_id", 210042]
@@ -28,11 +27,11 @@ data_conf:
   val_ratio: 0.15
   num_workers: 4
   train_resamples: 1
-  batch_size: 128
+  batch_size: 32
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
-  max_seq_len: &max_seq_len 1025
+  max_seq_len: &max_seq_len 256
   padding_value: 0
 
   train_random_end: none

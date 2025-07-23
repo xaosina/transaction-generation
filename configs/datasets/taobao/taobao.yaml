@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/taobao
-
 # DATA
 data_conf:
+  dataset_name: taobao
   cat_cardinalities:
     - ["item_category", 1904]
     - ["behavior_type", 5]

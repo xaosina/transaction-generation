@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/retail
-
 # DATA
 data_conf:
+  dataset_name: retail
   cat_cardinalities:
   - ["is_own_trademark", 3]
   - ["is_alcohol", 3]
