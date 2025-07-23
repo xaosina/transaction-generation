@@ -41,7 +41,7 @@ class DataConfig:
     # List of features to focus on in loss and metrics. If None->focus on all
     focus_on: Optional[list[str]] = None
     drop_nonfocus: bool = False
-    target_token: str = "event_type"
+    target_token: str = "none"
 
     @property
     def seq_cols(self):

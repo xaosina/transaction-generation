@@ -38,7 +38,7 @@ def df_to_str(df):
         values = []
         for v in df.iloc[i].tolist():
             if isinstance(v, float):
-                values += [str(v).replace(".", ",")]
+                values += [str(round(v, 3)).replace(".", ",")]
             else:
                 values += [str(v)]
         s += "\t".join(values) + "\n"
