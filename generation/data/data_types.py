@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from ebes.types import Batch
 
 from ..utils import RateLimitFilter
@@ -15,6 +16,7 @@ logger.addFilter(RateLimitFilter(60))
 
 @dataclass(frozen=True)
 class DataConfig:
+    dataset_name: str = "shakespeare"
     train_path: str = ""
     test_path: str = ""
     batch_size: int = 128
@@ -38,6 +40,7 @@ class DataConfig:
     padding_value: float = 0
     # List of features to focus on in loss and metrics. If None->focus on all
     focus_on: Optional[list[str]] = None
+    drop_nonfocus: bool = False
     target_token: str = "none"
 
     @property
@@ -48,13 +51,13 @@ class DataConfig:
         if self.num_names is not None:
             seq_cols += self.num_names
         return seq_cols
-    
+
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += (self.num_names or [])
+        all_num += self.num_names or []
         return [col for col in all_num if col in self.focus_on]
-    
+
     @property
     def focus_cat(self):
         cat_d = self.cat_cardinalities or {}
@@ -64,19 +67,28 @@ class DataConfig:
         time_name = self.time_name
         num_names = set(self.num_names or [])
         if isinstance(self.cat_cardinalities, list):
-            cat_dict = {
-                self.cat_cardinalities[i][0]: self.cat_cardinalities[i][1]
-                for i in range(len(self.cat_cardinalities))
-            }
+            cat_dict = {c[0]: c[1] for c in self.cat_cardinalities}
             object.__setattr__(self, "cat_cardinalities", cat_dict)
         cat_names = set(self.cat_cardinalities or {})
 
         if (time_name in cat_names | num_names) or (cat_names & num_names):
             raise ValueError("Conflict. time_name, num_names and cat_names intersect.")
 
-        if self.focus_on and not set(self.focus_on).issubset(self.seq_cols):
-            raise ValueError("focus_on must be a subset of seq_cols")
-        elif self.focus_on is None:
+        focus = self.focus_on
+        if focus:
+            new_focus = [
+                f if f != "<target_token>" else self.target_token for f in focus
+            ]
+            object.__setattr__(self, "focus_on", new_focus)
+            if not set(new_focus).issubset(self.seq_cols):
+                raise ValueError("focus_on must be a subset of seq_cols")
+            if self.drop_nonfocus:
+                new_cat, new_num = self.cat_cardinalities or {}, self.num_names or []
+                new_cat = {k: v for k, v in new_cat.items() if k in new_focus}
+                new_num = [n for n in new_num if n in new_focus]
+                object.__setattr__(self, "cat_cardinalities", new_cat or None)
+                object.__setattr__(self, "num_names", new_num or None)
+        elif focus is None:
             object.__setattr__(self, "focus_on", self.seq_cols)
 
 
@@ -87,6 +99,18 @@ class LatentDataConfig:
     generation_len: int
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
+
+    def check_focus_on(self, use_time):
+        """Checks if focus_on is compatable with autoregressive approach."""
+        if self.time_name not in self.focus_on:
+            assert (
+                not use_time
+            ), "Time not in focus_on, but will be fed into network during generation"
+        seq_cols = set(list(self.cat_cardinalities or {}) + (self.num_names or []))
+        set_focus = set(self.focus_on)
+        assert (
+            seq_cols <= set_focus
+        ), f"Can't use this features autoregressivly and NOT focus on them: {seq_cols - set_focus}"
 
 
 @dataclass(kw_only=True)
@@ -194,7 +218,7 @@ class PredBatch:
             tensors = [self.num_features] + tensors
         return torch.cat(tensors, dim=2)
 
-    def to_batch(self):
+    def to_batch(self, topk=1, temperature=1.0):
         cat_features = None
         cat_feature_names = (
             None if self.cat_features is None else list(self.cat_features.keys())
@@ -202,9 +226,18 @@ class PredBatch:
         if self.cat_features:
             cat_features = []
             for cat_name, cat_tensor in self.cat_features.items():
-                cat_features.append(
-                    cat_tensor.argmax(dim=2) if cat_tensor.ndim > 2 else cat_tensor
-                )
+                if topk > 1:
+                    L, B, C = cat_tensor.shape
+                    logits = (cat_tensor / temperature).view(L * B, C)
+                    v, _ = torch.topk(logits, min(topk, logits.size(-1)))
+                    logits[logits < v[..., [-1]]] = -float("Inf")
+                    probs = F.softmax(logits, dim=-1)
+                    samples = torch.multinomial(probs, num_samples=1).squeeze(1)
+                    samples = samples.view(L, B)
+                else:
+                    samples = cat_tensor.argmax(dim=2)
+                cat_features.append(samples)
+
             cat_features = torch.stack(cat_features, dim=2)
 
         return GenBatch(

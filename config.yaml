@@ -1,1 +1,1 @@
-config_factory: [start, datasets/mbd/mbd,methods/gru_oneshot,datasets/mbd/metrics/default, ]
+config_factory: [start, datasets/shakespeare/shakespeare, methods/gru, metrics/default, 1to1]

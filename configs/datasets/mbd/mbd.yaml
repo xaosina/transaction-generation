@@ -1,17 +1,16 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'F1_macro on event_type' #'Reconstruction overall'
+  ckpt_track_metric: 'loss' #'Reconstruction overall'
   iters_per_epoch: null
   patience: 10
   profiling: false
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/mbd
-
 # DATA
 data_conf:
+  dataset_name: mbd
   cat_cardinalities:
     - ["src_type32", 88]
     - ["src_type11", 47]
@@ -29,6 +28,7 @@ data_conf:
   index_name: client_id
   time_name: days_since_first_tx
   focus_on:
+  target_token: "event_type"
 
   test_path: 'data/mbd-50k/test'
   train_path: 'data/mbd-50k/train'

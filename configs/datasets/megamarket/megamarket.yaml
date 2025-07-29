@@ -8,10 +8,9 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/megamarket
-
 # DATA
 data_conf:
+  dataset_name: megamarket
   cat_cardinalities:
     - ["category_id", 9844]
     - ["event", 5]
@@ -21,7 +20,7 @@ data_conf:
   index_name: user_id
   time_name: hours_since_first_tx
   focus_on: 
-
+  target_token: "category_id"
 
   test_path: 'data/megamarket-100k/test'
   train_path: 'data/megamarket-100k/train'

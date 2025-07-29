@@ -1,5 +1,5 @@
 # Runner params:
-log_dir: log/generation
+log_dir: log/generation/${data_conf.dataset_name}
 device: "cuda:0"
 common_seed: 0
 

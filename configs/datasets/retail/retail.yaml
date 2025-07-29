@@ -1,17 +1,16 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 4
   profiling: false
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/retail
-
 # DATA
 data_conf:
+  dataset_name: retail
   cat_cardinalities:
   - ["is_own_trademark", 3]
   - ["is_alcohol", 3]
@@ -36,6 +35,7 @@ data_conf:
   index_name: client_id
   time_name: transaction_datetime
   focus_on:
+  target_token: "level_2"
 
   test_path: 'data/retail/preprocessed/test'
   train_path: 'data/retail/preprocessed/train'

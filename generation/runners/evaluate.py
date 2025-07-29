@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Mapping
 
 import torch
-from dacite import from_dict
+from dacite import from_dict, Config
 from ebes.pipeline import Runner
 
 from ..models import generator as gen_models
 from ..data.utils import get_dataloaders
+from ..losses import get_loss
 from ..metrics.evaluator import SampleEvaluator
 from ..trainer import Trainer
 
@@ -20,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class GenerationEvaluator(Runner):
     def pipeline(self, cfg: Mapping) -> dict[str, float]:
-        cfg = from_dict(PipelineConfig, cfg)
+        cfg = from_dict(PipelineConfig, cfg, Config(strict=True))
         assert isinstance(cfg, PipelineConfig)
 
         (train_loader, val_loader, test_loader), (internal_dataconf, cfg.data_conf) = (
@@ -29,6 +30,7 @@ class GenerationEvaluator(Runner):
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
+        loss = get_loss(internal_dataconf, cfg.loss)
         log_dir = Path(cfg.log_dir) / cfg.run_name
         sample_evaluator = SampleEvaluator(
             log_dir / "evaluation",
@@ -39,6 +41,7 @@ class GenerationEvaluator(Runner):
         )
         trainer = Trainer(
             model=model,
+            loss=loss,
             evaluator=sample_evaluator,
             train_loader=train_loader,
             val_loader=val_loader,
@@ -56,7 +59,9 @@ class GenerationEvaluator(Runner):
 
         # val_metrics = trainer.validate(val_loader, remove=False)
         # train_metrics = trainer.validate(train_loader, remove=False)
-        test_metrics = trainer.validate(test_loader, remove=False)
+        test_metrics = trainer.validate(
+            test_loader, remove=False, get_loss=True, get_metrics=True
+        )
 
         # val_metrics = {k: v for k, v in val_metrics.items()}
         # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}

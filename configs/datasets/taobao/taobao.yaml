@@ -1,17 +1,16 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 10
   profiling: false
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/taobao
-
 # DATA
 data_conf:
+  dataset_name: taobao
   cat_cardinalities:
     - ["item_category", 1904]
     - ["behavior_type", 5]
@@ -19,6 +18,7 @@ data_conf:
   index_name: user_id
   time_name: time_since_tuesday
   focus_on:
+  target_token: "item_category"
 
   test_path: 'data/taobao/preprocessed/test'
   train_path: 'data/taobao/preprocessed/train'
