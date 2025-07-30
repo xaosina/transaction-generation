@@ -1,0 +1,7 @@
+data_conf:
+  focus_on: ["<target_token>"]
+
+model:
+  autoencoder:
+    params:
+      use_time: True
