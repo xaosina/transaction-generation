@@ -116,7 +116,8 @@ class Reshaper(BaseModel):
         super().__init__()
         self.gen_len = gen_len
 
-    def forward(self, tensor: torch.Tensor) -> Seq:
+    def forward(self, seq: Seq) -> Seq:
+        tensor = seq.tokens
         assert (
             tensor.shape[1] % self.gen_len == 0
         ), f"hidden_size doesnt divide by {self.gen_len}"
@@ -153,12 +154,14 @@ class OneShotGenerator(BaseGenerator):
         self.poller = (
             TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
         )
-        self.reshaper = Reshaper(data_conf.generation_len)
 
         self.projector = Projection(
-            self.encoder.output_dim // data_conf.generation_len,
             self.encoder.output_dim,
+            self.encoder.output_dim * data_conf.generation_len,
         )
+
+        self.reshaper = Reshaper(data_conf.generation_len)
+
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
@@ -169,9 +172,10 @@ class OneShotGenerator(BaseGenerator):
         """
         x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
         x = self.encoder(x)  # [L, B, D]
-        x = self.poller(x)  # [B, D]
-        x = self.reshaper(x)  # [gen_len, B, D // gen_len]
-        x = self.projector(x)
+        x = self.poller(x) # [B, D]
+        x = Seq(tokens=x, lengths=None, time=None)
+        x = self.projector(x) # [B, D * gen_len]
+        x = self.reshaper(x)  # [gen_len, B, D]
         x = self.autoencoder.decoder(x)
         return x
 

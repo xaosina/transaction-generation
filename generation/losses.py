@@ -4,12 +4,13 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 from torch.nn import Module
+from scipy.optimize import linear_sum_assignment
 
 from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
-try:
-    from torch_linear_assignment import batch_linear_assignment
-except Exception:
-    print('No module batch_linear_assignment was installed')
+# try:
+#     from torch_linear_assignment import batch_linear_assignment
+# except Exception:
+#     print('No module batch_linear_assignment was installed')
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,17 @@ def rse(pred, true):
     eps = 1e-8
     rse = userwise_res / (userwise_tot + eps)
     return rse.sum(), rse.numel()
+
+
+def batch_linear_assignment(cost):
+    b, w, t = cost.shape
+    matching = torch.full([b, w], -1, dtype=torch.long, device=cost.device)
+    for i in range(b):
+        workers, tasks = linear_sum_assignment(cost[i].numpy(), maximize=False)  # (N, 2).
+        workers = torch.from_numpy(workers)
+        tasks = torch.from_numpy(tasks)
+        matching[i].scatter_(0, workers, tasks)
+    return matching
 
 
 class BaseLoss(Module):
