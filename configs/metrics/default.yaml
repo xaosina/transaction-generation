@@ -6,6 +6,8 @@ evaluator:
     # - KLDiv
     # - JSDiv
     - Levenshtein
+    - NDCG:
+        k: 10
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:
@@ -15,11 +17,11 @@ evaluator:
         average: macro
     - F1Metric:
         average: micro
-    - Precision:
-        average: macro
-    - Precision:
-        average: micro
-    - Recall:
-        average: macro
-    - Recall:
-        average: micro
+    # - Precision:
+    #     average: macro
+    # - Precision:
+    #     average: micro
+    # - Recall:
+    #     average: macro
+    # - Recall:
+    #     average: micro
