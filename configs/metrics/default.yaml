@@ -3,23 +3,31 @@ evaluator:
   topk: 1
   temperature: 1.
   metrics:
-    - KLDiv
-    - JSDiv
+    # - KLDiv
+    # - JSDiv
     - Levenshtein
-    - MatchedReconstruction:
-        max_shift: 0
-    - MatchedReconstruction:
-        max_shift: 32
+    - NDCG:
+        k: 1
+    - NDCG:
+        k: 5
+    - NDCG:
+        k: 10
+    - NDCG:
+        k: 15
+    # - MatchedReconstruction:
+    #     max_shift: 0
+    # - MatchedReconstruction:
+    #     max_shift: 32
     - Cardinality
     - F1Metric:
         average: macro
     - F1Metric:
         average: micro
-    - Precision:
-        average: macro
-    - Precision:
-        average: micro
-    - Recall:
-        average: macro
-    - Recall:
-        average: micro
+    # - Precision:
+    #     average: macro
+    # - Precision:
+    #     average: micro
+    # - Recall:
+    #     average: macro
+    # - Recall:
+    #     average: micro

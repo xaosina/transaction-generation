@@ -296,6 +296,21 @@ class BinaryMetric(BaseMetric):
         ).map(lambda x: x[-self.data_conf.generation_len :])
         return df.apply(self.get_scores, axis=1).mean()
 
+@dataclass
+class NDCG(BinaryMetric):
+    k: str = 1
+    def get_scores(self, row):
+        gt, pred = row["gt"], row["pred"]
+        set_gt = set(gt)
+        pred_len = min(self.k, len(pred))
+        ground_truth_len = min(self.k, len(gt))
+        denom = [1 / np.log2(i + 2) for i in range(self.k)]
+        dcg = sum(denom[i] for i in range(pred_len) if pred[i] in set_gt)
+        idcg = sum(denom[:ground_truth_len])
+        return dcg / idcg
+    
+    def __repr__(self):
+        return f"NDCG@{self.k} on {self.data_conf.target_token}"
 
 @dataclass
 class Levenshtein(BinaryMetric):
