@@ -3,8 +3,8 @@ evaluator:
   topk: 1
   temperature: 1.
   metrics:
-    - KLDiv
-    - JSDiv
+    # - KLDiv
+    # - JSDiv
     - Levenshtein
     - MatchedReconstruction:
         max_shift: 0

@@ -6,10 +6,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 import pickle
+
 try:
     from torch_linear_assignment import batch_linear_assignment
 except Exception:
-    print('No module batch_linear_assignment was installed')
+    print("No module batch_linear_assignment was installed")
 
 import numpy as np
 import torch
@@ -151,6 +152,7 @@ class LocalShuffle(BatchTransform):
     """
 
     max_shift: int = 0
+    independent_tail: int = 0
 
     def __call__(self, batch: GenBatch):
         if self.max_shift == 0:
@@ -170,7 +172,19 @@ class LocalShuffle(BatchTransform):
         mask = mask[:, None] | mask[:, :, None]
         mask[:, torch.arange(L), torch.arange(L)] = False
         cost[mask] = torch.inf
-
+        
+        # Step 3: Make independent shuffle for tail
+        if self.independent_tail > 0:
+            hist = torch.arange(L, device=batch.time.device) < (
+                batch.lengths[:, None] - self.independent_tail
+            ) # B, L
+            target = torch.arange(L, device=batch.time.device) >= (
+                batch.lengths[:, None] - self.independent_tail
+            ) # B, L
+            intersection = hist[:, None] & target[:, :, None]
+            intersection = intersection | intersection.transpose(-1, -2)
+            cost[intersection] = torch.inf
+        
         # Step 3: permute everything
         assignment = batch_linear_assignment(cost).T  # L, B
 
@@ -518,8 +532,10 @@ class ForwardFillNans(BatchTransform):
                 batch.num_features[i + 1],
                 batch.num_features[i],
             )
+
     def reverse(self, batch):
         pass
+
 
 @dataclass
 class FillNans(BatchTransform):
@@ -541,7 +557,7 @@ class FillNans(BatchTransform):
 
         for name, val in self.fill_value.items():
             batch[name].nan_to_num_(nan=val)
-    
+
     def reverse(self, batch):
         pass
 
