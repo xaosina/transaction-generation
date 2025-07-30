@@ -12,12 +12,13 @@ model:
     name: BaselineAE
     params:
       cat_emb_dim: 32
-      num_emb_dim: 64
+      num_emb_dim: 32
       num_norm: True
       use_time: True
     pretrain: False
     frozen: False
     checkpoint:
+
   latent_encoder:
     name: Transformer
     params:
@@ -29,14 +30,7 @@ model:
       pos_enc_type: "learned"
       num_heads: 8
   pooler: "last"
-      
-  # vae:
-  #   num_layers: 2
-  #   d_token: 6
-  #   n_head: 2
-  #   factor: 64
 
-data_conf.max_seq_len: 512
 
 optimizer:
   name: Adam
@@ -48,18 +42,7 @@ schedulers:
   "step":
     StepLR:
       step_size: 30
-  # "beta":
-  #   BetaScheduler:
-  #     init_beta: 0.01
-  #     factor: 0.7
-  #     patience: 4
-  #     min_beta: 0.00001
-  #     verbose: True
 
-loss:
-  name: matched
-  params:
-    mse_weight: 0.5
 
 optuna:
   params:
@@ -68,7 +51,7 @@ optuna:
     request_list: []
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
-    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-2, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
     - ["model.encoder.params.num_layers", [suggest_int, {low: 1, high: 10, log: False}]]
@@ -78,12 +61,12 @@ optuna:
     - ["model.encoder.params.pos_enc_type", [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]]
     - ["model.encoder.params.num_heads", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
 
-    # - ["model.autoencoder.params.use_time", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.pooler", ["suggest_categorical", {choices: ["last", "mean"]}]]
+
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
-    - ["model.preprocessor.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.preprocessor.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.preprocessor.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
-    # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
+    - ["model.autoencoder.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.autoencoder.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
