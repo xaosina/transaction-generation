@@ -322,7 +322,7 @@ class OneShotDistributionGenerator(BaseGenerator):
         tensor.lengths *= gen_len
         return tensor
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 
