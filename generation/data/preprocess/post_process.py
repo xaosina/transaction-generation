@@ -86,14 +86,14 @@ def main(path_from, path_to, feature_name):
     mapping, df = apply_ngrams(
         df, 3, coverage=0.3, col=feature_name, new_col=feature_name
     )
-    breakpoint()
+    print(mapping)
     maps[f"{3}-grams"] = mapping
     mapping, df = apply_ngrams(
         df, 2, coverage=0.2, col=feature_name, new_col=feature_name
     )
-    breakpoint()
+    print(mapping)
     maps[f"{2}-grams"] = mapping
-    breakpoint()
+
     with open(path_to, "wb") as file:
         pickle.dump(maps, file)
 

@@ -1,0 +1,4 @@
+loss:
+  name: target
+  params:
+    mse_weight: 0.5

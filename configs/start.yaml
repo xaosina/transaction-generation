@@ -1,0 +1,18 @@
+# Runner params:
+log_dir: log/generation/${data_conf.dataset_name}
+device: "cuda:0"
+common_seed: 0
+
+runner:
+  name: GenerationTrainer
+  run_type: simple
+  seed_keys:
+    - "common_seed"
+  params:
+    n_runs: 1
+    n_workers: 1
+  device_list:
+
+logging:
+  file_lvl: "info"
+  cons_lvl: "info"

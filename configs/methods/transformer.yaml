@@ -6,13 +6,10 @@ model:
       cat_emb_dim: 16
       num_emb_dim: 64
       num_norm: True
+      use_time: True
     pretrain: False
     frozen: False
     checkpoint:
-    batch_transforms:
-      '0':
-        TimeToFeatures:
-          process_type: "cat"
   latent_encoder:
     name: Transformer
     params:
@@ -49,8 +46,8 @@ loss:
 
 optuna:
   params:
-    n_trials: 70
-    n_startup_trials: 3
+    n_trials: 100
+    n_startup_trials: 10
     request_list: []
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
@@ -64,12 +61,12 @@ optuna:
     - ["model.encoder.params.pos_enc_type", [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]]
     - ["model.encoder.params.num_heads", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
 
-    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    # - ["model.autoencoder.params.use_time", ["suggest_categorical", {choices: [True, False]}]]
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
-    - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.preprocessor.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.preprocessor.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.preprocessor.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
 
-    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
+    # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

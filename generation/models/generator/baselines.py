@@ -6,7 +6,7 @@ import torch
 
 from ...data.data_types import GenBatch, LatentDataConfig, gather
 from . import BaseGenerator, ModelConfig
-
+from typing import Any
 
 class GroundTruthGenerator(BaseGenerator):
     """To check that all preprocessing is fine. Get perfect baseline."""
@@ -14,7 +14,9 @@ class GroundTruthGenerator(BaseGenerator):
     def forward(self, x: GenBatch):
         raise "No need to train a GroundTruthGenerator."
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(
+        self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any
+    ) -> GenBatch:
         assert hist.target_time.shape[0] == gen_len
         gen_batch = deepcopy(hist)
         gen_batch.append(gen_batch.get_target_batch())
@@ -36,7 +38,7 @@ class ModeGenerator(BaseGenerator):
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
         def get_mode(tensor, lengths, discrete=True):
             if tensor is None:
                 return None
@@ -85,7 +87,7 @@ class BaselineRepeater(BaseGenerator):
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
         assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
         assert isinstance(hist.time, torch.Tensor)
         hist = deepcopy(hist)
@@ -119,7 +121,7 @@ class PerfectRepeater(BaseGenerator):
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
         assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
         assert isinstance(hist.time, torch.Tensor)
         assert not hist.monotonic_time
@@ -168,11 +170,13 @@ class PerfectRepeater(BaseGenerator):
             res = res.permute(0, 3, 1, 2)  # [L - gen_len + 1, gen_len, B, D]
 
             res = res[:, :, :, cat_ids] != cat_true[None, :, :, cat_ids]
-            cost += res.to(torch.float32).mean(1).mean(-1) # [L - gen_len + 1, B]
+            cost += res.to(torch.float32).mean(1).mean(-1)  # [L - gen_len + 1, B]
 
         # Step 2: gather best slices
-        best_start = cost.argmin(0) # [B]
-        samples = torch.arange(gen_len, device=cost.device)[:, None] + best_start # [gen_len, B]
+        best_start = cost.argmin(0)  # [B]
+        samples = (
+            torch.arange(gen_len, device=cost.device)[:, None] + best_start
+        )  # [gen_len, B]
 
         gen_batch = replace(
             hist,
@@ -189,67 +193,67 @@ class PerfectRepeater(BaseGenerator):
             return hist
         else:
             return gen_batch
-        
-
-class PerfectRepeaterF1(BaseGenerator):
-    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
-        from torcheval.metrics.functional import multiclass_f1_score
-        self.data_conf = data_conf
-        super().__init__()
-
-    def forward(self, x: GenBatch):
-        raise "No need to train a repeator."
-
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
-        assert isinstance(hist.time, torch.Tensor)
-        assert not hist.monotonic_time
-        hist = deepcopy(hist)
-        L, B = hist.time.shape
-        data_conf = self.data_conf
-
-        # Step 1: Calculate cost
-        cost = torch.zeros(
-            (L - gen_len + 1, B), device=hist.time.device, dtype=hist.time.dtype
-        )
-        
-        # 1.2 Calculate F1
-        cat_names = hist.cat_features_names or []
-        cat_ids = [
-            cat_names.index(name) for name in cat_names if name in data_conf.focus_on
-        ]
-        assert len(cat_ids) == 1
-        cat_hist, cat_true = hist.cat_features, hist.target_cat_features
-        if cat_ids:
-            res = cat_hist.unfold(0, gen_len, 1)  # [L - gen_len + 1, B, D, gen_len]
-            res = res.permute(0, 3, 1, 2)  # [L - gen_len + 1, gen_len, B, D]
-
-            for label in range(1, cat_true[:, :, cat_ids].max() + 1):
-                
 
 
-            res = res[:, :, :, cat_ids] != cat_true[None, :, :, cat_ids]
-            cost += res.to(torch.float32).mean(1).mean(-1) # [L - gen_len + 1, B]
+# Should be fixed res = ...
+# class PerfectRepeaterF1(BaseGenerator):
+#     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+#         from torcheval.metrics.functional import multiclass_f1_score
+#         self.data_conf = data_conf
+#         super().__init__()
 
-        # Step 2: gather best slices
-        best_start = cost.argmin(0) # [B]
-        samples = torch.arange(gen_len, device=cost.device)[:, None] + best_start # [gen_len, B]
+#     def forward(self, x: GenBatch):
+#         raise "No need to train a repeator."
 
-        gen_batch = replace(
-            hist,
-            lengths=torch.ones_like(hist.lengths) * gen_len,
-            time=gather(hist.time, samples),
-            num_features=gather(hist.num_features, samples),
-            cat_features=gather(hist.cat_features, samples),
-            cat_mask=gather(hist.cat_mask, samples),
-            num_mask=gather(hist.num_mask, samples),
-        )
+#     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+#         assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
+#         assert isinstance(hist.time, torch.Tensor)
+#         assert not hist.monotonic_time
+#         hist = deepcopy(hist)
+#         L, B = hist.time.shape
+#         data_conf = self.data_conf
 
-        if with_hist:
-            hist.append(gen_batch)
-            return hist
-        else:
-            return gen_batch
+#         # Step 1: Calculate cost
+#         cost = torch.zeros(
+#             (L - gen_len + 1, B), device=hist.time.device, dtype=hist.time.dtype
+#         )
+
+#         # 1.2 Calculate F1
+#         cat_names = hist.cat_features_names or []
+#         cat_ids = [
+#             cat_names.index(name) for name in cat_names if name in data_conf.focus_on
+#         ]
+#         assert len(cat_ids) == 1
+#         cat_hist, cat_true = hist.cat_features, hist.target_cat_features
+#         if cat_ids:
+#             res = cat_hist.unfold(0, gen_len, 1)  # [L - gen_len + 1, B, D, gen_len]
+#             res = res.permute(0, 3, 1, 2)  # [L - gen_len + 1, gen_len, B, D]
+
+#             for label in range(1, cat_true[:, :, cat_ids].max() + 1):
+
+
+#             res = res[:, :, :, cat_ids] != cat_true[None, :, :, cat_ids]
+#             cost += res.to(torch.float32).mean(1).mean(-1) # [L - gen_len + 1, B]
+
+#         # Step 2: gather best slices
+#         best_start = cost.argmin(0) # [B]
+#         samples = torch.arange(gen_len, device=cost.device)[:, None] + best_start # [gen_len, B]
+
+#         gen_batch = replace(
+#             hist,
+#             lengths=torch.ones_like(hist.lengths) * gen_len,
+#             time=gather(hist.time, samples),
+#             num_features=gather(hist.num_features, samples),
+#             cat_features=gather(hist.cat_features, samples),
+#             cat_mask=gather(hist.cat_mask, samples),
+#             num_mask=gather(hist.num_mask, samples),
+#         )
+
+#         if with_hist:
+#             hist.append(gen_batch)
+#             return hist
+#         else:
+#             return gen_batch
 
 
 class BaselineHistSampler(BaseGenerator):
@@ -259,7 +263,7 @@ class BaselineHistSampler(BaseGenerator):
     def forward(self, x: GenBatch):
         raise "No need to train a repeator."
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
         # assert hist.lengths.min() >= gen_len, "Cannot generate when gen_len > hist_len"
         assert isinstance(hist.time, torch.Tensor)
 

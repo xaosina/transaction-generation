@@ -8,16 +8,16 @@ trainer:
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/shakespeare
-
 # DATA
 data_conf:
+  dataset_name: shakespeare
   cat_cardinalities:
     - ["char", 65]
   num_names:
   index_name: speach_id
   time_name: char_number
-  focus_on: ["char"]
+  focus_on:
+  target_token: char
 
   test_path: 'data/shakespeare/preprocessed/test'
   train_path: 'data/shakespeare/preprocessed/train'
@@ -41,7 +41,10 @@ data_conf:
         scale: 400.0
     "1":
       TimeToDiff:
-        disable: false
+        disable: True
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
     "3":
       CutTargetSequence:
         target_len: 0
@@ -53,7 +56,7 @@ data_conf:
         scale: 400.0
     "1":
       TimeToDiff:
-        disable: False
+        disable: True
     "3":
       CutTargetSequence:
         target_len: *generation_len

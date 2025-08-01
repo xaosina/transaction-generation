@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 class EvaluatorConfig:
     devices: list[str] = field(default_factory=lambda: ["cuda:0"])
     metrics: list[Mapping[str, Any] | str] = None
+    topk: int = 1
+    temperature: float = 1.0
 
 
 class SampleEvaluator:
@@ -35,6 +37,7 @@ class SampleEvaluator:
     ):
         self.log_dir = Path(log_dir)
         self.data_config = data_conf
+        self.eval_config = eval_config
         self.device = device
         self.metrics = (
             create_instances_from_module(
@@ -87,7 +90,10 @@ class SampleEvaluator:
             batch_input = batch_input.to(self.device)
             with torch.no_grad():
                 batch_pred = model.generate(
-                    deepcopy(batch_input), self.data_config.generation_len
+                    deepcopy(batch_input),
+                    self.data_config.generation_len,
+                    topk=self.eval_config.topk,
+                    temperature=self.eval_config.temperature,
                 )
             gen = _concat_samples(batch_input, batch_pred)
             gen = data_loader.collate_fn.reverse(gen.to("cpu"))

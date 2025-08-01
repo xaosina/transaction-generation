@@ -16,6 +16,7 @@ from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
 from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
+from scipy.stats import entropy
 from scipy.optimize import linear_sum_assignment
 
 from ..data.data_types import DataConfig
@@ -135,12 +136,12 @@ class MatchedReconstruction(BaseMetric):
 
             denominator = ((true_num - true_num.mean(0)) ** 2).sum(
                 axis=0, dtype=np.float64
-            ) # B, D
+            )  # B, D
             nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
             denominator[nominator.sum(0).sum(0) == 0] = 1
             nominator[:, :, (denominator == 0)] = 1 / gen_len
             denominator[denominator == 0] = 1
-            
+
             r2 = 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
 
         # Prepare cat arrays
@@ -158,7 +159,9 @@ class MatchedReconstruction(BaseMetric):
                 np.concatenate(pred_cat.ravel()).reshape((B, D, gen_len)),
                 (2, 0, 1),
             )  # [gen_len, B, D]
-            accuracy = (pred_cat[:, None] == true_cat[None, :]) / gen_len  # [L, L, B, D]
+            accuracy = (
+                pred_cat[:, None] == true_cat[None, :]
+            ) / gen_len  # [L, L, B, D]
 
         full_score = np.concatenate([r2, accuracy], axis=-1)  # [L, L, B, D]
         perfect_score = get_perfect_score(full_score, self.max_shift, gen_len)
@@ -175,21 +178,139 @@ class MatchedReconstruction(BaseMetric):
         return f"MatchedReconstruction {self.max_shift}"
 
 
+class KLDiv(BaseMetric):
+
+    EPS = 1e-8  # сглаживание, чтобы не было нулевых вероятностей
+    N_BINS = 50
+
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+
+        cat_cards = self.data_conf.cat_cardinalities or {}
+        results = {}
+
+        for col in self.data_conf.focus_on:
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+            results[col] = df.apply(
+                lambda row: self._compute_kl(row, bins=cat_cards.get(col, None)),
+                axis=1,
+            ).mean()
+
+        return {"overall": np.mean(list(results.values())), **results}
+
+    def _compute_kl(self, row, bins=None):
+        if bins is None:
+            bins = self.N_BINS
+
+        gt, pred = row["gt"], row["pred"]
+
+        # общий диапазон
+        range_ = (
+            (min(gt.min(), pred.min()), max(gt.max(), pred.max()))
+            if bins is not None
+            else (0, bins)
+        )
+
+        p, _ = np.histogram(gt, bins=self.N_BINS, range=range_, density=False)
+        q, _ = np.histogram(pred, bins=self.N_BINS, range=range_, density=False)
+
+        p = p.astype(float) + self.EPS
+        q = q.astype(float) + self.EPS
+        p /= p.sum()
+        q /= q.sum()
+        return entropy(p, q)
+
+    def __repr__(self):
+        return "KLDiv"
+
+
+class JSDiv(BaseMetric):
+
+    EPS = 1e-8
+    N_BINS = 50
+
+    def __call__(self, orig, gen):
+        assert (orig.columns == gen.columns).all()
+
+        cat_cards = self.data_conf.cat_cardinalities or {}
+        results = {}
+
+        for col in self.data_conf.focus_on:
+            df = pd.concat(
+                (orig[col], gen[col]),
+                keys=["gt", "pred"],
+                axis=1,
+            ).map(lambda x: x[-self.data_conf.generation_len :])
+
+            results[col] = df.apply(
+                lambda row: self._compute_kl(row, bins=cat_cards.get(col, None)),
+                axis=1,
+            ).mean()
+
+        return {"overall": np.mean(list(results.values())), **results}
+
+    def _compute_kl(self, row, bins=None):
+        if bins is None:
+            bins = self.N_BINS
+
+        gt, pred = row["gt"], row["pred"]
+
+        range_ = (
+            (min(gt.min(), pred.min()), max(gt.max(), pred.max()))
+            if bins is not None
+            else (0, bins)
+        )
+
+        p, _ = np.histogram(gt, bins=self.N_BINS, range=range_, density=False)
+        q, _ = np.histogram(pred, bins=self.N_BINS, range=range_, density=False)
+
+        p = p.astype(float) + self.EPS
+        q = q.astype(float) + self.EPS
+        p /= p.sum()
+        q /= q.sum()
+
+        m = 0.5 * (p + q)
+
+        return 0.5 * entropy(p, m) + 0.5 * entropy(q, m)
+
+    def __repr__(self):
+        return "JSDiv"
+
+
 @dataclass
 class BinaryMetric(BaseMetric):
-    target_key: str
 
     @abstractmethod
     def get_scores(self, row): ...
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         df = pd.concat(
-            (orig[self.target_key], gen[self.target_key]),
+            (orig[self.data_conf.target_token], gen[self.data_conf.target_token]),
             keys=["gt", "pred"],
             axis=1,
         ).map(lambda x: x[-self.data_conf.generation_len :])
         return df.apply(self.get_scores, axis=1).mean()
 
+@dataclass
+class NDCG(BinaryMetric):
+    k: str = 1
+    def get_scores(self, row):
+        gt, pred = row["gt"], row["pred"]
+        set_gt = set(gt)
+        pred_len = min(self.k, len(pred))
+        ground_truth_len = min(self.k, len(gt))
+        denom = [1 / np.log2(i + 2) for i in range(self.k)]
+        dcg = sum(denom[i] for i in range(pred_len) if pred[i] in set_gt)
+        idcg = sum(denom[:ground_truth_len])
+        return dcg / idcg
+    
+    def __repr__(self):
+        return f"NDCG@{self.k} on {self.data_conf.target_token}"
 
 @dataclass
 class Levenshtein(BinaryMetric):
@@ -199,7 +320,7 @@ class Levenshtein(BinaryMetric):
         return lev_m
 
     def __repr__(self):
-        return f"Levenstein on {self.target_key}"
+        return f"Levenstein on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -211,7 +332,7 @@ class Accuracy(BinaryMetric):
         return acc_m
 
     def __repr__(self):
-        return f"Accuracy on {self.target_key}"
+        return f"Accuracy on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -254,7 +375,7 @@ class PR(BinaryMetric):
         return pd.Series(stats)
 
     def __repr__(self):
-        return f"PR on {self.target_key}"
+        return f"PR on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -275,7 +396,7 @@ class Precision(PR):
         return ret
 
     def __repr__(self):
-        return f"Precision {self.average} on {self.target_key}"
+        return f"Precision {self.average} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -295,7 +416,7 @@ class Recall(PR):
         return ret
 
     def __repr__(self):
-        return f"Recall {self.average} on {self.target_key}"
+        return f"Recall {self.average} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -374,12 +495,11 @@ class F1Metric(BinaryMetric):
         return f1
 
     def __repr__(self):
-        return f"F1_{self.average} on {self.target_key}"
+        return f"F1_{self.average} on {self.data_conf.target_token}"
 
 
 @dataclass
 class DistributionMetric(BaseMetric):
-    target_key: str
     overall: bool = False
 
     @abstractmethod
@@ -387,7 +507,7 @@ class DistributionMetric(BaseMetric):
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         df = pd.concat(
-            (orig[self.target_key], gen[self.target_key]),
+            (orig[self.data_conf.target_token], gen[self.data_conf.target_token]),
             keys=["gt", "pred"],
             axis=1,
         ).map(lambda x: x[-self.data_conf.generation_len :])
@@ -437,7 +557,7 @@ class Gini(StatisticMetric):
         return gini
 
     def __repr__(self):
-        return self.overall * "Overall " + f"Gini on {self.target_key}"
+        return self.overall * "Overall " + f"Gini on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -450,12 +570,14 @@ class ShannonEntropy(StatisticMetric):
         return shannon_entropy
 
     def __repr__(self):
-        return self.overall * "Overall " + f"Shannon entropy on {self.target_key}"
+        return (
+            self.overall * "Overall "
+            + f"Shannon entropy on {self.data_conf.target_token}"
+        )
 
 
 @dataclass
 class GenVsHistoryMetric(BaseMetric):
-    target_key: str
     overall: bool = False
 
     @abstractmethod
@@ -463,8 +585,8 @@ class GenVsHistoryMetric(BaseMetric):
 
     def score_for_df(self, df):
         gen_len = self.data_conf.generation_len
-        hist = df[self.target_key].map(lambda x: x[:-gen_len])
-        preds = df[self.target_key].map(lambda x: x[-gen_len:])
+        hist = df[self.data_conf.target_token].map(lambda x: x[:-gen_len])
+        preds = df[self.data_conf.target_token].map(lambda x: x[-gen_len:])
         df = pd.concat((hist, preds), keys=["hists", "preds"], axis=1)
         if self.overall:
             df = df.agg(lambda x: [np.concatenate(x.values)], axis=0)
@@ -473,8 +595,8 @@ class GenVsHistoryMetric(BaseMetric):
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
-        score = 1 - (1 + abs(gen_score - orig_score))
-        return {"score": score, "gen": gen_score, "orig": orig_score}
+        # score = 1 - (1 + abs(gen_score - orig_score))
+        return {"gen": gen_score, "orig": orig_score} #"score": score, 
 
 
 @dataclass
@@ -484,7 +606,10 @@ class CardinalityCoverage(GenVsHistoryMetric):
         return len(np.unique(preds)) / len(np.unique(hists))
 
     def __repr__(self):
-        return self.overall * "Overall " + f"CardinalityCoverage on {self.target_key}"
+        return (
+            self.overall * "Overall "
+            + f"CardinalityCoverage on {self.data_conf.target_token}"
+        )
 
 
 @dataclass
@@ -494,7 +619,9 @@ class Cardinality(GenVsHistoryMetric):
         return len(np.unique(preds))
 
     def __repr__(self):
-        return self.overall * "Overall " + f"Cardinality on {self.target_key}"
+        return (
+            self.overall * "Overall " + f"Cardinality on {self.data_conf.target_token}"
+        )
 
 
 @dataclass
@@ -505,7 +632,9 @@ class NoveltyScore(GenVsHistoryMetric):
         return len(preds - hists) / len(preds)
 
     def __repr__(self):
-        return self.overall * "Overall " + f"NoveltyScore on {self.target_key}"
+        return (
+            self.overall * "Overall " + f"NoveltyScore on {self.data_conf.target_token}"
+        )
 
 
 @dataclass

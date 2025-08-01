@@ -1,16 +1,15 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 10
   profiling: false
   verbose: True
   ckpt_resume: null
 
-log_dir: log/generation/age
-
 data_conf:
+  dataset_name: age
   cat_cardinalities:
     - ["age", 5]
     - ["small_group", 203]
@@ -19,11 +18,12 @@ data_conf:
   index_name: client_id
   time_name: trans_date
   focus_on:
+  target_token: "small_group"
 
   test_path: 'data/age/preprocessed/test'
   train_path: 'data/age/preprocessed/train'
   val_ratio: 0.15
-  num_workers: 2
+  num_workers: 4
   train_resamples: 1
   batch_size: 128
 
@@ -54,6 +54,12 @@ data_conf:
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
+    "3":
+      CutTargetSequence:
+        target_len: 0
 
   val_transforms:
     "0":

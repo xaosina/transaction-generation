@@ -1,3 +1,4 @@
+from copy import deepcopy
 import logging
 import os
 from collections.abc import Iterable, Sized
@@ -58,6 +59,7 @@ class Trainer:
         profiling: bool = False,
         verbose: bool = True,
         grad_clip: float = 1,
+        metrics_on_train: bool = False,
     ):
         """Initialize trainer.
 
@@ -110,6 +112,7 @@ class Trainer:
         self._device = device
         self._verbose = verbose
         self._grad_clip = grad_clip
+        self._metrics_on_train = metrics_on_train
 
         self._model = None
         if model is not None:
@@ -125,6 +128,9 @@ class Trainer:
         self._sched = scheduler
         self._train_loader = train_loader
         self._val_loader = val_loader
+
+        self._train_collator = deepcopy(train_loader.collate_fn)
+        self._train_random_end = deepcopy(train_loader.dataset.random_end)
 
         self._metric_values: dict[str, Any] | None = None
         self._last_iter = 0
@@ -314,9 +320,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                torch.nn.utils.clip_grad_norm_(
-                    self._model.parameters(), max_norm=self._grad_clip
-                )
+                # torch.nn.utils.clip_grad_norm_(
+                #     self._model.parameters(), max_norm=self._grad_clip
+                # )
                 self._opt.step()
 
                 self._opt.zero_grad()
@@ -337,21 +343,37 @@ class Trainer:
         self,
         loader: Iterable[GenBatch] | None = None,
         remove=True,
-        another_metrics=None,
+        get_loss: bool = True,
+        get_metrics: bool = False,
     ) -> dict[str, Any]:
         assert self._model is not None
+        assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
             if self._val_loader is None:
                 raise ValueError("Either set val loader or provide loader explicitly")
             loader = self._val_loader
-
         logger.info("Epoch %04d: validation started", self._last_epoch + 1)
-
         self._model.eval()
+        self._metric_values = {}
 
-        self._metric_values = self._sample_evaluator.evaluate(
-            self._model, loader, remove=remove
-        ) | (another_metrics or {})
+        if get_loss:
+            orig_collate, orig_random_end = loader.collate_fn, loader.dataset.random_end
+            loader.collate_fn = self._train_collator
+            loader.dataset.random_end = self._train_random_end
+            log_losses: MeanDict = MeanDict()
+            with torch.no_grad():
+                for batch in tqdm(loader, disable=not self._verbose):
+                    batch.to(self._device)
+                    pred = self._model(batch)
+                    loss_dict = self._loss(batch, pred)
+                    log_losses.update(loss_dict)
+            loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
+            self._metric_values |= {k: -v for k, v in log_losses.mean().items()}
+
+        if get_metrics:
+            self._metric_values |= self._sample_evaluator.evaluate(
+                self._model, loader, remove=remove
+            )
         logger.info(
             "Epoch %04d: metrics: %s",
             self._last_epoch + 1,
@@ -409,9 +431,8 @@ class Trainer:
                 self._sched.step(loss=losses.pop("loss_ema"))
 
             self._metric_values = None
-            loss_metrics = {k: -v for k, v in losses.items()}
             if self._sample_evaluator is not None:
-                self.validate(another_metrics=loss_metrics)
+                self.validate(get_metrics=self._metrics_on_train)
 
             self._last_epoch += 1
             self.save_ckpt()
@@ -433,7 +454,7 @@ class Trainer:
                 break
 
         logger.info("run '%s' finished successfully", self._run_name)
-        return loss_metrics
+        return
 
     def best_checkpoint(self) -> Path:
         """
