@@ -5,7 +5,7 @@ n_days=6
 login="d.osin"
 
 # Define arrays
-models=(gru gpt)
+models=(gru transformer)
 datasets=(age mbd megamarket retail shakespeare taobao zvuk)
 losses=(target dist matched)
 
