@@ -283,22 +283,30 @@ class OneShotDistributionGenerator(BaseGenerator):
         return torch.stack(idx_rows)
 
     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
-        cat_features = list(tensor.cat_features.keys()) or []
+        num_features = None
+        cat_features = None
 
-        for cat_name in cat_features:
-            params = tensor.cat_features[cat_name]
-            probs = torch.nn.functional.softmax(params, dim=-1)
-            scaled = self.scale_to_gen_len(probs, gen_len)
+        cat_features_names = list(tensor.cat_features.keys()) or []
+        if cat_features_names:
+            cat_features = []
+            for cat_name in cat_features_names:
+                params = tensor.cat_features[cat_name]
+                probs = torch.nn.functional.softmax(params, dim=-1)
+                scaled = self.scale_to_gen_len(probs, gen_len)
 
-            assert all(scaled.sum(dim=1) == gen_len)
+                assert all(scaled.sum(dim=1) == gen_len)
 
-            tensor.cat_features[cat_name] = self.counts_to_indices(scaled).T
+                cat_features.append(self.counts_to_indices(scaled).T)
+            
+
+            cat_features = torch.stack(cat_features, dim=2)
+
         num_names = tensor.num_features_names or []
 
         if len(num_names) > 0:
             num_features = []
             for name in num_names:
-                idx = 2 * tensor.num_features_names.index(name)
+                idx = 2 * num_names.index(name)
                 idxs = [idx, idx + 1]
                 alpha_raw, beta_raw = tensor.num_features[:, idxs].unbind(dim=1)
                 # alpha = torch.nn.functional.softmax(alpha_raw)
@@ -306,7 +314,7 @@ class OneShotDistributionGenerator(BaseGenerator):
 
                 dist = torch.distributions.Normal(alpha_raw, beta)
                 num_features.append(dist.sample((gen_len,)))
-            tensor.num_features = torch.stack(num_features, dim=2)
+            num_features = torch.stack(num_features, dim=2)
         alpha_raw, beta_raw = tensor.time.unbind(dim=1)
         # alpha = torch.nn.functional.softplus(alpha_raw)
         beta = torch.nn.functional.softplus(beta_raw)
@@ -316,9 +324,17 @@ class OneShotDistributionGenerator(BaseGenerator):
 
         assert (tensor.lengths == 1).all()
         tensor.lengths *= gen_len
-        return tensor
+        return GenBatch(
+            lengths=tensor.lengths,
+            time=tensor.time,
+            index=None, 
+            num_features=num_features,
+            num_features_names=num_names,
+            cat_features=cat_features,
+            cat_features_names=cat_features_names
+        )
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 
@@ -337,118 +353,118 @@ class OneShotDistributionGenerator(BaseGenerator):
             return pred  # Return GenBatch of size [gen_len, B, D]
 
 
-class OneShotGaussianGenerator(BaseGenerator):
+# class OneShotGaussianGenerator(BaseGenerator):
 
-    K = 1  # number of Gaussian
-    PARAMS_NUMBER = 3  # mu + sigma + pi (логиты для комбинации гусян)
+#     K = 1  # number of Gaussian
+#     PARAMS_NUMBER = 3  # mu + sigma + pi (логиты для комбинации гусян)
 
-    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
-        super().__init__()
+#     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+#         super().__init__()
 
-        self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
-        )
-        if model_config.autoencoder.checkpoint:
-            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
-            )
+#         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
+#             data_conf, model_config.autoencoder
+#         )
+#         if model_config.autoencoder.checkpoint:
+#             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
+#             msg = self.autoencoder.load_state_dict(
+#                 ckpt["model"]["autoencoder"], strict=False
+#             )
 
-        if model_config.autoencoder.frozen:
-            self.autoencoder = freeze_module(self.autoencoder)
+#         if model_config.autoencoder.frozen:
+#             self.autoencoder = freeze_module(self.autoencoder)
 
-        encoder_params = model_config.latent_encoder.params or {}
-        encoder_params["input_size"] = self.autoencoder.encoder.output_dim
+#         encoder_params = model_config.latent_encoder.params or {}
+#         encoder_params["input_size"] = self.autoencoder.encoder.output_dim
 
-        self.encoder = AutoregressiveEncoder(
-            model_config.latent_encoder.name, encoder_params
-        )
-        self.poller = (
-            TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
-        )
+#         self.encoder = AutoregressiveEncoder(
+#             model_config.latent_encoder.name, encoder_params
+#         )
+#         self.poller = (
+#             TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
+#         )
 
-        self.gen_len = data_conf.generation_len
-        self.num_projection = torch.nn.Linear(
-            len(data_conf.num_names),
-            len(data_conf.num_names) * self.K * self.PARAMS_NUMBER,
-        )
-        self.time_projection = torch.nn.Linear(1, self.K * self.PARAMS_NUMBER)
+#         self.gen_len = data_conf.generation_len
+#         self.num_projection = torch.nn.Linear(
+#             len(data_conf.num_names),
+#             len(data_conf.num_names) * self.K * self.PARAMS_NUMBER,
+#         )
+#         self.time_projection = torch.nn.Linear(1, self.K * self.PARAMS_NUMBER)
 
-    def forward(self, x: GenBatch) -> PredBatch:
-        """
-        Forward pass of the Auto-regressive Transformer
-        Args:
-            x (GenBatch): Input sequence [L, B, D]
+#     def forward(self, x: GenBatch) -> PredBatch:
+#         """
+#         Forward pass of the Auto-regressive Transformer
+#         Args:
+#             x (GenBatch): Input sequence [L, B, D]
 
-        """
-        x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
-        x = self.encoder(x)  # [L, B, D]
-        x = self.poller(x)  # [B, D]
-        x = Seq(
-            tokens=x,
-            lengths=torch.ones_like(x, dtype=torch.long),
-            time=None,
-        )
-        x = self.autoencoder.decoder(x)
-        B = x.time.shape[0]
-        if x.time is not None:
-            x.time = self.time_projection(x.time[:, None])
-            x.time = x.time.reshape(B, self.K, self.PARAMS_NUMBER)
-        if x.num_features is not None:
-            x.num_features = self.num_projection(x.num_features)
-            x.num_features = x.num_features.reshape(
-                B, len(x.num_features_names), self.K, self.PARAMS_NUMBER
-            )
-        return x
+#         """
+#         x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
+#         x = self.encoder(x)  # [L, B, D]
+#         x = self.poller(x)  # [B, D]
+#         x = Seq(
+#             tokens=x,
+#             lengths=torch.ones_like(x, dtype=torch.long),
+#             time=None,
+#         )
+#         x = self.autoencoder.decoder(x)
+#         B = x.time.shape[0]
+#         if x.time is not None:
+#             x.time = self.time_projection(x.time[:, None])
+#             x.time = x.time.reshape(B, self.K, self.PARAMS_NUMBER)
+#         if x.num_features is not None:
+#             x.num_features = self.num_projection(x.num_features)
+#             x.num_features = x.num_features.reshape(
+#                 B, len(x.num_features_names), self.K, self.PARAMS_NUMBER
+#             )
+#         return x
 
-    def sample_numfeature(self, tensor, gen_len):
-        pi_logits, mu_raw, log_sigma = tensor.unbind(dim=-1)
-        pi = torch.nn.functional.softmax(pi_logits, dim=-1)
-        sigma = torch.nn.functional.softplus(log_sigma).clamp(1e-3, 5)
-        component = torch.distributions.Normal(mu_raw, sigma)
-        mixing = torch.distributions.Categorical(probs=pi)
-        dist = torch.distributions.MixtureSameFamily(mixing, component)
-        return dist.sample((gen_len,))
+#     def sample_numfeature(self, tensor, gen_len):
+#         pi_logits, mu_raw, log_sigma = tensor.unbind(dim=-1)
+#         pi = torch.nn.functional.softmax(pi_logits, dim=-1)
+#         sigma = torch.nn.functional.softplus(log_sigma).clamp(1e-3, 5)
+#         component = torch.distributions.Normal(mu_raw, sigma)
+#         mixing = torch.distributions.Categorical(probs=pi)
+#         dist = torch.distributions.MixtureSameFamily(mixing, component)
+#         return dist.sample((gen_len,))
 
-    def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
-        cat_features = list(tensor.cat_features.keys()) or []
+#     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
+#         cat_features = list(tensor.cat_features.keys()) or []
 
-        for cat_name in cat_features:
-            params = tensor.cat_features[cat_name]
-            dist = torch.distributions.Categorical(logits=params)
-            tensor.cat_features[cat_name] = dist.sample((gen_len,))
+#         for cat_name in cat_features:
+#             params = tensor.cat_features[cat_name]
+#             dist = torch.distributions.Categorical(logits=params)
+#             tensor.cat_features[cat_name] = dist.sample((gen_len,))
 
-        num_names = tensor.num_features_names or []
-        num_features = []
-        assert len(num_names) == 1, "Check numerical loss at first!!!"
-        for name in num_names:
-            idx = tensor.num_features_names.index(name)
-            sampled = self.sample_numfeature(tensor.num_features[:, idx, ...], gen_len)
-            num_features.append(sampled)
+#         num_names = tensor.num_features_names or []
+#         num_features = []
+#         assert len(num_names) == 1, "Check numerical loss at first!!!"
+#         for name in num_names:
+#             idx = tensor.num_features_names.index(name)
+#             sampled = self.sample_numfeature(tensor.num_features[:, idx, ...], gen_len)
+#             num_features.append(sampled)
 
-        tensor.num_features = torch.stack(num_features, dim=2)  # L, B, NUM_FEATURES
+#         tensor.num_features = torch.stack(num_features, dim=2)  # L, B, NUM_FEATURES
 
-        tensor.time = self.sample_numfeature(tensor.time, gen_len)
+#         tensor.time = self.sample_numfeature(tensor.time, gen_len)
 
-        assert (tensor.lengths == 1).all()
-        tensor.lengths *= gen_len
+#         assert (tensor.lengths == 1).all()
+#         tensor.lengths *= gen_len
 
-        return tensor
+#         return tensor
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        """
-        Auto-regressive generation using the transformer
+#     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+#         """
+#         Auto-regressive generation using the transformer
 
-        Args:
-            x (Seq): Input sequence [L, B, D]
+#         Args:
+#             x (Seq): Input sequence [L, B, D]
 
-        """
-        hist = deepcopy(hist)
+#         """
+#         hist = deepcopy(hist)
 
-        with torch.no_grad():
-            pred = self.sample(self.forward(hist), gen_len).to_batch()
-        if with_hist:
-            hist.append(pred)
-            return hist  # Return GenBatch of size [L + gen_len, B, D]
-        else:
-            return pred  # Return GenBatch of size [gen_len, B, D]
+#         with torch.no_grad():
+#             pred = self.sample(self.forward(hist), gen_len).to_batch()
+#         if with_hist:
+#             hist.append(pred)
+#             return hist  # Return GenBatch of size [L + gen_len, B, D]
+#         else:
+#             return pred  # Return GenBatch of size [gen_len, B, D]
