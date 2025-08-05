@@ -6,7 +6,7 @@ from typing import Any, Mapping, Optional, Union
 import numpy as np
 import torch
 import torch.nn.functional as F
-from ebes.types import Batch
+from ebes.types import Batch, Seq
 
 from ..utils import RateLimitFilter
 
@@ -260,3 +260,17 @@ def gather(tensor, target_ids):
         return torch.gather(tensor, 0, target_ids)  # [target_len, B, D]
     else:
         raise ValueError
+
+def get_seq_tail(seq: Seq, tail_len: int):
+    assert seq.lengths.min() >= tail_len, "tail_len is too big"
+    start_index = seq.lengths - tail_len  # [1, B]
+    target_ids = (
+        torch.arange(tail_len, device=start_index.device)[:, None] + start_index
+    )  # [target_len, B]
+
+    return Seq(
+        tokens=gather(seq.tokens, target_ids),
+        lengths=torch.ones_like(seq.lengths) * tail_len,
+        time=gather(seq.time, target_ids),
+        num_mask=gather(seq.num_mask, target_ids),
+    )
