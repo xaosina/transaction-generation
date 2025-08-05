@@ -54,12 +54,12 @@ optuna:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
 
-    - ["model.encoder.params.num_layers", [suggest_int, {low: 1, high: 10, log: False}]]
-    - ["model.encoder.params.scale_hidden", [suggest_int, {low: 1, high: 16, log: False}]]
-    - ["model.encoder.params.dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
-    - ["model.encoder.params.pos_dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
-    - ["model.encoder.params.pos_enc_type", [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]]
-    - ["model.encoder.params.num_heads", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
+    - ["model.latent_encoder.params.num_layers", [suggest_int, {low: 1, high: 10, log: False}]]
+    - ["model.latent_encoder.params.scale_hidden", [suggest_int, {low: 1, high: 16, log: False}]]
+    - ["model.latent_encoder.params.dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
+    - ["model.latent_encoder.params.pos_dropout", [suggest_float, {low: 0, high: 0.6, log: False}]]
+    - ["model.latent_encoder.params.pos_enc_type", [suggest_categorical, {choices: ["base", "cat", "learned", "none"]}]]
+    - ["model.latent_encoder.params.num_heads", [suggest_categorical, {choices: [1, 2, 4, 8]}]]
 
     # - ["model.autoencoder.params.use_time", ["suggest_categorical", {choices: [True, False]}]]
     - 
