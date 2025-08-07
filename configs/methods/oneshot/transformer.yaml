@@ -68,5 +68,5 @@ optuna:
       - ["suggest_categorical", {choices: [True, False]}]
 
     - ["model.autoencoder.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.autoencoder.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.autoencoder.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.params.cat_emb_dim", [suggest_int, {low: 8, high: 128, log: False, step: 8}]]
+    - ["model.autoencoder.params.num_emb_dim", [suggest_int, {low: 8, high: 128, log: False, step: 8}]]

@@ -65,8 +65,8 @@ optuna:
     - 
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
-    - ["model.preprocessor.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
-    - ["model.preprocessor.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
-    - ["model.preprocessor.params.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.autoencoder.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.autoencoder.params.cat_emb_dim", [suggest_int, {low: 8, high: 128, log: False, step: 8}]]
+    - ["model.autoencoder.params.num_emb_dim", [suggest_int, {low: 8, high: 128, log: False, step: 8}]]
 
     # - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]
