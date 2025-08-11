@@ -1,0 +1,30 @@
+# MODEL
+model:
+  name: AutoregressiveGenerator
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 256
+      num_emb_dim: 1
+      num_norm: True
+      use_time: True
+    pretrain: False
+    frozen: False
+    checkpoint:
+    batch_transforms:
+  latent_encoder:
+    name: GRU
+    params:
+      hidden_size: 512
+      num_layers: 1
+
+
+data_conf:
+  train_transforms:
+    "1":
+      TimeToDiff:
+        disable: True
+  val_transforms:
+    "1":
+      TimeToDiff:
+        disable: True

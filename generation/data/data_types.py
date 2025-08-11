@@ -261,6 +261,7 @@ def gather(tensor, target_ids):
     else:
         raise ValueError
 
+
 def get_seq_tail(seq: Seq, tail_len: int):
     assert seq.lengths.min() >= tail_len, "tail_len is too big"
     start_index = seq.lengths - tail_len  # [1, B]
@@ -274,3 +275,9 @@ def get_seq_tail(seq: Seq, tail_len: int):
         time=gather(seq.time, target_ids),
         num_mask=gather(seq.num_mask, target_ids),
     )
+
+
+def get_valid_mask(x: Seq | GenBatch):
+    L = x.lengths.max()
+    valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths # L, B
+    return valid_mask
