@@ -79,12 +79,13 @@ METADATA = {
     ],
     "index_columns": ["client_id"],
     "target_columns": [],
-    "raw_time_name": "datetime",
+    "raw_time_name": "event_time",
     "ordering_columns": ["days_since_first_tx"],
 }
 
 
 def prepocess_full_mbd(
+    spark,
     raw_data_path,
     output_path,
     temp_path: Path,
@@ -92,13 +93,15 @@ def prepocess_full_mbd(
     debug=False,
 ):
 
-    spark = spark_connection()
     assert os.path.isdir(raw_data_path)
     df = read_data(spark, raw_data_path, debug=debug)
 
     df = choose_years(df, [2021, 2022])
     df = filter_by_trx_in_month(df, 2, 100)
     df = select_clients(df, METADATA["index_columns"][0], clients_number)
+
+    df = df.persist()
+    _ = df.count()  
 
     # save_quantile_statistic(df, temp_path, features_to_transform=["amount"])
 
@@ -121,8 +124,7 @@ def prepocess_full_mbd(
         (temp_path / ".test.csv").as_posix(), header=True, mode="overwrite"
     )
 
-    spark.stop()
-
+    return train_dataset, test_dataset
 
 def save_quantile_statistic(
     df, temp_path: Path | str, features_to_transform=None
@@ -154,10 +156,12 @@ def main(
     debug=False,
     quantile_transform=False,
 ):
+    spark = spark_connection()
+    spark.sparkContext.setLogLevel("ERROR")
     temp_path = Path(f"data/temp-{dataset_name}")
     output_path = Path(f"data/{dataset_name}")
 
-    prepocess_full_mbd(raw_data_path, output_path, temp_path, clients_number, debug=debug)
+    _ = prepocess_full_mbd(spark, raw_data_path, output_path, temp_path, clients_number, debug=debug)
 
     save_to_parquet(
         temp_path / ".train.csv",
@@ -176,6 +180,8 @@ def main(
         metadata=METADATA,
         overwrite=True,
     )
+
+    spark.stop()
 
     if quantile_transform:
         for file in temp_path.glob("quantile_transform_*.pt"):

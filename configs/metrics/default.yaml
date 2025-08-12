@@ -14,10 +14,10 @@ evaluator:
         k: 10
     - NDCG:
         k: 15
-    # - MatchedReconstruction:
-    #     max_shift: 0
-    # - MatchedReconstruction:
-    #     max_shift: 32
+    - MatchedReconstruction:
+        max_shift: 0
+    - MatchedReconstruction:
+        max_shift: 32
     - Cardinality
     - F1Metric:
         average: macro
@@ -31,3 +31,9 @@ evaluator:
     #     average: macro
     # - Recall:
     #     average: micro
+
+    # - Density:
+    #     log_cols: ["amount_rur"]
+    #     with_timediff: True
+    #     save_details: True
+    #     verbose: False

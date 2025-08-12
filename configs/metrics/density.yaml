@@ -1,0 +1,8 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  metrics:
+    - Density:
+        log_cols: []
+        with_timediff: True
+        save_details: True
+        verbose: False

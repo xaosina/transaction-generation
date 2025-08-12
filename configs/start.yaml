@@ -9,7 +9,7 @@ runner:
   seed_keys:
     - "common_seed"
   params:
-    n_runs: 1
+    n_runs: 3
     n_workers: 1
   device_list:
 
