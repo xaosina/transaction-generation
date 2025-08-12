@@ -1,0 +1,24 @@
+config_factory: [start, datasets/shakespeare/shakespeare, methods/gpt, 1to1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 5.459389520559404e-09
+    lr: 0.0059487840739622785
+model:
+  latent_encoder:
+    params:
+      n_layer: 12
+      n_head: 16
+      n_embd: 64
+      dropout: 0.27090734310617026
+      bias: false
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 51
+      num_emb_dim: 10
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

@@ -6,14 +6,6 @@ evaluator:
     # - KLDiv
     # - JSDiv
     - Levenshtein
-    - NDCG:
-        k: 1
-    - NDCG:
-        k: 5
-    - NDCG:
-        k: 10
-    - NDCG:
-        k: 15
     - MatchedReconstruction:
         max_shift: 0
     - MatchedReconstruction:

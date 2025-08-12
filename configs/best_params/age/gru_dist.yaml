@@ -1,0 +1,23 @@
+config_factory: [start, datasets/age/age, methods/oneshot/gru, oneshot/dist, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 1.3019797362823218e-15
+    lr: 0.0005079609653151523
+model:
+  latent_encoder:
+    params:
+      hidden_size: 504
+      num_layers: 1
+      dropout: 1.3502129508773067e-10
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 76
+      num_emb_dim: 86
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
