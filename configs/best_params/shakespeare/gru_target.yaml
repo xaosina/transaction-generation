@@ -1,4 +1,4 @@
-config_factory: [start, datasets/shakespeare/shakespeare, methods/oneshot/gru, oneshot/target, allto1, metrics/default]
+config_factory: [start, datasets/shakespeare/shakespeare, methods/oneshot/gru, methods/oneshot/target, allto1, metrics/default]
 
 optimizer:
   params:

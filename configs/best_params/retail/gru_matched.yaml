@@ -1,4 +1,4 @@
-config_factory: [start, datasets/retail/retail, methods/oneshot/gru, oneshot/matched, allto1, metrics/default]
+config_factory: [start, datasets/retail/retail, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
 
 optimizer:
   params:

@@ -120,6 +120,31 @@ class GenBatch(Batch):
     target_time: np.ndarray | torch.Tensor | None = None  # (target_len, batch)
     monotonic_time: bool = True
 
+    @property
+    def shape(self):
+        if self.num_features is not None:
+            return self.num_features.shape[:2]
+        if self.cat_features is not None:
+            return self.cat_features.shape[:2]
+        assert self.time is not None, "All tensors are None!"
+        return self.time.shape
+
+    @property
+    def device(self):
+        if self.num_features is not None:
+            return self.num_features.device
+        if self.cat_features is not None:
+            return self.cat_features.device
+        assert isinstance(self.time, torch.tensor), "No tensors in batch!"
+        return self.time.device
+
+    def valid_mask(self):
+        L = self.lengths.max()
+        valid_mask = (
+            torch.arange(L, device=self.lengths.device)[:, None] < self.lengths
+        )  # L, B
+        return valid_mask
+
     def get_numerical(self):
         tensors = [self.time.unsqueeze(-1)]
         if self.num_features is not None:
@@ -277,7 +302,7 @@ def get_seq_tail(seq: Seq, tail_len: int):
     )
 
 
-def get_valid_mask(x: Seq | GenBatch):
+def valid_mask(x: Seq | GenBatch):
     L = x.lengths.max()
     valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths # L, B
     return valid_mask

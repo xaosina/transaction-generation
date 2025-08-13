@@ -8,7 +8,7 @@ from ebes.types import Seq
 from generation.models import autoencoders
 from generation.utils import freeze_module
 
-from ...data.data_types import GenBatch, LatentDataConfig, PredBatch, get_valid_mask
+from ...data.data_types import GenBatch, LatentDataConfig, PredBatch, valid_mask
 from ..encoders import AutoregressiveEncoder
 from . import BaseGenerator, ModelConfig
 
@@ -44,7 +44,7 @@ class ConditionalHead(BaseSeq2Seq):
         return x.reshape(b, self.output_dim)  # (B, KO).
 
     def forward(self, seq: Seq):
-        mask = get_valid_mask(seq)
+        mask = valid_mask(seq)
         x = seq.tokens
         assert x.ndim > 2  # (L, B, D).
         shape = list(x.shape)
