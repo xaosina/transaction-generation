@@ -3,9 +3,7 @@ evaluator:
   topk: 1
   temperature: 1.
   metrics:
-    - OTD:
-        max_shift: -1
-        num_metric: r1
+    - OTD
     - Cardinality
     - F1Metric:
         average: macro

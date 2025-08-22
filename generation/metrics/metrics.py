@@ -122,10 +122,10 @@ def r1_score(true_num, pred_num):
         pred_num: [L, B, D]
     """
     gen_len = true_num.shape[0]
-    denominator = ((true_num - true_num.median(0)[0]).abs()).sum(
+    denominator = np.abs(true_num - np.median(true_num, 0)[0]).sum(
         axis=0, dtype=np.float64
     )  # B, D
-    nominator = (pred_num[:, None] - true_num[None, :]).abs()  # [L, L, B, D]
+    nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
     denominator[nominator.sum(0).sum(0) == 0] = 1
     nominator[:, :, (denominator == 0)] = 1 / gen_len
     denominator[denominator == 0] = 1
@@ -139,8 +139,8 @@ def smape_score(true_num, pred_num):
         pred_num: [L, B, D]
     """
     gen_len = true_num.shape[0]
-    nominator = (pred_num[:, None] - true_num[None, :]).abs()  # [L, L, B, D]
-    denominator = pred_num[:, None].abs() + true_num[None, :].abs() # [L, L, B, D]
+    nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
+    denominator = np.abs(pred_num[:, None]) + np.abs(true_num[None, :]) # [L, L, B, D]
     denominator[nominator == 0] = 1
     smape = nominator / denominator / gen_len # L, L, B, D
 
@@ -221,7 +221,12 @@ class OTD(BaseMetric):
         }
 
     def __repr__(self):
-        return f"MatchedReconstruction {self.max_shift}"
+        res = "OTD"
+        if self.max_shift >= 0:
+            res += f" {self.max_shift}"
+        if self.num_metric != "r1":
+            res += f" {self.num_metric}"
+        return  res
 
 
 class KLDiv(BaseMetric):
