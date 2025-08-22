@@ -1,0 +1,22 @@
+config_factory: [start, datasets/alphabattle/alphabattle, methods/gru, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 6.882913563594073e-15
+    lr: 0.006812002660997401
+model:
+  latent_encoder:
+    params:
+      hidden_size: 200
+      num_layers: 1
+      dropout: 0.0007779770138537455
+  autoencoder:
+    params:
+      num_norm: false
+      cat_emb_dim: 127
+      num_emb_dim: 116
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

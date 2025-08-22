@@ -1,0 +1,70 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'loss' #'Reconstruction overall'
+  iters_per_epoch: null
+  patience: 10
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+
+# DATA
+data_conf:
+  dataset_name: alphabattle
+  cat_cardinalities:
+    - ["payment_system", 7]
+    - ["mcc_category", 28]
+    - ["card_type", 166]
+    - ["mcc", 109]
+  num_names:
+    - amnt
+  index_name: app_id
+  time_name: hours_since_first_tx
+  focus_on:
+  target_token: "mcc_category"
+
+  test_path: 'data/alphabattle-full/test'
+  train_path: 'data/alphabattle-full/train'
+  val_ratio: 0.15
+  num_workers: 0
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
+  max_seq_len:  &max_seq_len 350
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1.0
+    "1":
+      TimeToDiff:
+        disable: false
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
+    "3":
+      CutTargetSequence:
+        target_len: 0
+    # "shuffle":
+    #   ShuffleBatch:
+    #     untouched_slice: [None, None]
+
+  val_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1.0
+    "1":
+      TimeToDiff:
+        disable: False
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len
