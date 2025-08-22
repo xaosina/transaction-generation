@@ -26,9 +26,9 @@ class TPPConfig:
 @dataclass(frozen=True)
 class ModelConfig:
     name: str
-    latent_encoder: LatentEncConfig = field(default_factory=LatentEncConfig)
+    latent_encoder: Optional[LatentEncConfig] = None
     # tpp: TPPConfig = field(default_factory=TPPConfig)
-    autoencoder: AEConfig = field(default_factory=AEConfig)
+    autoencoder: Optional[AEConfig] = None
     pooler: str = "last"
     params: Optional[dict[str, Any]] = None
 
