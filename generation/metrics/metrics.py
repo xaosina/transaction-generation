@@ -14,7 +14,6 @@ import pandas as pd
 from Levenshtein import distance as lev_score
 from sdmetrics.reports.single_table import QualityReport
 from sklearn.metrics import mean_squared_error as mse_score
-from sklearn.metrics import r2_score
 from sklearn.metrics import accuracy_score
 from scipy.stats import entropy
 from scipy.optimize import linear_sum_assignment
@@ -83,7 +82,7 @@ class Reconstruction(BaseMetric):
 
 
 def get_perfect_score(score, max_shift, gen_len):
-    cost = np.transpose(-score.mean(-1), (2, 0, 1))  # [B, L, L]
+    cost = np.transpose(score.mean(-1), (2, 0, 1))  # [B, L, L]
     if max_shift >= 0:
         i_indices = np.arange(gen_len)[:, None]  # L, 1
         j_indices = np.arange(gen_len)
@@ -94,14 +93,63 @@ def get_perfect_score(score, max_shift, gen_len):
     L, B, D = score.shape[1:]
     perfect_score = np.zeros_like(score, shape=(B, D))
     for b in range(B):
-        workers, tasks = linear_sum_assignment(cost[b], maximize=False)
+        workers, tasks = linear_sum_assignment(cost[b], maximize=True)
         perfect_score[b] = score[workers, tasks, b].sum(0)  # D
     return perfect_score.mean(0)
 
 
+def r2_score(true_num, pred_num):
+    """R2 score for numerical
+    Input:
+        true_num: [L, B, D]
+        pred_num: [L, B, D]
+    """
+    gen_len = true_num.shape[0]
+    denominator = ((true_num - true_num.mean(0)) ** 2).sum(
+        axis=0, dtype=np.float64
+    )  # B, D
+    nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
+    denominator[nominator.sum(0).sum(0) == 0] = 1
+    nominator[:, :, (denominator == 0)] = 1 / gen_len
+    denominator[denominator == 0] = 1
+
+    return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
+
+def r1_score(true_num, pred_num):
+    """R1 score for numerical(MAE analog for R2)
+    Input:
+        true_num: [L, B, D]
+        pred_num: [L, B, D]
+    """
+    gen_len = true_num.shape[0]
+    denominator = ((true_num - true_num.median(0)[0]).abs()).sum(
+        axis=0, dtype=np.float64
+    )  # B, D
+    nominator = (pred_num[:, None] - true_num[None, :]).abs()  # [L, L, B, D]
+    denominator[nominator.sum(0).sum(0) == 0] = 1
+    nominator[:, :, (denominator == 0)] = 1 / gen_len
+    denominator[denominator == 0] = 1
+
+    return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
+
+def smape_score(true_num, pred_num):
+    """1 - sMAPE score
+    Input:
+        true_num: [L, B, D]
+        pred_num: [L, B, D]
+    """
+    gen_len = true_num.shape[0]
+    nominator = (pred_num[:, None] - true_num[None, :]).abs()  # [L, L, B, D]
+    denominator = pred_num[:, None].abs() + true_num[None, :].abs() # [L, L, B, D]
+    denominator[nominator == 0] = 1
+    smape = nominator / denominator / gen_len # L, L, B, D
+
+    return 1 / gen_len - smape  # [L, L, B, D]
+
 @dataclass
-class MatchedReconstruction(BaseMetric):
-    max_shift: int = 0
+class OTD(BaseMetric):
+    max_shift: int = -1
+    num_metric: str = "r1"
 
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
@@ -109,9 +157,10 @@ class MatchedReconstruction(BaseMetric):
         orig, gen = deepcopy(orig), deepcopy(gen)
 
         # Time to diff
-        time_name = self.data_conf.time_name
-        orig[time_name] = orig[time_name].map(lambda x: np.diff(x, 1))
-        gen[time_name] = gen[time_name].map(lambda x: np.diff(x, 1))
+        # time_name = self.data_conf.time_name
+        # orig[time_name] = orig[time_name].map(lambda x: np.diff(x, 1))
+        # gen[time_name] = gen[time_name].map(lambda x: np.diff(x, 1))
+
         # Cut gen_len
         gen_len = self.data_conf.generation_len
         seq_cols = self.data_conf.focus_on
@@ -119,7 +168,7 @@ class MatchedReconstruction(BaseMetric):
         gen[seq_cols] = gen[seq_cols].map(lambda x: x[-gen_len:])
 
         # Prepare num arrays
-        r2 = np.empty((gen_len, gen_len, orig.shape[0], 0))
+        num_metric = np.empty((gen_len, gen_len, orig.shape[0], 0))
         if self.data_conf.focus_num:
             true_num = orig[self.data_conf.focus_num].values  # B, D
             pred_num = gen[self.data_conf.focus_num].values  # B, D
@@ -134,15 +183,12 @@ class MatchedReconstruction(BaseMetric):
                 (2, 0, 1),
             )  # [gen_len, B, D]
 
-            denominator = ((true_num - true_num.mean(0)) ** 2).sum(
-                axis=0, dtype=np.float64
-            )  # B, D
-            nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
-            denominator[nominator.sum(0).sum(0) == 0] = 1
-            nominator[:, :, (denominator == 0)] = 1 / gen_len
-            denominator[denominator == 0] = 1
-
-            r2 = 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
+            if self.num_metric == "r2":
+                num_metric = r2_score(true_num, pred_num)
+            elif self.num_metric == "r1":
+                num_metric = r1_score(true_num, pred_num)
+            elif self.num_metric == "smape":
+                num_metric = smape_score(true_num, pred_num)
 
         # Prepare cat arrays
         accuracy = np.empty((gen_len, gen_len, orig.shape[0], 0))
@@ -163,7 +209,7 @@ class MatchedReconstruction(BaseMetric):
                 pred_cat[:, None] == true_cat[None, :]
             ) / gen_len  # [L, L, B, D]
 
-        full_score = np.concatenate([r2, accuracy], axis=-1)  # [L, L, B, D]
+        full_score = np.concatenate([num_metric, accuracy], axis=-1)  # [L, L, B, D]
         perfect_score = get_perfect_score(full_score, self.max_shift, gen_len)
         results = dict(
             zip(self.data_conf.focus_num + self.data_conf.focus_cat, perfect_score)
@@ -296,9 +342,11 @@ class BinaryMetric(BaseMetric):
         ).map(lambda x: x[-self.data_conf.generation_len :])
         return df.apply(self.get_scores, axis=1).mean()
 
+
 @dataclass
 class NDCG(BinaryMetric):
     k: str = 1
+
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         set_gt = set(gt)
@@ -308,9 +356,10 @@ class NDCG(BinaryMetric):
         dcg = sum(denom[i] for i in range(pred_len) if pred[i] in set_gt)
         idcg = sum(denom[:ground_truth_len])
         return dcg / idcg
-    
+
     def __repr__(self):
         return f"NDCG@{self.k} on {self.data_conf.target_token}"
+
 
 @dataclass
 class Levenshtein(BinaryMetric):
@@ -596,7 +645,7 @@ class GenVsHistoryMetric(BaseMetric):
         gen_score = self.score_for_df(gen)
         orig_score = self.score_for_df(orig)
         # score = 1 - (1 + abs(gen_score - orig_score))
-        return {"gen": gen_score, "orig": orig_score} #"score": score, 
+        return {"gen": gen_score, "orig": orig_score}  # "score": score,
 
 
 @dataclass
