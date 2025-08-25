@@ -31,6 +31,7 @@ class TrainConfig:
     ckpt_resume: Optional[str] = None
     profiling: bool = False
     verbose: bool = True
+    metrics_on_train: bool = False
 
 
 class Trainer:

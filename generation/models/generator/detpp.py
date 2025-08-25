@@ -51,7 +51,7 @@ class ConditionalHead(BaseSeq2Seq):
         x_masked = x[mask]  # (V, D).
         v = len(x_masked)
         x_mapped = self.forward_impl(x_masked.flatten(0, -2)).reshape(
-            *([v] + shape[2:-1] + [self.output_size])
+            *([v] + shape[2:-1] + [self.output_dim])
         )  # (V, *, D).
         x_new = torch.zeros(
             *[shape[:-1] + [self.output_dim]],
@@ -90,7 +90,30 @@ class DeTPP(BaseGenerator):
             self.autoencoder.encoder.output_dim, model_config.params["k"]
         )
 
-        data_conf.check_focus_on(self.autoencoder.encoder.use_time)
+    def _apply_delta(self, x: GenBatch):
+        x = deepcopy(x)
+        deltas = x.time
+        deltas[:, 1:] -= deltas[:, :-1]
+        deltas[:, 0] = 0
+        # deltas.clip_(min=0, max=self._max_time_delta)
+        x.time = deltas
+        return x
+
+    def _sort_time_and_revert_delta(self, hist, pred):
+        # Sort by time.
+        order = pred.time.argsort(dim=0)  # (L, B).
+        for attr in ["time", "num_features", "cat_features"]:
+            tensor = getattr(pred, attr)
+            if tensor is None:
+                continue
+            shaped_order = order.reshape(
+                *(list(order.shape) + [1] * (tensor.ndim - order.ndim))
+            )
+            tensor = tensor.take_along_dim(shaped_order, dim=0)
+            setattr(pred, attr, tensor)
+        # Revert delta from hist
+        pred.time += hist.time[hist.lengths - 1, torch.arange(hist.shape[1])]
+        return pred
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
@@ -99,16 +122,19 @@ class DeTPP(BaseGenerator):
             x (GenBatch): Input sequence [L, B, D]
 
         """
-        x = deepcopy(x)
-        deltas = x.time
-        deltas[:, 1:] -= deltas[:, :-1]
-        deltas[:, 0] = 0
-        # deltas.clip_(min=0, max=self._max_time_delta)
-        x.time = deltas
+        L, B = x.shape
+        x = self._apply_delta(x)
         x = self.autoencoder.encoder(x, copy=False)  # Sequence of [L, B, D]
-        x = self.encoder(x)
-        x = self.next_k_head(x) # L, B, D*k
-        x = self.autoencoder.decoder(x)
+        x = self.encoder(x)  # [L, B, D]
+        x = self.next_k_head(x)  # L, B, K * D
+        x = Seq(
+            tokens=x.tokens.reshape(L, B * self.next_k_head.k, -1),
+            lengths=x.lengths.repeat_interleave(self.next_k_head.k, 0),
+            time=None,
+        )
+        x = self.autoencoder.decoder(x)  # [L, B * K, preds]
+        x = x.k_reshape(self.next_k_head.k)  # [L, B, K, pred]
+
         return x
 
     def generate(
@@ -129,13 +155,22 @@ class DeTPP(BaseGenerator):
         hist = deepcopy(hist)
 
         with torch.no_grad():
-            for _ in range(gen_len):
-                x = self.autoencoder.encoder(hist)
-                x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
-                x = self.autoencoder.decoder.generate(
-                    x, topk=topk, temperature=temperature
-                )  # GenBatch with sizes [1, B, D] for cat, num
-                hist.append(x)  # Append GenBatch, result is [L+1, B, D]
+            L, B = hist.shape
+            x = self._apply_delta(hist)
+            x = self.autoencoder.encoder(hist, copy=False)
+            x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
+            x = self.next_k_head(x)  # 1, B, K * D
+            x = Seq(
+                tokens=x.tokens.reshape(B, self.next_k_head.k, -1).transpose(0, 1),
+                lengths=x.lengths * self.next_k_head.k,
+                time=None,
+            )
+            x = self.autoencoder.decoder.generate(
+                x, topk=topk, temperature=temperature
+            )  # GenBatch with sizes [1, B, D] for cat, num
+            x.time = x.time.clip(min=0)
+            x = self._sort_time_and_revert_delta(hist, x)
+            hist.append(x)  # Append GenBatch, result is [L+K, B, D]
         if with_hist:
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
