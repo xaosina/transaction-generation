@@ -1,20 +1,33 @@
-from copy import copy
 import logging
+from copy import copy
 from typing import Any, Mapping
 
 import numpy as np
 import torch
+from scipy.optimize import linear_sum_assignment
 from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
-from . import batch_tfs
-from . import loader_tfs
+from . import batch_tfs, loader_tfs
 from .batch_tfs import NewFeatureTransform
 from .collator import SequenceCollator
 from .data_types import DataConfig, LatentDataConfig
 from .dataset import ShardDataset
 
 logger = logging.getLogger()
+
+
+def batch_linear_assignment(cost):
+    b, w, t = cost.shape
+    matching = torch.full([b, w], -1, dtype=torch.long, device=cost.device)
+    for i in range(b):
+        workers, tasks = linear_sum_assignment(
+            cost[i].numpy(), maximize=False
+        )  # (N, 2).
+        workers = torch.from_numpy(workers)
+        tasks = torch.from_numpy(tasks)
+        matching[i].scatter_(0, workers, tasks)
+    return matching
 
 
 def save_partitioned_parquet(df, save_path, num_shards=20):
@@ -82,9 +95,13 @@ def get_latent_dataconf(
     )
 
 
-def get_transforms(data_conf: DataConfig): 
+def get_transforms(data_conf: DataConfig):
     loader_transforms = data_conf.loader_transforms
-    tfs = create_instances_from_module(loader_tfs, loader_transforms) if loader_transforms is not None else []
+    tfs = (
+        create_instances_from_module(loader_tfs, loader_transforms)
+        if loader_transforms is not None
+        else []
+    )
     for tf in tfs:
         data_conf = tf.new_dataconf(data_conf)
 
@@ -96,7 +113,10 @@ def get_dataloaders(outter_data_conf: DataConfig, seed: int):
 
     # Create datasets
     train_dataset, val_dataset = ShardDataset.train_val_split(
-        outter_data_conf.train_path, outter_data_conf, split_seed=seed, transforms=transforms
+        outter_data_conf.train_path,
+        outter_data_conf,
+        split_seed=seed,
+        transforms=transforms,
     )
     test_dataset = ShardDataset(
         outter_data_conf.test_path,
