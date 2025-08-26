@@ -40,7 +40,7 @@ schedulers:
   #     verbose: True
 
 loss:
-  name: baseline
+  name: BaselineLoss
   params:
     mse_weight: 0.5
 

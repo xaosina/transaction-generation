@@ -1,5 +1,5 @@
 loss:
-  name: matched
+  name: MatchedLoss
   params:
     mse_weight: 0.5
     max_shift: -1

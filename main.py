@@ -19,7 +19,7 @@ def pop_arg(args, key):
     while i < len(args):
         if args[i] == key:
             value = args[i + 1]
-            if key == "--config_factory":
+            if key in ["--config_factory", "--append_factory"]:
                 assert value[0] == "[" and value[-1] == "]", "Wrong factory format"
                 value = value[1:-1].split(",")
             i += 2
@@ -44,9 +44,12 @@ def run_config_factory(config_path, config_factory):
 def main():
     args = sys.argv[1:]
     args, config_factory = pop_arg(args, "--config_factory")
+    args, append_factory = pop_arg(args, "--append_factory")
     args, config_path = pop_arg(args, "--config_path")
     path = config_path or "config.yaml"
     config_factory = config_factory or OmegaConf.load(path).get("config_factory")
+    if append_factory is not None:
+        config_factory += append_factory
     merged_config = run_config_factory(config_path, config_factory)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as tmpfile:

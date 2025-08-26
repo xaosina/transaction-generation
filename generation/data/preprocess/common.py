@@ -263,20 +263,31 @@ def save_to_parquet(
         save_path.as_posix(),
         mode=mode,
     )
-    spark.stop()
 
 
-def code_categories(df, path, cat_features):
-    vcs = cat_freq(df, cat_features)
-    for vc in vcs:
-        df = vc.encode(df)
-        vc.write(path / "cat_codes" / vc.feature_name, mode="overwrite")
+def code_categories(df, cat_features, load_path=None, save_path=None):
+    assert load_path != save_path
+    if save_path is not None:
+        vcs = cat_freq(df, cat_features)
+        for vc in vcs:
+            df = vc.encode(df)
+            vc.write(save_path / "cat_codes" / vc.feature_name, mode="overwrite")
+    elif load_path is not None:
+        for cat_col in cat_features:
+            vc = CatMap.read(load_path / cat_col)
+            df = vc.encode(df)
     return df
 
 
-def code_indexes(df, path, index_columns):
-    print("Creating new idx codes.")
-    idc = cat_freq(df, index_columns)[0]
-    df = idc.encode(df)
-    idc.write(path / "idx", mode="overwrite")
+def code_indexes(df, index_columns, load_path=None, save_path=None):
+    assert load_path != save_path
+    
+    if save_path is not None:
+        idc = cat_freq(df, index_columns)[0]
+        df = idc.encode(df)
+        idc.write(save_path / "idx", mode="overwrite")
+    elif load_path is not None:
+        idc = CatMap.read(load_path)
+        df = idc.encode(df)
+    
     return df
