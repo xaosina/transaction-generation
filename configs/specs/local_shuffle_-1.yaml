@@ -2,5 +2,5 @@ data_conf:
   train_transforms:
     "local_shuffle":
       LocalShuffle:
-        max_shift: 32
+        max_shift: -1
         independent_tail: ${data_conf.generation_len}
