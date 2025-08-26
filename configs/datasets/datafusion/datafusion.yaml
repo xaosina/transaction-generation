@@ -1,7 +1,7 @@
 trainer:
   total_iters: 1_000_000
   total_epochs: null
-  ckpt_track_metric: 'loss' #'Reconstruction overall'
+  ckpt_track_metric: 'loss'
   iters_per_epoch: null
   patience: 10
   profiling: false
@@ -24,7 +24,7 @@ data_conf:
   test_path: 'data/datafusion2023/test'
   train_path: 'data/datafusion2023/train'
   val_ratio: 0.15
-  num_workers: 0
+  num_workers: 4
   train_resamples: 1
   batch_size: 128
 
@@ -43,16 +43,16 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: false
+        disable: True
+    "log_tfs":
+      Logarithm:
+        names: ["transaction_amt"]
     "local_shuffle":
       LocalShuffle:
         max_shift: 0
     "3":
       CutTargetSequence:
         target_len: 0
-    # "shuffle":
-    #   ShuffleBatch:
-    #     untouched_slice: [None, None]
 
   val_transforms:
     "0":
@@ -61,7 +61,10 @@ data_conf:
         scale: 365.0
     "1":
       TimeToDiff:
-        disable: False
+        disable: True
+    "log_tfs":
+      Logarithm:
+        names: ["transaction_amt"]
     "3":
       CutTargetSequence:
         target_len: *generation_len

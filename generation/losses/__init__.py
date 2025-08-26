@@ -9,6 +9,7 @@ from generation.data.data_types import GenBatch, LatentDataConfig
 
 from .base import BaselineLoss, NoOrderLoss, TailLoss, VAELoss
 from .oneshot import DistLoss, GaussianDistLoss, MatchedLoss, TargetLoss
+from .detpp.detpp import DeTPPLoss
 
 
 @dataclass(frozen=True)
@@ -18,29 +19,16 @@ class LossConfig:
 
 
 class DummyLoss(Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
     def __call__(self, y_true: GenBatch, data) -> torch.Tensor:
         return {'loss': data}
 
 
 def get_loss(data_conf: LatentDataConfig, config: LossConfig):
     name = config.name
-    if name == "baseline":
-        return BaselineLoss(data_conf, **config.params)
-    elif name == "target":
-        return TargetLoss(data_conf, **config.params)
-    elif name == "distloss":
-        return DistLoss(data_conf, **config.params)
-    elif name == "gaussian_distloss":
-        return GaussianDistLoss(data_conf, **config.params)
-    elif name == "matched":
-        return MatchedLoss(data_conf, **config.params)
-    elif name == "tail":
-        return TailLoss(data_conf, **config.params)
-    elif name == "vae":
-        return VAELoss(data_conf, init_beta=1.0, **config.params)
-    elif name == "no_order_loss":
-        return NoOrderLoss(data_conf, **config.params)
-    elif name == "dummy":
-        return DummyLoss()
+    if name in globals():
+        return globals()[name](data_conf, **config.params)
     else:
         raise ValueError(f"Unknown type of target (target_type): {name}")

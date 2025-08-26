@@ -100,6 +100,15 @@ class LatentDataConfig:
     cat_cardinalities: Mapping[str, int] | None = None
     num_names: Optional[list[str]] = None
 
+    @property
+    def focus_cat(self):
+        return [name for name in self.cat_cardinalities or [] if name in self.focus_on]
+
+    @property
+    def focus_num(self):
+        names = self.num_names or [] + [self.time_name]
+        return [name for name in names if name in self.focus_on]
+
     def check_focus_on(self, use_time):
         """Checks if focus_on is compatable with autoregressive approach."""
         if self.time_name not in self.focus_on:
@@ -138,12 +147,21 @@ class GenBatch(Batch):
         assert isinstance(self.time, torch.tensor), "No tensors in batch!"
         return self.time.device
 
+    @property
     def valid_mask(self):
         L = self.lengths.max()
         valid_mask = (
             torch.arange(L, device=self.lengths.device)[:, None] < self.lengths
         )  # L, B
         return valid_mask
+
+    def __getitem__(self, name: str):
+        if self.num_features_names and (name in self.num_features_names):
+            return self.num_features[..., self.num_features_names.index(name)]
+        elif self.cat_features_names and (name in self.cat_features_names):
+            return self.cat_features[..., self.cat_features_names.index(name)]
+        else:
+            raise KeyError(f"No feature named '{name}'")
 
     def get_numerical(self):
         tensors = [self.time.unsqueeze(-1)]
@@ -232,10 +250,60 @@ class GenBatch(Batch):
 @dataclass(kw_only=True)
 class PredBatch:
     lengths: torch.Tensor  # (batch,)
-    time: np.ndarray | torch.Tensor  # (len, batch)
-    num_features: torch.Tensor | None = None  # (len, batch, features)
+    time: np.ndarray | torch.Tensor  # (len, batch, [K])
+    num_features: torch.Tensor | None = None  # (len, batch, [K], features)
     num_features_names: list[str] | None = None
-    cat_features: dict[str, torch.Tensor] | None = None  # {"name": (len, batch, C)}
+    cat_features: dict[str, torch.Tensor] | None = (
+        None  # {"name": (len, batch, [K], C)}
+    )
+
+    def __getitem__(self, name: str):
+        if name in self.num_features_names:
+            return self.num_features[..., self.num_features_names.index(name)]
+        elif name in self.cat_features:
+            return self.cat_features[name]
+        else:
+            raise KeyError(f"No feature named '{name}'")
+
+    @property
+    def shape(self):
+        if self.num_features is not None:
+            return self.num_features.shape[:2]
+        if self.cat_features is not None:
+            return list(self.cat_features.items())[0][1].shape[:2]
+        assert self.time is not None, "All tensors are None!"
+        return self.time.shape
+
+    @property
+    def device(self):
+        if self.num_features is not None:
+            return self.num_features.device
+        if self.cat_features is not None:
+            return list(self.cat_features.items())[0].device
+        assert isinstance(self.time, torch.tensor), "No tensors in batch!"
+        return self.time.device
+
+    @property
+    def valid_mask(self):
+        L = self.lengths.max()
+        valid_mask = (
+            torch.arange(L, device=self.lengths.device)[:, None] < self.lengths
+        )  # L, B
+        return valid_mask
+
+    def k_reshape(self, k):
+        assert self.time.ndim == 2
+        L, BK = self.time.shape
+        assert BK % k == 0
+        B = BK // k
+        self.lengths = self.lengths[::k]
+        self.time = self.time.reshape(L, B, k)
+        if self.num_features is not None:
+            self.num_features = self.num_features.reshape(L, B, k, -1)
+        if self.cat_features is not None:
+            for name in self.cat_features:
+                self.cat_features[name] = self.cat_features[name].reshape(L, B, k, -1)
+        return self
 
     def get_numerical(self):
         tensors = [self.time.unsqueeze(-1)]
@@ -252,18 +320,18 @@ class PredBatch:
             cat_features = []
             for cat_name, cat_tensor in self.cat_features.items():
                 if topk > 1:
-                    L, B, C = cat_tensor.shape
-                    logits = (cat_tensor / temperature).view(L * B, C)
+                    shape = cat_tensor.shape
+                    logits = (cat_tensor / temperature).view(-1, shape[-1])
                     v, _ = torch.topk(logits, min(topk, logits.size(-1)))
                     logits[logits < v[..., [-1]]] = -float("Inf")
                     probs = F.softmax(logits, dim=-1)
                     samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(L, B)
+                    samples = samples.view(shape[:-1])
                 else:
-                    samples = cat_tensor.argmax(dim=2)
+                    samples = cat_tensor.argmax(dim=-1)
                 cat_features.append(samples)
 
-            cat_features = torch.stack(cat_features, dim=2)
+            cat_features = torch.stack(cat_features, dim=-1)
 
         return GenBatch(
             lengths=self.lengths,
@@ -279,12 +347,10 @@ class PredBatch:
 def gather(tensor, target_ids):
     if tensor is None:
         return None
-    if 2 <= tensor.ndim <= 3:  # time
-        if tensor.ndim == 3:  # cat|num
-            target_ids = target_ids[:, :, None].expand(-1, -1, tensor.shape[2])
-        return torch.gather(tensor, 0, target_ids)  # [target_len, B, D]
-    else:
-        raise ValueError
+    ndim_diff = tensor.ndim - target_ids.ndim
+    target_expanded = target_ids.view(*target_ids.shape, *(1,) * ndim_diff)
+    target_expanded = target_expanded.expand(-1, -1, *tensor.shape[2:])
+    return torch.gather(tensor, 0, target_expanded)  # [L, B, ...]
 
 
 def get_seq_tail(seq: Seq, tail_len: int):
@@ -304,5 +370,5 @@ def get_seq_tail(seq: Seq, tail_len: int):
 
 def valid_mask(x: Seq | GenBatch):
     L = x.lengths.max()
-    valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths # L, B
+    valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths  # L, B
     return valid_mask
