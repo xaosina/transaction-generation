@@ -1,0 +1,6 @@
+data_conf:
+  train_transforms:
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 32
+        independent_tail: ${data_conf.generation_len}
