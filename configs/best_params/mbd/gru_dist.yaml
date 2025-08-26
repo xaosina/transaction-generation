@@ -1,0 +1,23 @@
+config_factory: [start, datasets/mbd/mbd, methods/oneshot/gru, methods/oneshot/dist, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 6.867091695026577e-11
+    lr: 0.00032423955522607766
+model:
+  latent_encoder:
+    params:
+      hidden_size: 1090
+      num_layers: 2
+      dropout: 1.9359187821996958e-06
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: false
+      cat_emb_dim: 91
+      num_emb_dim: 112
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

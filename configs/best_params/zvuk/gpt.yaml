@@ -1,0 +1,24 @@
+config_factory: [start, datasets/zvuk/zvuk, methods/gpt, 1to1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 1.0112379496825305e-06
+    lr: 0.00012241526172300025
+model:
+  latent_encoder:
+    params:
+      n_layer: 5
+      n_head: 8
+      n_embd: 624
+      dropout: 0.25208232532327096
+      bias: true
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 121
+      num_emb_dim: 27
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

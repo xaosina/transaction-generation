@@ -1,0 +1,23 @@
+config_factory: [start, datasets/retail/retail, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 2.1540033832323556e-10
+    lr: 0.0003889426098273081
+model:
+  latent_encoder:
+    params:
+      hidden_size: 694
+      num_layers: 2
+      dropout: 2.1264352194768988e-10
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 9
+      num_emb_dim: 93
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false

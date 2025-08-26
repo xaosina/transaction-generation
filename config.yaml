@@ -1,1 +1,1 @@
-config_factory: [start, datasets/shakespeare/shakespeare, methods/gru, metrics/default]
+config_factory: [start, datasets/shakespeare/shakespeare, methods/detpp, metrics/default]

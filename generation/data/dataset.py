@@ -115,8 +115,8 @@ class ShardDataset(IterableDataset):
         # When we set generator in DataLoader, this seeds will repeat each run.
         worker_seed = torch.initial_seed() if worker_info is None else worker_info.seed
         base_seed = (worker_seed - worker_id) % (2**32 - 1)
-        common_rng = np.random.default_rng(self.seed or base_seed)
-        worker_rng = np.random.default_rng(self.seed or worker_seed)
+        common_rng = np.random.default_rng(base_seed if self.seed is None else self.seed)
+        worker_rng = np.random.default_rng(worker_seed if self.seed is None else self.seed)
         data_conf = self.data_conf
 
         partitions_copy = list(self.partitions)

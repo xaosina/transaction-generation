@@ -7,6 +7,7 @@ from pyspark.sql import SparkSession, Window
 from pyspark.sql import functions as F
 from pyspark.sql.dataframe import DataFrame
 from pyspark.sql.types import FloatType, LongType, StringType
+from pyspark.sql import DataFrame as SparkDataFrame
 
 NA_VALUE = 0
 
@@ -224,12 +225,14 @@ def save_to_parquet(
     spark = SparkSession.builder.master("local[32]").getOrCreate()  # pyright: ignore
     if isinstance(data, Path) or isinstance(data, str):
         data = Path(data)
-        if data.suffix == "csv":
+        if data.suffix == ".csv":
             df = spark.read.csv(data.as_posix(), header=True)
         elif data.suffix:
             df = spark.read.parquet(data.as_posix())
     elif isinstance(data, pd.DataFrame):
         df = spark.createDataFrame(data)
+    elif isinstance(data, SparkDataFrame):
+        df = data
     else:
         raise TypeError
     index_columns = metadata.get("index_columns", [])

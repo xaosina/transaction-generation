@@ -1,0 +1,23 @@
+config_factory: [start, datasets/megamarket/megamarket, methods/oneshot/gru, methods/oneshot/dist, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 3.7828594115951556e-05
+    lr: 0.0031537068250317903
+model:
+  latent_encoder:
+    params:
+      hidden_size: 272
+      num_layers: 2
+      dropout: 2.686600884783391e-10
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: false
+      cat_emb_dim: 113
+      num_emb_dim: 17
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false
