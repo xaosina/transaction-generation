@@ -10,7 +10,7 @@ try:
     from torch_linear_assignment import batch_linear_assignment
 except ImportError:
     print("Using slow linear assignment implementation")
-    from utils import batch_linear_assignment
+    from .utils import batch_linear_assignment
 
 
 class DeTPPLoss(Module):
