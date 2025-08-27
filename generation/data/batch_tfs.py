@@ -9,8 +9,11 @@ import pickle
 
 try:
     from torch_linear_assignment import batch_linear_assignment
+    CPU_ASSIGNMENT = False
 except Exception:
-    print("No module batch_linear_assignment was installed")
+    print("Using slow linear assignment implementation")
+    CPU_ASSIGNMENT = True
+    from .utils import batch_linear_assignment
 
 import numpy as np
 import torch
@@ -186,6 +189,8 @@ class LocalShuffle(BatchTransform):
             cost[intersection] = torch.inf
         
         # Step 3: permute everything
+        if CPU_ASSIGNMENT:
+            cost = cost.detach().cpu()
         assignment = batch_linear_assignment(cost).T  # L, B
 
         def reorder_tensor(tensor, order):
