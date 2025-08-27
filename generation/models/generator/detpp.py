@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import replace
 
 import torch
+import torch.nn as nn
 from ebes.model import BaseSeq2Seq
 from ebes.types import Seq
 
@@ -41,6 +42,7 @@ class ConditionalHead(BaseSeq2Seq):
             0, 1
         )  # (BK, D)
         x = self.proj(x)  # (BK, O).
+        x = self.relu(x)
         return x.reshape(b, self.output_dim)  # (B, KO).
 
     def forward(self, seq: Seq):
@@ -86,9 +88,13 @@ class DeTPP(BaseGenerator):
             model_config.latent_encoder.name, encoder_params
         )
 
+        assert model_config.params["k_factor"] >= 1
         self.next_k_head = ConditionalHead(
-            self.autoencoder.encoder.output_dim, model_config.params["k"]
+            self.autoencoder.encoder.output_dim,
+            int(model_config.params["k_factor"] * data_conf.generation_len),
         )
+        self.k = self.next_k_head.k
+        self.presence_head = nn.Linear(self.autoencoder.encoder.output_dim, 1)
 
     def _apply_delta(self, x: GenBatch):
         x = deepcopy(x)
@@ -116,26 +122,21 @@ class DeTPP(BaseGenerator):
         return pred
 
     def forward(self, x: GenBatch) -> PredBatch:
-        """
-        Forward pass of the Auto-regressive Transformer
-        Args:
-            x (GenBatch): Input sequence [L, B, D]
-
-        """
         L, B = x.shape
         x = self._apply_delta(x)
         x = self.autoencoder.encoder(x, copy=False)  # Sequence of [L, B, D]
         x = self.encoder(x)  # [L, B, D]
         x = self.next_k_head(x)  # L, B, K * D
         x = Seq(
-            tokens=x.tokens.reshape(L, B * self.next_k_head.k, -1),
-            lengths=x.lengths.repeat_interleave(self.next_k_head.k, 0),
+            tokens=x.tokens.reshape(L, B * self.k, -1),
+            lengths=x.lengths.repeat_interleave(self.k, 0),
             time=None,
         )
+        presence_scores = self.presence_head(x.tokens).reshape(L, B, -1)  # [L, B, K]
         x = self.autoencoder.decoder(x)  # [L, B * K, preds]
-        x = x.k_reshape(self.next_k_head.k)  # [L, B, K, pred]
+        x = x.k_reshape(self.k)  # [L, B, K, pred]
 
-        return x
+        return (x, presence_scores)
 
     def generate(
         self,
@@ -145,29 +146,24 @@ class DeTPP(BaseGenerator):
         topk=1,
         temperature=1.0,
     ) -> GenBatch:
-        """
-        Auto-regressive generation using the transformer
-
-        Args:
-            x (Seq): Input sequence [L, B, D]
-
-        """
         hist = deepcopy(hist)
-
+        assert self.k >= gen_len
         with torch.no_grad():
             L, B = hist.shape
             x = self._apply_delta(hist)
             x = self.autoencoder.encoder(hist, copy=False)
             x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
             x = self.next_k_head(x)  # 1, B, K * D
+            # Filter events
+            x = x.tokens.reshape(B, self.k, -1).transpose(0, 1)  # K, B, D
+            presence_scores = self.presence_head(x).reshape(self.k, B)
+            topk_indices = torch.topk(presence_scores, gen_len, dim=0)[1]
+            x = torch.take_along_dim(x, topk_indices.unsqueeze(-1), dim=0)
             x = Seq(
-                tokens=x.tokens.reshape(B, self.next_k_head.k, -1).transpose(0, 1),
-                lengths=x.lengths * self.next_k_head.k,
-                time=None,
+                tokens=x, lengths=torch.full((B,), gen_len, device=hist.device), time=None
             )
-            x = self.autoencoder.decoder.generate(
-                x, topk=topk, temperature=temperature
-            )  # GenBatch with sizes [1, B, D] for cat, num
+            # Reconstruct
+            x = self.autoencoder.decoder.generate(x, topk=topk, temperature=temperature)
             x.time = x.time.clip(min=0)
             x = self._sort_time_and_revert_delta(hist, x)
             hist.append(x)  # Append GenBatch, result is [L+K, B, D]
