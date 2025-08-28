@@ -69,13 +69,13 @@ class DeTPP(BaseGenerator):
         super().__init__()
 
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
+            data_conf, model_config
         )
 
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
+                ckpt["model"], strict=False
             )
 
         if model_config.autoencoder.frozen:

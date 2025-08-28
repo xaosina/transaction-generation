@@ -9,14 +9,9 @@ from ebes.model.seq2seq import Projection
 
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
 from ..encoders import AutoregressiveEncoder, LatentEncConfig
-from generation.models.autoencoders.base import AEConfig, BaseAE
+from generation.models.autoencoders.base import AEConfig
 from generation.models import autoencoders
 from generation.utils import freeze_module
-
-
-@dataclass(frozen=True)
-class TPPConfig:
-    feature_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -43,13 +38,13 @@ class AutoregressiveGenerator(BaseGenerator):
         super().__init__()
 
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
+            data_conf, model_config
         )
 
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
+                ckpt["model"], strict=False
             )
 
         if model_config.autoencoder.frozen:
@@ -130,12 +125,12 @@ class OneShotGenerator(BaseGenerator):
         super().__init__()
 
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
+            data_conf, model_config
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
+                ckpt["model"], strict=False
             )
 
         if model_config.autoencoder.frozen:
@@ -205,12 +200,12 @@ class OneShotDistributionGenerator(BaseGenerator):
         super().__init__()
 
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
+            data_conf, model_config
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
+                ckpt["model"], strict=False
             )
 
         if model_config.autoencoder.frozen:

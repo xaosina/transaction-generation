@@ -1,5 +1,5 @@
-from copy import deepcopy
 import math
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -11,32 +11,32 @@ from ebes.types import Seq
 
 from generation.data import batch_tfs
 from generation.data.batch_tfs import NewFeatureTransform
-from generation.data.data_types import GenBatch, PredBatch, LatentDataConfig
+from generation.data.data_types import GenBatch, LatentDataConfig, PredBatch
 from generation.data.utils import create_instances_from_module
-from generation.models.autoencoders.base import BaseAE, AEConfig
-
-
-@dataclass
-class VaeConfig:
-    num_layers: int = 2
-    d_token: int = 6
-    n_head: int = 2
-    factor: int = 64
-    pretrained: bool = False
+from generation.models.autoencoders.base import AEConfig, BaseAE
 
 
 class VAE(BaseAE):
-    def __init__(self, data_conf: LatentDataConfig, model_config: AEConfig):
+    def __init__(self, data_conf: LatentDataConfig, model_config):
         super().__init__()
+        model_config: AEConfig = model_config.autoencoder
+        vae_params = {
+            "num_layers": model_config.params.get("num_layers", 2),
+            "d_token": model_config.params.get("d_token", 6),
+            "n_head": model_config.params.get("n_head", 2),
+            "factor": model_config.params.get("factor", 64),
+        }
         self.encoder = Encoder(
-            model_config.vae,
+            **vae_params,
+            use_time=model_config.params["use_time"],
+            pretrain=model_config.pretrain,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_features=data_conf.num_names,
-            batch_transforms=model_config.preprocessor.batch_transforms,
+            batch_transforms=model_config.batch_transforms,
         )
 
         self.decoder = Decoder(
-            model_config.vae,
+            **vae_params,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_names=data_conf.num_names,
         )
@@ -54,13 +54,20 @@ class VAE(BaseAE):
         x = self.decoder(x)
         return x, params
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
+    def generate(
+        self,
+        hist: GenBatch,
+        gen_len: int,
+        with_hist=False,
+        topk=1,
+        temperature=1.0,
+    ) -> GenBatch:
         hist = deepcopy(hist)
         assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
         x = self.encoder(hist.get_target_batch())
         if not self.encoder.pretrained:
             x = x[0]
-        x = self.decoder.generate(x)
+        x = self.decoder.generate(x, topk=topk, temperature=temperature)
         if with_hist:
             hist.append(x)
             return hist
@@ -71,20 +78,29 @@ class VAE(BaseAE):
 class Encoder(nn.Module):
     def __init__(
         self,
-        vae_conf: VaeConfig,
+        num_layers: int = 2,
+        d_token: int = 6,
+        n_head: int = 2,
+        factor: int = 64,
+        use_time: bool = True,
+        pretrain: bool = False,
         cat_cardinalities: Mapping[str, int] | None = None,
         num_features: Sequence[str] | None = None,
         batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
         bias=True,
     ):
         super(Encoder, self).__init__()
-        self.d_token = vae_conf.d_token
-        self.pretrained = vae_conf.pretrained
+        self.d_token = d_token
+        self.pretrained = not pretrain
 
         if num_features is not None:
             num_count = len(num_features)
         else:
             num_count = 0
+
+        self.use_time = use_time
+        if use_time:
+            num_count += 1
         self.batch_transforms = create_instances_from_module(
             batch_tfs, batch_transforms
         )
@@ -105,38 +121,34 @@ class Encoder(nn.Module):
         self.tokenizer = Tokenizer(
             d_numerical=num_count,
             categories=list(cat_cardinalities.values()) if cat_cardinalities else None,
-            d_token=vae_conf.d_token,
+            d_token=d_token,
             bias=bias,
         )
 
-        self.encoder_mu = Transformer(
-            vae_conf.num_layers,
-            vae_conf.d_token,
-            vae_conf.n_head,
-            vae_conf.d_token,
-            vae_conf.factor,
-        )
+        self.encoder_mu = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.encoder_std = None
         if not self.pretrained:
-            self.encoder_std = Transformer(
-                vae_conf.num_layers,
-                vae_conf.d_token,
-                vae_conf.n_head,
-                vae_conf.d_token,
-                vae_conf.factor,
-            )
+            self.encoder_std = Transformer(num_layers, d_token, n_head, d_token, factor)
 
     def reparametrize(self, mu, logvar) -> torch.Tensor:
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, batch: GenBatch) -> Seq:
+    def forward(self, batch: GenBatch, copy=True) -> Seq:
+        if copy:
+            batch = deepcopy(batch)
+
         if self.batch_transforms:
             for tf in self.batch_transforms:
                 tf(batch)
 
         x_num, x_cat = batch.num_features, batch.cat_features
+        if self.use_time:
+            x_num = [] if x_num is None else [x_num]
+            x_num += [batch.time.unsqueeze(-1)]  # L, B, 1
+            x_num = torch.cat(x_num, dim=2)
+
         D_num = x_num.size(-1) if x_num is not None else 0
         D_cat = x_cat.size(-1) if x_cat is not None else 0
         time = batch.time
@@ -174,29 +186,24 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(
         self,
-        vae_conf: VaeConfig,
+        num_layers: int = 2,
+        d_token: int = 6,
+        n_head: int = 2,
+        factor: int = 64,
         num_names: Sequence[str] | None = None,
         cat_cardinalities: Mapping[str, int] = None,
     ):
         super(Decoder, self).__init__()
-        self.d_token = vae_conf.d_token
+        self.d_token = d_token
         self.num_names = num_names
         self.cat_cardinalities = cat_cardinalities
         num_counts = 1  # Time
         if self.num_names:
             num_counts += len(self.num_names)
 
-        self.decoder = Transformer(
-            vae_conf.num_layers,
-            vae_conf.d_token,
-            vae_conf.n_head,
-            vae_conf.d_token,
-            vae_conf.factor,
-        )
+        self.decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.reconstructor = Reconstructor(
-            num_counts,
-            self.cat_cardinalities or {},
-            d_token=vae_conf.d_token,
+            num_counts, self.cat_cardinalities or {}, d_token=d_token
         )
 
     def forward(self, seq: Seq) -> PredBatch:
@@ -240,8 +247,8 @@ class Decoder(nn.Module):
             cat_features=cat_features if cat_features else None,
         )
 
-    def generate(self, seq: Seq) -> GenBatch:
-        return self.forward(seq).to_batch()
+    def generate(self, seq: Seq, topk=1, temperature=1.0) -> GenBatch:
+        return self.forward(seq).to_batch(topk, temperature)
 
 
 class Tokenizer(nn.Module):
