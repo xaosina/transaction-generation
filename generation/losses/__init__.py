@@ -14,7 +14,7 @@ from .detpp.detpp import DeTPPLoss
 
 @dataclass(frozen=True)
 class LossConfig:
-    name: Optional[str] = "baseline"
+    name: Optional[str] = "BaselineLoss"
     params: dict = field(default_factory=dict)
 
 
