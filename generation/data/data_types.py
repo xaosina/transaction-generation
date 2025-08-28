@@ -389,7 +389,7 @@ def get_seq_tail(seq: Seq, tail_len: int):
         tokens=gather(seq.tokens, target_ids),
         lengths=torch.ones_like(seq.lengths) * tail_len,
         time=gather(seq.time, target_ids),
-        num_mask=gather(seq.num_mask, target_ids),
+        masks=gather(seq.masks, target_ids),
     )
 
 

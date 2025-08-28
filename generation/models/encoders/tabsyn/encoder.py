@@ -108,6 +108,8 @@ class ConditionalDiffusionEncoder(nn.Module):
         history_seq = self.seq2tensor(history_seq)
         if history_seq is not None:
             assert history_seq.shape == (n_seqs, self.history_len, self.latent_dim)
+            history_seq = torch.flatten(history_seq, start_dim=1)
+
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
 

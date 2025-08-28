@@ -50,7 +50,7 @@ class LatentDiffusionGenerator(BaseGenerator):
                 **history_encoder_data['params']
             )
 
-            if history_encoder_data.checkpoint:
+            if history_encoder_data['checkpoint']:
                 ckpt = torch.load(history_encoder_data['checkpoint'], map_location="cpu")
                 msg = self.autoencoder.load_state_dict(
                     ckpt["state_dict"], strict=False #TODO: I do not know how history_encoder will be stored

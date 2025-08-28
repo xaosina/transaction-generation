@@ -33,20 +33,24 @@ model:
     params:
       latent_dim: &autoencoder_output_dim 44
       generation_len: ${data_conf.generation_len}
-      history_len: 0 # может быть другое число, 
-      history_encoder_dim: &history_encoder_output_dim 0 
+      history_len: 32 # может быть другое число, 
+      history_encoder_dim: &history_encoder_output_dim 44 
       base_factor: 256 # unetS: 64, unetM: 128, unetL: 256, unetXL: 512
       dim_t : 1024
       num_classes: 1
   
   params:
     history_encoder:
-      name:
+      name: GRU
       output_dim: *history_encoder_output_dim
       params:
-        output_dim: *history_encoder_output_dim
-      
-  # vae:
+        input_size: *autoencoder_output_dim
+        hidden_size: *history_encoder_output_dim
+        num_layers: 1
+      pretrain: False
+      frozen: False
+      checkpoint:
+
   #   num_layers: 2
   #   d_token: 6
   #   n_head: 2
