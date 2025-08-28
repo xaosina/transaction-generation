@@ -124,7 +124,7 @@ class Reshaper(BaseModel):
         B, D = tensor.shape
         return Seq(
             tokens=tensor.view(B, self.gen_len, D // self.gen_len).permute(1, 0, 2),
-            lengths=torch.ones_like(tensor, dtype=torch.long) * self.gen_len,
+            lengths=torch.ones((B,), dtype=torch.long, device=tensor.device) * self.gen_len,
             time=None,
         )
 
@@ -465,94 +465,10 @@ class OneShotDistributionGenerator(BaseGenerator):
 #         """
 #         hist = deepcopy(hist)
 
-<<<<<<< HEAD
-        with torch.no_grad():
-            pred = self.sample(self.forward(hist), gen_len).to_batch()
-        if with_hist:
-            hist.append(pred)
-            return hist  # Return GenBatch of size [L + gen_len, B, D]
-        else:
-            return pred  # Return GenBatch of size [gen_len, B, D]
-
-
-class LatentDiffusionGenerator(BaseGenerator):
-    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
-        #TODO: currently almost the same as OneShotGenerator
-        super().__init__()
-
-        self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
-        )
-        if model_config.autoencoder.checkpoint:
-            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
-            )
-
-        if model_config.autoencoder.frozen:
-            self.autoencoder = freeze_module(self.autoencoder)
-
-        encoder_params = model_config.latent_encoder.params or {}
-        encoder_params["input_size"] = self.autoencoder.encoder.output_dim
-
-        self.encoder = AutoregressiveEncoder(
-            model_config.latent_encoder.name, encoder_params
-        )
-        self.poller = (
-            TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
-        )
-        self.reshaper = Reshaper(data_conf.generation_len)
-
-        self.projector = Projection(
-            self.encoder.output_dim // data_conf.generation_len,
-            self.encoder.output_dim,
-        )
-
-    def forward(self, x: GenBatch) -> PredBatch:
-        """
-        Forward pass of the Auto-regressive Transformer
-        Args:
-            x (GenBatch): Input sequence [L, B, D]
-
-        """
-        x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
-        # здесь доп. шаг - собираются условия для диффузии (эмбеддинг, последние 32)
-        x = self.encoder(x)  # [L, B, D]
-        # x = self.poller(x)  # [B, D] # не нужен
-        # x = self.reshaper(x)  # [gen_len, B, D // gen_len] # не нужен
-        # x = self.projector(x) # не нужен
-        # x = self.autoencoder.decoder(x)
-        return x
-
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        """
-        Auto-regressive generation using the transformer
-
-        Args:
-            x (Seq): Input sequence [L, B, D]
-
-        """
-        assert (
-            gen_len == self.reshaper.gen_len
-        ), f"Can't generate other than {self.reshaper.gen_len}"
-        hist = deepcopy(hist)
-
-        with torch.no_grad():
-            pred = self.forward(hist).to_batch()
-            # перенести закомменченные действия из форварда
-            # x = self.autoencoder.decoder(x)
-            # добавляю цикл - чтобы сгенерить последовательность любой длины - посмотреть, как это сделано в авторегрессии
-        if with_hist:
-            hist.append(pred)
-            return hist  # Return GenBatch of size [L + gen_len, B, D]
-        else:
-            return pred  # Return GenBatch of size [gen_len, B, D]
-=======
-#         with torch.no_grad():
-#             pred = self.sample(self.forward(hist), gen_len).to_batch()
-#         if with_hist:
-#             hist.append(pred)
-#             return hist  # Return GenBatch of size [L + gen_len, B, D]
-#         else:
-#             return pred  # Return GenBatch of size [gen_len, B, D]
->>>>>>> main
+#        with torch.no_grad():
+#            pred = self.sample(self.forward(hist), gen_len).to_batch()
+#        if with_hist:
+#            hist.append(pred)
+#            return hist  # Return GenBatch of size [L + gen_len, B, D]
+#        else:
+#            return pred  # Return GenBatch of size [gen_len, B, D]

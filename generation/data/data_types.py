@@ -1,7 +1,7 @@
 import logging
 from copy import copy, deepcopy
 from dataclasses import dataclass, replace
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Mapping, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -245,6 +245,31 @@ class GenBatch(Batch):
             cat_mask=gather(self.cat_mask, target_ids),
             num_mask=gather(self.num_mask, target_ids),
         )
+    
+    def head(self, head_len: int):
+        """Return a new batch containing only the first head_len elements of each sequence."""
+        if self.lengths.max() <= head_len:
+            return deepcopy(self)
+        
+        def _cutoff_tail(tensor):
+            if tensor is None:
+                return None
+            return tensor[:head_len]
+        
+        return replace(
+            self,
+            lengths = torch.where(self.lengths <= head_len, self.lengths, head_len),
+            time = _cutoff_tail(self.time),
+            index = copy(self.index),
+            num_features = _cutoff_tail(self.num_features),
+            cat_features = _cutoff_tail(self.cat_features),
+            cat_features_names = copy(self.cat_features_names),
+            num_features_names = copy(self.num_features_names),
+            cat_mask = _cutoff_tail(self.cat_mask),
+            num_mask = _cutoff_tail(self.num_mask),
+        )
+        
+
 
 
 @dataclass(kw_only=True)
@@ -365,6 +390,64 @@ def get_seq_tail(seq: Seq, tail_len: int):
         lengths=torch.ones_like(seq.lengths) * tail_len,
         time=gather(seq.time, target_ids),
         num_mask=gather(seq.num_mask, target_ids),
+    )
+
+
+def append_padded(
+        a : torch.Tensor | None, 
+        la : torch.Tensor, 
+        b : torch.Tensor | None, 
+        lb : torch.Tensor
+    ) -> Tuple[torch.Tensor | None, torch.Tensor]:
+    """
+    a: [L1, B, *X]  (padded sequences)
+    la: [B]         (lengths of each seq in a)
+    b: [L2, B, *X]  (padded sequences)
+    lb: [B]         (lengths of each seq in b)
+
+    Returns:
+        out: [Lout, B, *X] padded concatenation
+        lout: [B] new lengths
+    """
+    if (a is None) or (b is None):
+        return None, la + lb
+    
+    
+    L1, B = a.shape[0], a.shape[1]
+    L2 = b.shape[0]
+
+    lout = la + lb
+    Lout = lout.max().item()
+
+    # allocate output
+    out = a.new_zeros((Lout, B) + a.shape[2:])
+
+    # --- copy a ---
+    mask_a = torch.arange(L1, device=a.device)[:, None] < la[None]   # [L1, B]
+    out[:L1] = torch.where(mask_a[(...,) + (None,) * (a.ndim - 2)], a, out[:L1])
+
+    # --- copy b ---
+    start = la[None]  # [1, B]
+    idx = torch.arange(L2, device=b.device)[:, None] + start  # [L2, B]
+    batch_idx = torch.arange(B, device=b.device).expand(L2, B) # [L2, B]
+    mask_b = torch.arange(L2, device=b.device)[:, None] < lb[None]  # [L2, B]
+
+    out[idx[mask_b], batch_idx[mask_b]] = b[mask_b]
+
+    return out[:Lout], lout
+
+
+def seq_append(seq: Seq, other_seq: Seq) -> Seq:
+
+    assert seq.lengths is not None, "seq lengths should be specified!"
+    assert other_seq.lengths is not None, "other_seq lengths should be specified!"
+    assert len(seq) == len(other_seq), "seq lenghts should be equal!"
+
+    return Seq(
+        tokens=append_padded(seq.tokens, seq.lengths, other_seq.tokens, other_seq.lengths)[0],
+        lengths=seq.lengths + other_seq.lengths,
+        time=append_padded(seq.time, seq.lengths, other_seq.time, other_seq.lengths)[0],
+        masks=append_padded(seq.masks, seq.lengths, other_seq.masks, other_seq.lengths)[0],
     )
 
 
