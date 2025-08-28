@@ -7,10 +7,6 @@ from ebes.model import BaseModel, TakeLastHidden, ValidHiddenMean
 from ebes.types import Seq
 from ebes.model.seq2seq import Projection
 
-from generation.models.autoencoders.vae import Decoder as VAE_Decoder
-from generation.models.autoencoders.vae import Encoder as VAE_Encoder
-from generation.models.autoencoders.vae import VaeConfig
-
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
 from ..encoders import AutoregressiveEncoder, LatentEncConfig
 from generation.models.autoencoders.base import AEConfig, BaseAE

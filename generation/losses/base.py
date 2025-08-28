@@ -4,7 +4,7 @@ from torch.nn import Module
 
 from generation.data.data_types import GenBatch, LatentDataConfig, PredBatch
 
-from .utils import rse_valid
+from .utils import r1_valid
 
 
 class BaseLoss(Module):
@@ -43,7 +43,7 @@ class BaseLoss(Module):
             pred_time = y_pred.time[self.pred_slice]  # [L, B]
             true_time = y_true.time[self.true_slice]  # [L, B]
             current_mask = valid_mask[self.true_slice]
-            loss, count = rse_valid(pred_time, true_time, current_mask)
+            loss, count = r1_valid(pred_time, true_time, current_mask)
             mse_sum += loss
             mse_count += count
 
@@ -57,7 +57,7 @@ class BaseLoss(Module):
             pred_num = y_pred.num_features[self.pred_slice, :, pred_feature_ids]
             true_num = y_true.num_features[self.true_slice, :, true_feature_ids]
             current_mask = valid_mask[self.true_slice]
-            loss, count = rse_valid(pred_num, true_num, current_mask)
+            loss, count = r1_valid(pred_num, true_num, current_mask)
             mse_sum += loss
             mse_count += count
 
@@ -212,7 +212,7 @@ class VAELoss(BaseLoss):
 
     def __call__(self, y_true: GenBatch, data) -> torch.Tensor:
         y_pred, params = data
-        base_loss = super().__call__(y_true, y_pred)
+        base_loss = super().__call__(y_true, y_pred)["loss"]
 
         mu_z = params["mu_z"]
         std_z = params["std_z"]

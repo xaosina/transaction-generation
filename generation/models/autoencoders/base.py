@@ -12,8 +12,6 @@ from ebes.types import Seq
 
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
 
-# from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
-
 from ...data.batch_tfs import NewFeatureTransform
 from ...utils import create_instances_from_module
 from ...data import batch_tfs
