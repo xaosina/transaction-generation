@@ -124,11 +124,16 @@ class Encoder(nn.Module):
             d_token=d_token,
             bias=bias,
         )
+        self._out_dim = (num_count + len(cat_cardinalities)) * self.d_token
 
         self.encoder_mu = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.encoder_std = None
         if not self.pretrained:
             self.encoder_std = Transformer(num_layers, d_token, n_head, d_token, factor)
+
+    @property
+    def output_dim(self):
+        return self._out_dim
 
     def reparametrize(self, mu, logvar) -> torch.Tensor:
         std = torch.exp(0.5 * logvar)

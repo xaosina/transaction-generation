@@ -52,13 +52,13 @@ def freeze_module(m: Module):
     for param in m.parameters():
         param.requires_grad = False
 
-    def train(self, mode=True):
+    def train(mode=True):
         if not isinstance(mode, bool):
             raise ValueError("training mode is expected to be boolean")
-        self.training = mode
-        for module in self.children():
+        m.training = False
+        for module in m.children():
             module.train(False)
-        return self
+        return m
 
     m.train = train
     return m
