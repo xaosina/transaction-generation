@@ -3,7 +3,7 @@ import torch.nn as nn
 from .model import EDM
 from .model import Unet1DDiffusion
 from .diffusion_utils import sample
-from ebes.model.seq2seq import BaseSeq2Seq
+from ebes.model.basemodel import BaseModel
 # from ...generator import Reshaper
 
 from ebes.types import Seq
@@ -26,7 +26,7 @@ class Reshaper(nn.Module):
             time=None,
         )
 
-class ConditionalDiffusionEncoder(nn.Module):
+class ConditionalDiffusionEncoder(BaseModel):
 
     @staticmethod
     def seq2tensor(s: Seq | None) -> torch.Tensor | None:
@@ -46,7 +46,7 @@ class ConditionalDiffusionEncoder(nn.Module):
 
         hstate_condition = params['history_encoder_dim'] > 0
         self.denoise_fn = Unet1DDiffusion(
-            latent_dim=params['latent_dim'],
+            latent_dim=params['input_size'],
             dim_t=params['dim_t'],
             length=params['generation_len'],
             base_factor=params['base_factor'],
@@ -64,8 +64,12 @@ class ConditionalDiffusionEncoder(nn.Module):
         self.num_model_params = sum(p.numel() for p in self.denoise_fn.parameters())
         self.generation_len = params['generation_len']
         self.history_len = params['history_len']
-        self.latent_dim = params['latent_dim']
+        self.latent_dim = params['input_size']
         self.history_encoder_dim = params['history_encoder_dim']
+    
+    @property
+    def output_dim(self):
+        return self.latent_dim
 
     def forward(
             self, 
@@ -101,7 +105,7 @@ class ConditionalDiffusionEncoder(nn.Module):
             class_labels: torch.Tensor | None = None, 
             history_embedding: torch.Tensor | None = None, 
             history_seq: Seq | None = None
-        ) -> torch.Tensor :
+        ) -> Seq :
 
         self.model.eval()
 

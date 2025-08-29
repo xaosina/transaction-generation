@@ -31,7 +31,7 @@ model:
   latent_encoder:
     name: ConditionalDiffusionEncoder # здесь - табсин!
     params:
-      latent_dim: &autoencoder_output_dim 44
+      input_size: &autoencoder_output_dim 44
       generation_len: ${data_conf.generation_len}
       history_len: 32 # может быть другое число, 
       history_encoder_dim: &history_encoder_output_dim 44 

@@ -15,17 +15,16 @@ from . import BaseGenerator, ModelConfig
 class LatentDiffusionGenerator(BaseGenerator):
 
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
-        #TODO: currently almost the same as OneShotGenerator
         super().__init__()
 
         # initializing autoencoder
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
-            data_conf, model_config.autoencoder
+            data_conf, model_config
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(
-                ckpt["model"]["autoencoder"], strict=False
+                ckpt["model"], strict=False
             )
         
         #TODO: I think it should be frozen by default
@@ -34,6 +33,13 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         # initializing encoder
         encoder_params = model_config.latent_encoder.params or {}
+        if encoder_params.get("input_size") is None:
+            encoder_params["input_size"] = self.autoencoder.encoder.output_dim
+        assert encoder_params["input_size"] == self.autoencoder.encoder.output_dim, (
+            f"Latent encoder's 'input_size' {encoder_params['input_size']} "
+            f"does not match autoencoder's 'output_dim' {self.autoencoder.encoder.output_dim}"
+        )
+
         self.encoder = ConditionalDiffusionEncoder(
             model_config.latent_encoder.name, encoder_params)
         
