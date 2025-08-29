@@ -1,0 +1,13 @@
+# MODEL
+model:
+  name: ModeGenerator
+
+data_conf:
+  train_transforms:
+    "1":
+      TimeToDiff:
+        disable: False
+  val_transforms:
+    "1":
+      TimeToDiff:
+        disable: False

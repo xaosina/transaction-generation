@@ -18,17 +18,16 @@ class DeTPPLoss(Module):
         self,
         data_conf: LatentDataConfig,
         loss_subset: float = 0.25,
-        weights: dict = None,
+        matching_weights: dict = None,
     ):
         super().__init__()
-        if weights is None:
-            self.weights = {k: 1 for k in data_conf.focus_on}
+        self.matching_weights = matching_weights or {}
         self._k = data_conf.generation_len
         self._loss_subset = loss_subset
 
         self.data_conf = data_conf
 
-    def forward(self, inputs, outputs):
+    def forward(self, inputs: GenBatch, outputs: tuple):
         """Extract targets and compute loss between predictions and targets.
 
         Args:
@@ -38,6 +37,7 @@ class DeTPPLoss(Module):
         Returns:
             loss
         """
+        outputs, presence_scores = outputs
         target_windows = self.extract_structured_windows(
             inputs
         )  # (L, B, k + 1), where first event is an input for the model.
@@ -48,8 +48,9 @@ class DeTPPLoss(Module):
             target_windows, indices, subset_lengths
         )  # (I, B, K + 1).
         outputs = self.select_subset(outputs, indices, subset_lengths)  # (I, B, K, P).
+        presence_scores = self.select_subset(presence_scores, indices, subset_lengths)
 
-        return {"loss": self.match_targets(outputs, target_windows)}
+        return {"loss": self.match_targets(outputs, presence_scores, target_windows)}
 
     def extract_structured_windows(self, inputs: GenBatch):
         """Extract windows with shape (L, B, k + 1) from inputs with shape (L, B, D)."""
@@ -88,7 +89,7 @@ class DeTPPLoss(Module):
 
     def select_subset(
         self,
-        batch: GenBatch | PredBatch,
+        batch: GenBatch | PredBatch | torch.Tensor,
         indices: torch.Tensor,
         subset_lengths: torch.Tensor,
     ):
@@ -102,6 +103,10 @@ class DeTPPLoss(Module):
             Subset batch with shape (I, B, *).
         """
         I, B = indices.shape
+
+        if isinstance(batch, torch.Tensor):
+            return batch.take_along_dim(indices.reshape(I, B, 1), 0)
+
         for attr in ["time", "num_features", "cat_features"]:
             field = getattr(batch, attr)
             if isinstance(field, torch.Tensor):
@@ -118,7 +123,9 @@ class DeTPPLoss(Module):
         batch.lengths = subset_lengths
         return batch
 
-    def match_targets(self, outputs: PredBatch, targets: GenBatch):
+    def match_targets(
+        self, outputs: PredBatch, presence_scores: torch.Tensor, targets: GenBatch
+    ):
         """Find closest prediction to each target.
         Args:
             outputs : (I, B, [K], D)
@@ -133,8 +140,8 @@ class DeTPPLoss(Module):
         V = valid_mask.sum()
         assert outputs.time.ndim == targets.time.ndim == 3
         K, T = outputs.time.shape[2], targets.time.shape[2] - 1
-        assert K == T
-        loss = torch.zeros((V, K, T), device=targets.device)
+        assert presence_scores.shape == (*valid_mask.shape, K)
+        losses = {}
 
         # 1. Compute cat
         for name in self.data_conf.focus_cat:
@@ -144,7 +151,7 @@ class DeTPPLoss(Module):
             pred = pred.unsqueeze(-1).expand(V, C, K, T)
             true = true.expand(V, K, T)
             ce_loss = F.cross_entropy(pred, true, reduction="none")
-            loss += ce_loss * self.weights[name]
+            losses[name] = ce_loss
 
         # 2. Compute num
         for name in self.data_conf.focus_num:
@@ -156,12 +163,26 @@ class DeTPPLoss(Module):
                 pred = outputs[name][valid_mask]
                 true = targets[name][valid_mask][:, 1:]  # V,[T]
             pred, true = pred.reshape(V, K, 1), true.reshape(V, 1, T)
-            loss += (pred - true).abs() * self.weights[name]
-        cost = loss  # V, K, T
+            losses[name] = (pred - true).abs()
+
+        # Final cost = sum[all](-log(1-o)) + sum[selected](-log(o) + log(1-o))
+        # So in each cell l_bce = log(1-o) - log(o) = log(1/sigmoid - 1)
+        # log(1/sigmoid - 1) = log(1 + exp(-z) - 1) = log(exp(-z)) = -z
+        losses["_presence"] = -presence_scores[valid_mask].unsqueeze(-1)
+
+        cost = torch.zeros((V, K, T), device=targets.device)
+        for name in losses:
+            cost += losses[name] * self.matching_weights.get(name, 1)
         assignment = batch_linear_assignment(cost).unsqueeze(-1)  # V, K, 1
-        loss = loss.take_along_dim(assignment, -1)[..., 0]  # V, K
-        assert loss.shape == (V, K)
-        return loss.mean()
+
+        losses = list(losses.values())
+        loss = sum(losses[1:], start=losses[0]) 
+        loss = loss.take_along_dim(assignment.clip(min=0), -1)  # V, K, 1
+        loss = loss[assignment >= 0].sum()  # V * T
+        # Return sum[all](-log(1-o)) == -sum(logsigmoid(-z))
+        leftover = -torch.nn.functional.logsigmoid(-presence_scores[valid_mask]).sum()
+        final_loss = (loss + leftover) / V
+        return final_loss
 
 
 # MAKE SURE TO NOT CALCULATE PADDINGS!!! L, B, K --> NEED TO MAKE lengths - K!!!!!!!

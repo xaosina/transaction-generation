@@ -18,7 +18,7 @@ model:
       hidden_size: 512
       num_layers: 1
   params:
-    k: ${data_conf.generation_len}
+    k_factor: 1
 
 optimizer:
   name: Adam
@@ -34,7 +34,9 @@ schedulers:
 loss:
   name: DeTPPLoss
   params: 
-    loss_subset: 0.25
+    loss_subset: 0.1
+    matching_weights: {"_presence": 0}
+
 
 data_conf:
   train_transforms:

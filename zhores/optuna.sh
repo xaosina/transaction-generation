@@ -2,8 +2,8 @@
 
 n_gpus=1
 
-dataset=${1:-shakespeare}
-method=${2:-gpt}
+dataset=${1:-alphabattle}
+method=${2:-vae}
 
 array_range=${3:-"0-0"}
 
@@ -41,7 +41,7 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     nvidia-smi;
     python main.py \
         --run_name optuna/${method} \
-        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},metrics/default,optuna]
+        --config_factory [start,metrics/default,datasets/${dataset}/${dataset},methods/${method},optuna]
 '
 EOT
 

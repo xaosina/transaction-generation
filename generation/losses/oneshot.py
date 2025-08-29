@@ -4,7 +4,7 @@ from torch.nn import Module
 
 from generation.data.data_types import GenBatch, LatentDataConfig, PredBatch
 
-from .utils import batch_linear_assignment, rse
+from .utils import batch_linear_assignment, r1
 
 
 class TargetLoss(Module):
@@ -30,7 +30,7 @@ class TargetLoss(Module):
         if data_conf.time_name in data_conf.focus_on:
             pred_time = y_pred.time  # [L, B]
             true_time = y_true.target_time  # [L, B]
-            loss, count = rse(pred_time, true_time)
+            loss, count = r1(pred_time, true_time)
             mse_sum += loss
             mse_count += count
 
@@ -43,7 +43,7 @@ class TargetLoss(Module):
             ]
             pred_num = y_pred.num_features[:, :, pred_feature_ids]
             true_num = y_true.target_num_features[:, :, true_feature_ids]
-            loss, count = rse(pred_num, true_num)
+            loss, count = r1(pred_num, true_num)
             mse_sum += loss
             mse_count += count
 

@@ -53,7 +53,7 @@ class ModeGenerator(BaseGenerator):
                     mode_value, _ = torch.mode(valid_tensor, dim=0)
                     res[0, b] = mode_value
                 else:
-                    mean_value = torch.mean(valid_tensor, dim=0)
+                    mean_value = torch.median(valid_tensor, dim=0)[0]
                     res[0, b] = mean_value
             new_shape = [1] * len(res.shape)
             new_shape[0] = gen_len
