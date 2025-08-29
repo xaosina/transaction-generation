@@ -35,7 +35,7 @@ loss:
   name: DeTPPLoss
   params: 
     loss_subset: 0.1
-    matching_weights: {"_presence": 0}
+    matching_weights: {"_presence": 4}
 
 
 data_conf:
@@ -52,7 +52,9 @@ optuna:
   params:
     n_trials: 100
     n_startup_trials: 10
-    request_list: []
+    request_list:
+    - "loss.params.matching_weights._presence": 0
+    - "model.params.k_factor": 1
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-2, log: True}]]
@@ -61,11 +63,9 @@ optuna:
     - ["model.latent_encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
     - ["model.latent_encoder.params.num_layers", ["suggest_int", {low: 1, high: 10, log: False}]]
     - ["model.latent_encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
-    - ["model.pooler", ["suggest_categorical", {choices: ["last", "mean"]}]]
+    - ["model.params.k_factor", ["suggest_float", {low: 1, high: 3, log: False}]]
 
-    # - 
-    #   - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
-    #   - ["suggest_categorical", {choices: [True, False]}]
+    - ["loss.params.matching_weights._presence", ["suggest_float", {low: 0, high: 10, log: False}]]
 
     - ["model.autoencoder.params.num_norm", ["suggest_categorical", {choices: [True, False]}]]
     - ["model.autoencoder.params.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
