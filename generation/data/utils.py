@@ -4,7 +4,6 @@ from typing import Any, Mapping
 
 import numpy as np
 import torch
-from scipy.optimize import linear_sum_assignment
 from torch.utils.data import DataLoader
 
 from ..utils import create_instances_from_module
@@ -15,19 +14,6 @@ from .data_types import DataConfig, LatentDataConfig
 from .dataset import ShardDataset
 
 logger = logging.getLogger()
-
-
-def batch_linear_assignment(cost):
-    b, w, t = cost.shape
-    matching = torch.full([b, w], -1, dtype=torch.long, device=cost.device)
-    for i in range(b):
-        workers, tasks = linear_sum_assignment(
-            cost[i].numpy(), maximize=False
-        )  # (N, 2).
-        workers = torch.from_numpy(workers)
-        tasks = torch.from_numpy(tasks)
-        matching[i].scatter_(0, workers, tasks)
-    return matching
 
 
 def save_partitioned_parquet(df, save_path, num_shards=20):
