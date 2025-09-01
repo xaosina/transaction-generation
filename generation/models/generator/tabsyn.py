@@ -8,8 +8,19 @@ from ...data.data_types import seq_append, get_seq_tail
 from ..encoders import ConditionalDiffusionEncoder
 from generation.models import autoencoders
 from generation.utils import freeze_module
+from typing import Any, Dict
 
 from . import BaseGenerator, ModelConfig
+import logging
+logger = logging.getLogger()
+
+def _set_or_check_match(_dict: Dict, field: str, value: Any):
+    if _dict.get(field) is None:
+        _dict[field] = value
+    assert _dict[field] == value, (
+        f"The value {_dict[field]} of field '{field}' in the dictionary "
+        f"does not match the provided value {value}"
+    )
 
 
 class LatentDiffusionGenerator(BaseGenerator):
@@ -30,15 +41,11 @@ class LatentDiffusionGenerator(BaseGenerator):
         #TODO: I think it should be frozen by default
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
+        logger.info(f"Tabsyn latent dimension is {self.autoencoder.encoder.output_dim}")
 
         # initializing encoder
         encoder_params = model_config.latent_encoder.params or {}
-        if encoder_params.get("input_size") is None:
-            encoder_params["input_size"] = self.autoencoder.encoder.output_dim
-        assert encoder_params["input_size"] == self.autoencoder.encoder.output_dim, (
-            f"Latent encoder's 'input_size' {encoder_params['input_size']} "
-            f"does not match autoencoder's 'output_dim' {self.autoencoder.encoder.output_dim}"
-        )
+        _set_or_check_match(encoder_params, "input_size", self.autoencoder.encoder.output_dim)
 
         self.encoder = ConditionalDiffusionEncoder(
             model_config.latent_encoder.name, encoder_params)
@@ -47,9 +54,12 @@ class LatentDiffusionGenerator(BaseGenerator):
         self.history_len = encoder_params['history_len']
 
         # initializing history encoder
-        history_encoder_data = model_config.params['history_encoder']
+        history_encoder_data = model_config.params.get('history_encoder')
         self.history_encoder = None # default history encoder
-        if history_encoder_data['name'] is not None:
+        if history_encoder_data is not None:
+
+            history_encoder_params = history_encoder_data['params'] or {}
+            _set_or_check_match(history_encoder_params, "input_size", self.autoencoder.encoder.output_dim)
 
             self.history_encoder = BaseModel.get_model(
                 history_encoder_data['name'], 

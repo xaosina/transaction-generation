@@ -21,7 +21,7 @@ class Reshaper(nn.Module):
         ), f"hidden_size doesnt divide by {self.gen_len}"
         B, D = tensor.shape
         return Seq(
-            tokens=tensor.view(B, self.gen_len, D // self.gen_len).permute(1, 0, 2),
+            tokens=tensor.view(B, self.gen_len, D // self.gen_len).permute(1, 0, 2).contiguous(),
             lengths=torch.ones((B,), dtype=torch.long, device=tensor.device) * self.gen_len,
             time=None,
         )
