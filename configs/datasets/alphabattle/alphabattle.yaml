@@ -43,7 +43,7 @@ data_conf:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 1.0
+        scale: 11754.0
     "1":
       TimeToDiff:
         disable: True
@@ -58,7 +58,7 @@ data_conf:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 1.0
+        scale: 11754.0
     "1":
       TimeToDiff:
         disable: True
