@@ -1,0 +1,27 @@
+config_factory: [start, metrics/default, datasets/age/age, methods/vae]
+
+optimizer:
+  params:
+    weight_decay: 2.5018811032969796e-10
+    lr: 0.0026371693993216734
+model:
+  autoencoder:
+    params:
+      d_token: 64
+      num_layers: 8
+      n_head: 1
+      factor: 1
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+schedulers:
+  step:
+    StepLR:
+      step_size: 50
+  beta:
+    BetaScheduler:
+      init_beta: 0.0012981258450870876
+      factor: 0.2
+      patience: 3

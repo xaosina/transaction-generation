@@ -173,6 +173,9 @@ class DeTPPLoss(Module):
         cost = torch.zeros((V, K, T), device=targets.device)
         for name in losses:
             cost += losses[name] * self.matching_weights.get(name, 1)
+
+        if cost.isnan().any():
+            return torch.tensor(float('nan'))
         assignment = batch_linear_assignment(cost).unsqueeze(-1)  # V, K, 1
 
         losses = list(losses.values())
