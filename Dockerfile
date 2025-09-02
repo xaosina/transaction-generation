@@ -26,3 +26,6 @@ RUN if [[ -n "$DEV" ]]; then \
 
 WORKDIR /home
 
+# Only managed to install inside docker:
+# pip install --no-build-isolation torch-linear-assignment
+# docker commit <container_id> <image>
