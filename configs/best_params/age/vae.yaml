@@ -1,4 +1,4 @@
-config_factory: [start, metrics/default, datasets/age/age, methods/methods/vae]
+config_factory: [start, metrics/default, datasets/age/age, methods/vae]
 
 optimizer:
   params:
