@@ -817,8 +817,9 @@ class Density(BaseMetric):
 
 @dataclass
 class Detection(BaseMetric):
-    dataset_config: str
-    method_config: str = "gru"
+    '''
+    Run GRU classifier to detect generated sequences.
+    '''
     condition_len: int = 0
     verbose: bool = False
 
@@ -830,7 +831,7 @@ class Detection(BaseMetric):
             gen=gen,
             log_dir=self.log_dir,
             data_conf=data_conf,
-            dataset=self.dataset_config,
+            dataset=f"detection/{self.data_conf.dataset_name}",
             tail_len=tail_len,
             devices=self.devices,
             verbose=self.verbose,

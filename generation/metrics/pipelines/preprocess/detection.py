@@ -12,6 +12,9 @@ def prepare_data(
     tail_len=None,
 ):
     orig, gen = deepcopy(orig), deepcopy(gen)
+    assert (
+        data_conf.seq_cols == data_conf.focus_on
+    ), "Can't run detection if you not generate all features"
     seq_cols = data_conf.seq_cols
     # Classification labels
     gen["generated"] = 1
