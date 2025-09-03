@@ -82,16 +82,9 @@ data_conf:
     #     untouched_slice: [None, None]
 
   val_transforms:
-    "0":
-      RescaleTime:
-        loc: 0.0
-        scale: 365.0
-    "1":
-      TimeToDiff:
-        disable: False
-    "log_tfs":
-      Logarithm:
-        names: ["amount"]
+    "0": ${data_conf.train_transforms.0}
+    "1": ${data_conf.train_transforms.1}
+    "log_tfs": ${data_conf.train_transforms.log_tfs}
     "3":
       CutTargetSequence:
         target_len: *generation_len
