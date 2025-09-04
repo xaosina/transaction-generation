@@ -2,7 +2,7 @@ from ebes.model.seq2seq import BaseSeq2Seq, PositionalEncoding
 from ebes.types import Seq
 
 
-class Transformer(BaseSeq2Seq):
+class Transformer1(BaseSeq2Seq):
     def __init__(
         self,
         input_size: int,

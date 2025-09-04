@@ -10,4 +10,4 @@ sdmetrics==0.19.0
 Levenshtein==0.26.1
 pyrallis==0.3.1
 dacite==1.9.2
-torch-linear-assignment==0.0.3
+# torch-linear-assignment==0.0.3

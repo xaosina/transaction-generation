@@ -7,16 +7,15 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, NewType, Union
+from typing import Dict, NewType, Union
 
 import numpy as np
 import pandas as pd
 from Levenshtein import distance as lev_score
-from sdmetrics.reports.single_table import QualityReport
-from sklearn.metrics import mean_squared_error as mse_score
-from sklearn.metrics import accuracy_score
-from scipy.stats import entropy
 from scipy.optimize import linear_sum_assignment
+from scipy.stats import entropy, gaussian_kde
+from sdmetrics.reports.single_table import QualityReport
+from sklearn.metrics import accuracy_score, r2_score as r2_sklearn
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -71,7 +70,7 @@ class Reconstruction(BaseMetric):
 
     def _compute_mse(self, row):
         gt, pred = row["gt"], row["pred"]
-        return r2_score(gt, pred)
+        return r2_sklearn(gt, pred)
 
     def _compute_accuracy(self, row):
         gt, pred = row["gt"], row["pred"]
@@ -115,6 +114,7 @@ def r2_score(true_num, pred_num):
 
     return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
 
+
 def r1_score(true_num, pred_num):
     """R1 score for numerical(MAE analog for R2)
     Input:
@@ -132,6 +132,7 @@ def r1_score(true_num, pred_num):
 
     return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
 
+
 def smape_score(true_num, pred_num):
     """1 - sMAPE score
     Input:
@@ -140,11 +141,12 @@ def smape_score(true_num, pred_num):
     """
     gen_len = true_num.shape[0]
     nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
-    denominator = np.abs(pred_num[:, None]) + np.abs(true_num[None, :]) # [L, L, B, D]
+    denominator = np.abs(pred_num[:, None]) + np.abs(true_num[None, :])  # [L, L, B, D]
     denominator[nominator == 0] = 1
-    smape = nominator / denominator / gen_len # L, L, B, D
+    smape = nominator / denominator / gen_len  # L, L, B, D
 
     return 1 / gen_len - smape  # [L, L, B, D]
+
 
 @dataclass
 class OTD(BaseMetric):
@@ -226,7 +228,7 @@ class OTD(BaseMetric):
             res += f" {self.max_shift}"
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
-        return  res
+        return res
 
 
 class KLDiv(BaseMetric):
@@ -654,6 +656,53 @@ class GenVsHistoryMetric(BaseMetric):
 
 
 @dataclass
+class DiversityIndex(BaseMetric):
+    def _simpson_cat(self, values):
+        simpson = []
+        for b in range(len(values)):
+            _, counts = np.unique(values[b], return_counts=True)
+            p = counts / len(values[b])
+            simpson += [1 - np.sum(p**2)]
+        return np.mean(simpson)
+
+    def _simpson_num(self, values):
+        simpson = []
+        flattened = np.concatenate(values.values)
+        x_min, x_max = flattened.min(), flattened.max()
+        x = np.linspace(x_min, x_max, 512)
+        for b in range(len(values)):
+            kde = gaussian_kde(values[b])
+            p = kde(x)
+            integral = np.trapz(p**2, x)
+            simpson += [integral]
+        return np.mean(simpson)
+
+    def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
+        data = {}
+        data["orig"] = orig[self.data_conf.focus_on].map(
+            lambda x: x[-self.data_conf.generation_len :]
+        )
+        data["gen"] = gen[self.data_conf.focus_on].map(
+            lambda x: x[-self.data_conf.generation_len :]
+        )
+        collect = {"orig": [], "gen": []}
+        res = {}
+        for sample in collect:
+            for feature in self.data_conf.focus_cat:
+                res[f"{sample}_{feature}"] = self._simpson_cat(data[sample][feature])
+                collect[sample] += [res[f"{sample}_{feature}"]]
+            # for feature in self.data_conf.focus_num:
+            #     if self.data_conf.time_name != feature:
+            #         continue
+            #     res[f"{sample}_{feature}"] = self._simpson_num(data[sample][feature])
+            #     collect[sample] += [res[f"{sample}_{feature}"]]
+            res[sample] = np.mean(collect[sample])
+        return res
+
+    def __repr__(self):
+        return "DiversityIndex"
+
+@dataclass
 class CardinalityCoverage(GenVsHistoryMetric):
     def get_scores(self, row):
         hists, preds = row["hists"], row["preds"]
@@ -768,8 +817,9 @@ class Density(BaseMetric):
 
 @dataclass
 class Detection(BaseMetric):
-    dataset_config: str
-    method_config: str = "gru"
+    '''
+    Run GRU classifier to detect generated sequences.
+    '''
     condition_len: int = 0
     verbose: bool = False
 
@@ -781,7 +831,7 @@ class Detection(BaseMetric):
             gen=gen,
             log_dir=self.log_dir,
             data_conf=data_conf,
-            dataset=self.dataset_config,
+            dataset=f"detection/{self.data_conf.dataset_name}",
             tail_len=tail_len,
             devices=self.devices,
             verbose=self.verbose,

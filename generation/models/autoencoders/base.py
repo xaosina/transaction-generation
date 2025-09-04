@@ -4,19 +4,15 @@ from typing import Any, Mapping, Optional, Sequence
 
 import torch
 import torch.nn as nn
-from ebes.model.preprocess import Batch2Seq, SeqBatchNorm
-from ebes.types import Seq
 from ebes.model import BaseModel
+from ebes.model.preprocess import SeqBatchNorm
 from ebes.model.seq2seq import Projection
 from ebes.types import Seq
 
-from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
-
-# from ..data.preprocess.vae.models.vae.model import Decoder_model as VAE_Decoder
-
-from ...data.batch_tfs import NewFeatureTransform
-from ...utils import create_instances_from_module
 from ...data import batch_tfs
+from ...data.batch_tfs import NewFeatureTransform
+from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
+from ...utils import create_instances_from_module
 
 
 @dataclass(frozen=True)
@@ -39,8 +35,9 @@ class BaseAE(BaseModel):
 
 
 class BaselineAE(BaseAE):
-    def __init__(self, data_conf, ae_config: AEConfig):
+    def __init__(self, data_conf, ae_config):
         super().__init__()
+        ae_config: AEConfig = ae_config.autoencoder
         self.encoder = Batch2TransformedSeq(
             cat_cardinalities=data_conf.cat_cardinalities,
             num_features=data_conf.num_names,
@@ -54,10 +51,10 @@ class BaselineAE(BaseAE):
         self.decoder = ReconstructorBase(data_conf, self.encoder.output_dim)
 
     def forward(self, x: GenBatch) -> PredBatch:
-        raise "No need to train a GroundTruthGenerator."
+        raise "We don't pretrain AE"
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        raise "No need to train a GroundTruthGenerator."
+        raise "We don't use AE yet"
 
 
 class Batch2TransformedSeq(nn.Module):

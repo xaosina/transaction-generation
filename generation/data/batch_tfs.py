@@ -13,7 +13,7 @@ try:
 except Exception:
     print("Using slow linear assignment implementation")
     CPU_ASSIGNMENT = True
-    from .assign import batch_linear_assignment
+    from ..losses.utils import batch_linear_assignment
 
 import numpy as np
 import torch
