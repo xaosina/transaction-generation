@@ -1,0 +1,24 @@
+config_factory: [start, metrics/detection, datasets/age/age, methods/tabsyn/base]
+
+# setting up the optimal autoencoder
+model:
+  autoencoder:
+    params:
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+    checkpoint: TODO #SPECIFY YOUR CHECKPOINT!
+  
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
