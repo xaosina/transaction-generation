@@ -4,12 +4,12 @@ import numpy as np
 import torch
 from sklearn.preprocessing import LabelEncoder
 
-try:
-    from hmmlearn.hmm import CategoricalHMM
-    from tick.base import TimeFunction
-    from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
-except ImportError:
-    print("Could not import TPP libs")
+# try:
+#     from hmmlearn.hmm import CategoricalHMM
+#     from tick.base import TimeFunction
+#     from tick.hawkes import HawkesEM, HawkesKernelTimeFunc, SimuHawkes
+# except ImportError:
+#     print("Could not import TPP libs")
 
 from ...data.data_types import DataConfig, GenBatch, PredBatch
 from . import BaseGenerator, ModelConfig
@@ -257,7 +257,7 @@ def select_hmm_by_bic(
     n_iter: int = 100,
     tol: float = 1e-4,
     restarts: int = 1,
-) -> CategoricalHMM:
+): # -> CategoricalHMM:
     N = obs.shape[0]
     best_bic = float("inf")
     best_m = None

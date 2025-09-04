@@ -55,16 +55,9 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "0":
-      RescaleTime:
-        loc: 0.0
-        scale: 365.0
-    "1":
-      TimeToDiff:
-        disable: True
-    "log_tfs":
-      Logarithm:
-        names: ["transaction_amt"]
+    "0": ${data_conf.train_transforms.0}
+    "1": ${data_conf.train_transforms.1}
+    "log_tfs": ${data_conf.train_transforms.log_tfs}
     "3":
       CutTargetSequence:
         target_len: *generation_len
