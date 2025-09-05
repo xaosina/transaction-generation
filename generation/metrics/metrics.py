@@ -271,7 +271,8 @@ class OTD(BaseMetric):
         results = dict(
             zip(self.data_conf.focus_num + self.data_conf.focus_cat, perfect_score)
         )
-
+        if self.f1_average == "micro":
+            return {"overall": np.mean(list(results.values()))}
         return {
             "overall": np.mean(list(results.values())),
             **results,
@@ -283,6 +284,8 @@ class OTD(BaseMetric):
             res += f" {self.max_shift}"
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
+        if self.f1_average != "macro":
+            res += f" {self.f1_average}"
         return res
 
 

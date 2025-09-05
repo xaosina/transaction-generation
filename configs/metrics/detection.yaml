@@ -4,6 +4,8 @@ evaluator:
   temperature: 1.
   metrics:
     - OTD
+    - OTD:
+        f1_average: micro
     - Cardinality
     - F1Metric:
         average: macro
