@@ -12,9 +12,6 @@ def prepare_data(
     tail_len=None,
 ):
     orig, gen = deepcopy(orig), deepcopy(gen)
-    assert (
-        data_conf.seq_cols == data_conf.focus_on
-    ), "Can't run detection if you not generate all features"
     seq_cols = data_conf.seq_cols
     # Classification labels
     gen["generated"] = 1
@@ -29,5 +26,6 @@ def prepare_data(
         assert final_df._seq_len.min() >= tail_len
         final_df[seq_cols] = final_df[seq_cols].map(lambda x: x[-tail_len:])
         final_df["_seq_len"] = tail_len
+    final_df = final_df[[data_conf.index_name] + seq_cols + ["generated", "_seq_len"]]
     # Save
     final_df.to_parquet(save_path, index=False)
