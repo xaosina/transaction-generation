@@ -1,0 +1,30 @@
+config_factory: [start, metrics/detection, datasets/alphabattle_small/alphabattle_small, methods/tabsyn/base]
+
+# setting up the optimal autoencoder
+model:
+  autoencoder:
+    params:
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/alphabattle_small/debug/-/seed_0/ckpt/epoch__0057_-_loss__-0.002813.ckpt
+  
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+
+data_conf:
+  train_resamples: 10
+  val_ratio: 0.12
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+
+evaluator:
+  devices: ["cuda:0", "cuda:0"] # adjust for your hardware ALWAYS SET MORE THAN 1 DEVICE (possible repeated)
