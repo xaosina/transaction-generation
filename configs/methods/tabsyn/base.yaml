@@ -23,6 +23,7 @@ model:
   autoencoder: 
     name: VAE
     params:
+      use_time: True
       d_token: 64
       num_layers: 8
       n_head: 4

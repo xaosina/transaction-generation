@@ -8,7 +8,7 @@ model:
       num_layers: 10
       n_head: 4
       factor: 28
-    checkpoint: TODO #SPECIFY YOUR CHECKPOINT!
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/debug/-(27)/seed_0/ckpt/epoch__0351_-_loss__-0.002042.ckpt
   
   latent_encoder:
     params:
@@ -22,3 +22,6 @@ data_conf:
     '1':
       TimeToDiff:
         disable: true
+
+evaluator:
+  devices: ["cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)
