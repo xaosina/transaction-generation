@@ -6,7 +6,6 @@ evaluator:
     - OTD
     - OTD:
         f1_average: micro
-    - Levenshtein
     - Cardinality
     - MultisetF1Metric:
         average: macro
