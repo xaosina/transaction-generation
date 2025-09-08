@@ -36,7 +36,7 @@ sbatch <<EOT
 
 #SBATCH --gpus=${n_gpus}
 
-srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
+srun singularity exec --bind /home/${login}/dev/:/home -f --nv image_trans.sif bash -c '
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \

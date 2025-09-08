@@ -7,7 +7,7 @@ job_name=${1:-simple}
 time=${2:-"00-03"}
 login=${3:-d.osin}
 
-PATH_TO_CHECK=/gpfs/gpfs0/${login}/transaction-generation/zhores/configs/${job_name}.yaml
+PATH_TO_CHECK=/home/${login}/dev/transaction-generation/zhores/configs/${job_name}.yaml
 
 if [ ! -e "$PATH_TO_CHECK" ]; then
     echo "Error: The path '$PATH_TO_CHECK' does not exist."
@@ -38,7 +38,7 @@ sbatch <<EOT
 
 #SBATCH --gpus=${n_gpus}
 
-srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
+srun singularity exec --bind /home/${login}/dev/:/home -f --nv image_trans.sif bash -c '
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \
@@ -46,6 +46,7 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
         --run_name ${job_name} \
         --device 'cuda:0' \
         --trainer.verbose False \
+        --runner.params.n_runs 3 \
 '
 EOT
 
