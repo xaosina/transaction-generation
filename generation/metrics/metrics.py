@@ -148,10 +148,60 @@ def smape_score(true_num, pred_num):
     return 1 / gen_len - smape  # [L, L, B, D]
 
 
+def f1_macro(true_cat, pred_cat):
+    L, B, D = true_cat.shape
+    result = np.zeros((L, L, B, D))
+    
+    for d in range(D):
+        y_true = true_cat[:, :, d]  # (L, B)
+        y_pred = pred_cat[:, :, d]  # (L, B)
+        
+        # 1. Create match matrix
+        match = (y_pred[:, None, :] == y_true[None, :, :])  # (L, L, B)
+        
+        # 2. Compute class counts PER BATCH
+        max_class = max(np.max(y_true), np.max(y_pred)) + 1
+        n_true = np.zeros((max_class, B))
+        n_pred = np.zeros((max_class, B))
+        
+        for b in range(B):
+            n_true[:, b] = np.bincount(y_true[:, b], minlength=max_class)
+            n_pred[:, b] = np.bincount(y_pred[:, b], minlength=max_class)
+        
+        denom = n_true + n_pred  # (max_class, B)
+        denom[denom == 0] = 1  # Avoid div/0 (safe since TP=0 when denom=0)
+        
+        # For each (i,j,b), we need denom[y_pred[i,b], b]
+        batch_indices = np.arange(B)[None, None, :]  # (1, 1, B)
+        class_indices = y_pred[:, None, :]           # (L, 1, B)
+        
+        # Broadcast to (L, L, B) and index denom
+        denom_vals = denom[class_indices, batch_indices]  # (L, L, B)
+        
+        # 4. Compute F1 contribution ONLY where match=True
+        f1_contrib = np.where(match, 2 / denom_vals, 0)  # (L, L, B)
+        
+        # 5. Normalize by number of unique classes PER BATCH
+        unique_counts = np.array([
+            len(np.unique(np.concatenate([y_true[:, b], y_pred[:, b]]))) 
+            for b in range(B)
+        ])
+        result[:, :, :, d] = f1_contrib / unique_counts[None, None, :]
+    
+    return result
+
+
+def f1_micro(true_cat, pred_cat):
+    gen_len = true_cat.shape[0]  # [gen_len, B, D]
+    accuracy = (pred_cat[:, None] == true_cat[None, :]) / gen_len  # [L, L, B, D]
+    return accuracy
+
+
 @dataclass
 class OTD(BaseMetric):
     max_shift: int = -1
     num_metric: str = "r1"
+    f1_average: str = "macro"
 
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
@@ -191,9 +241,11 @@ class OTD(BaseMetric):
                 num_metric = r1_score(true_num, pred_num)
             elif self.num_metric == "smape":
                 num_metric = smape_score(true_num, pred_num)
+            else:
+                raise ValueError(f"Unknown metric: {self.num_metric}")
 
         # Prepare cat arrays
-        accuracy = np.empty((gen_len, gen_len, orig.shape[0], 0))
+        cat_metric = np.empty((gen_len, gen_len, orig.shape[0], 0))
         if self.data_conf.focus_cat:
             true_cat = orig[self.data_conf.focus_cat].values  # B, D
             pred_cat = gen[self.data_conf.focus_cat].values  # B, D
@@ -207,16 +259,20 @@ class OTD(BaseMetric):
                 np.concatenate(pred_cat.ravel()).reshape((B, D, gen_len)),
                 (2, 0, 1),
             )  # [gen_len, B, D]
-            accuracy = (
-                pred_cat[:, None] == true_cat[None, :]
-            ) / gen_len  # [L, L, B, D]
+            if self.f1_average == "micro":
+                cat_metric = f1_micro(true_cat, pred_cat)
+            elif self.f1_average == "macro":
+                cat_metric = f1_macro(true_cat, pred_cat)
+            else:
+                raise ValueError(f"Unknown f1 average: {self.f1_average}")
 
-        full_score = np.concatenate([num_metric, accuracy], axis=-1)  # [L, L, B, D]
+        full_score = np.concatenate([num_metric, cat_metric], axis=-1)  # [L, L, B, D]
         perfect_score = get_perfect_score(full_score, self.max_shift, gen_len)
         results = dict(
             zip(self.data_conf.focus_num + self.data_conf.focus_cat, perfect_score)
         )
-
+        if self.f1_average == "micro":
+            return {"overall": np.mean(list(results.values()))}
         return {
             "overall": np.mean(list(results.values())),
             **results,
@@ -228,6 +284,8 @@ class OTD(BaseMetric):
             res += f" {self.max_shift}"
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
+        if self.f1_average != "macro":
+            res += f" {self.f1_average}"
         return res
 
 
@@ -715,6 +773,7 @@ class DiversityIndex(BaseMetric):
     def __repr__(self):
         return "DiversityIndex"
 
+
 @dataclass
 class CardinalityCoverage(GenVsHistoryMetric):
     def get_scores(self, row):
@@ -830,9 +889,10 @@ class Density(BaseMetric):
 
 @dataclass
 class Detection(BaseMetric):
-    '''
+    """
     Run GRU classifier to detect generated sequences.
-    '''
+    """
+
     condition_len: int = 0
     verbose: bool = False
 

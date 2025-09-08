@@ -38,6 +38,8 @@ def run_eval_detection(
             method=method,
             experiment=experiment,
             train_data=temp_dir,
+            use_time=data_conf.time_name in data_conf.focus_on,
+            focus_on=data_conf.focus_on,
             log_dir=log_dir,
             verbose=verbose,
             devices=devices,

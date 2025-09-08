@@ -1,9 +1,11 @@
 evaluator:
-  devices: ["cuda:1", "cuda:2"]
+  devices: ["cuda:0", "cuda:0"] # ALWAYS SET MORE THAN 1 DEVICE
   topk: 1
   temperature: 1.
   metrics:
     - OTD
+    - OTD:
+        f1_average: micro
     - Cardinality
     - MultisetF1Metric:
         average: macro

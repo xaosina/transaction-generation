@@ -7,7 +7,7 @@ import pdb
 import signal
 from functools import partialmethod
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Mapping
 
 import pandas as pd
 from ebes.pipeline.base_runner import Runner
@@ -22,7 +22,13 @@ def start_debugging(_, frame):
 
 
 def collect_config(
-    dataset, method, experiment, specify=None, gpu=None
+    dataset,
+    method,
+    experiment,
+    specify=None,
+    gpu=None,
+    use_time: bool = True,
+    focus_on: list[str] | None = None,
 ) -> dict[str, Any]:
     data_config = OmegaConf.load(Path(f"{DIRPATH}/datasets/{dataset}.yaml"))
     method_config = OmegaConf.load(Path(f"{DIRPATH}/methods/{method}.yaml"))
@@ -40,6 +46,28 @@ def collect_config(
     if gpu is not None:
         assert config.runner.get("device_list") is None
         config["device"] = gpu
+
+    if not use_time:
+        config.model.preprocess.params.time_process = "none"
+    if focus_on is not None:
+        if config.cc is not None:
+            config.cc = {k: v for k, v in config.cc.items() if k in focus_on}
+            config.cc = None if config.cc == {} else config.cc
+        if config.nn is not None:
+            config.nn = [n for n in config.nn if n in focus_on]
+            config.nn = None if config.nn == [] else config.nn
+            # Also filter Logarithm
+            new_btfs = []
+            for tfs in config.data.preprocessing.common_pipeline.batch_transforms:
+                if isinstance(tfs, Mapping) and "Logarithm" in tfs:
+                    new_log_features = [n for n in tfs["Logarithm"]["names"] if n in focus_on]
+                    if new_log_features == []:
+                        continue
+                    else:
+                        tfs["Logarithm"]["names"] = new_log_features
+                new_btfs += [tfs]
+            config.data.preprocessing.common_pipeline.batch_transforms = new_btfs
+
     return config  # type: ignore
 
 
@@ -59,6 +87,8 @@ def main(
     method: str,
     experiment: str,
     train_data: Path,
+    use_time: bool = True,
+    focus_on: list[str] | None = None,
     test_data: Path = None,
     log_dir: Path = None,
     specify: str = None,
@@ -82,7 +112,9 @@ def main(
     assert logging_lvl in ["error", "info"]
     signal.signal(signal.SIGUSR1, start_debugging)
 
-    config = collect_config(dataset, method, experiment, specify)
+    config = collect_config(
+        dataset, method, experiment, specify, use_time=use_time, focus_on=focus_on
+    )
     config["trainer"]["verbose"] = verbose
     config.logging.cons_lvl = logging_lvl
     if devices is not None:
