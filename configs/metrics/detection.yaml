@@ -4,7 +4,7 @@ evaluator:
   temperature: 1.
   metrics:
     - OTD
-    - Levenstein
+    - Levenshtein
     - OTD:
         f1_average: micro
     - Cardinality
