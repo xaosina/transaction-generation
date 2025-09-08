@@ -43,9 +43,7 @@ class AutoregressiveGenerator(BaseGenerator):
 
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = self.autoencoder.load_state_dict(
-                ckpt["model"], strict=False
-            )
+            msg = self.autoencoder.load_state_dict(ckpt["model"], strict=False)
 
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
@@ -114,8 +112,11 @@ class Reshaper(BaseModel):
         ), f"hidden_size doesnt divide by {self.gen_len}"
         B, D = tensor.shape
         return Seq(
-            tokens=tensor.view(B, self.gen_len, D // self.gen_len).permute(1, 0, 2).contiguous(),
-            lengths=torch.ones((B,), dtype=torch.long, device=tensor.device) * self.gen_len,
+            tokens=tensor.view(B, self.gen_len, D // self.gen_len)
+            .permute(1, 0, 2)
+            .contiguous(),
+            lengths=torch.ones((B,), dtype=torch.long, device=tensor.device)
+            * self.gen_len,
             time=None,
         )
 
@@ -129,9 +130,7 @@ class OneShotGenerator(BaseGenerator):
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = self.autoencoder.load_state_dict(
-                ckpt["model"], strict=False
-            )
+            msg = self.autoencoder.load_state_dict(ckpt["model"], strict=False)
 
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
@@ -153,7 +152,6 @@ class OneShotGenerator(BaseGenerator):
 
         self.reshaper = Reshaper(data_conf.generation_len)
 
-
     def forward(self, x: GenBatch) -> PredBatch:
         """
         Forward pass of the Auto-regressive Transformer
@@ -163,9 +161,9 @@ class OneShotGenerator(BaseGenerator):
         """
         x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
         x = self.encoder(x)  # [L, B, D]
-        x = self.poller(x) # [B, D]
+        x = self.poller(x)  # [B, D]
         x = Seq(tokens=x, lengths=None, time=None)
-        x = self.projector(x) # [B, D * gen_len]
+        x = self.projector(x)  # [B, D * gen_len]
         x = self.reshaper(x)  # [gen_len, B, D]
         x = self.autoencoder.decoder(x)
         return x
@@ -204,9 +202,7 @@ class OneShotDistributionGenerator(BaseGenerator):
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = self.autoencoder.load_state_dict(
-                ckpt["model"], strict=False
-            )
+            msg = self.autoencoder.load_state_dict(ckpt["model"], strict=False)
 
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
@@ -292,7 +288,6 @@ class OneShotDistributionGenerator(BaseGenerator):
                 assert all(scaled.sum(dim=1) == gen_len)
 
                 cat_features.append(self.counts_to_indices(scaled).T)
-            
 
             cat_features = torch.stack(cat_features, dim=2)
 
@@ -322,14 +317,16 @@ class OneShotDistributionGenerator(BaseGenerator):
         return GenBatch(
             lengths=tensor.lengths,
             time=tensor.time,
-            index=None, 
+            index=None,
             num_features=num_features,
             num_features_names=num_names,
             cat_features=cat_features,
-            cat_features_names=cat_features_names
+            cat_features_names=cat_features_names,
         )
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs) -> GenBatch:
+    def generate(
+        self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs
+    ) -> GenBatch:
         """
         Auto-regressive generation using the transformer
 

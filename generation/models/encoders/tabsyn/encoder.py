@@ -3,7 +3,7 @@ import torch.nn as nn
 from .model import EDM
 from .model import Unet1DDiffusion
 from .diffusion_utils import sample
-from ebes.model.basemodel import BaseModel
+from ebes.model.seq2seq import BaseSeq2Seq
 # from ...generator import Reshaper
 
 from ebes.types import Seq
@@ -26,7 +26,7 @@ class Reshaper(nn.Module):
             time=None,
         )
 
-class ConditionalDiffusionEncoder(BaseModel):
+class ConditionalDiffusionEncoder(BaseSeq2Seq):
 
     @staticmethod
     def seq2tensor(s: Seq | None) -> torch.Tensor | None:
