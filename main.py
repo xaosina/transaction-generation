@@ -51,7 +51,6 @@ def main():
     if append_factory is not None:
         config_factory += append_factory
     merged_config = run_config_factory(config_path, config_factory)
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as tmpfile:
         OmegaConf.save(config=merged_config, f=tmpfile.name)
         temp_config_path = tmpfile.name

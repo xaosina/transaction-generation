@@ -1,0 +1,16 @@
+config_factory: [start, metrics/detection, datasets/age/age, methods/adiff4tpp/base]
+
+
+data_conf:
+  batch_size: 4
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: True
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: True
+
+evaluator:
+  devices: ["cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)

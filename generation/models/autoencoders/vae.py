@@ -202,10 +202,10 @@ class Decoder(nn.Module):
         self.d_token = d_token
         self.num_names = num_names
         self.cat_cardinalities = cat_cardinalities
+        
         num_counts = 1  # Time
         if self.num_names:
             num_counts += len(self.num_names)
-
         self.decoder = Transformer(num_layers, d_token, n_head, d_token, factor)
         self.reconstructor = Reconstructor(
             num_counts, self.cat_cardinalities or {}, d_token=d_token
@@ -220,6 +220,7 @@ class Decoder(nn.Module):
         valid_mask = (
             torch.arange(L, device=x.device)[:, None] < seq.lengths
         ).ravel()  # L, B
+        #x = x.view(L * B, D, self.d_token)[valid_mask]
         x = x.view(L * B, D, self.d_token)[valid_mask]
 
         # Decode and reconstruct

@@ -1,0 +1,116 @@
+trainer:
+  metrics_on_train: True
+  total_iters: 10_000_000 # may be it is too much...
+
+evaluator:
+  devices: ["cuda:0", "cuda:1"]
+
+data_conf:
+  train_resamples: 50
+  batch_size: 4
+  train_random_end: time
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true #IMPORTANT: make sure it is consistent with VAE!
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+# MODEL
+model:
+  name: LatentDiffusionGenerator
+  autoencoder: 
+    name: VAE
+    params:
+      use_time: False
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+    pretrain: False
+    frozen: True
+    checkpoint: 
+
+  latent_encoder:
+    name: ConditionalDiffusionEncoder
+    params:
+      generation_len: ${data_conf.generation_len}
+      history_len: 32 # может быть другое число, 
+      history_encoder_dim: &history_encoder_output_dim 256
+      base_factor: 256 # unetS: 64, unetM: 128, unetL: 256, unetXL: 512
+      dim_t : 1024
+      num_classes: 1
+  
+  params:
+    history_encoder:
+      name: GRU
+      output_dim: *history_encoder_output_dim
+      params:
+        hidden_size: *history_encoder_output_dim
+        num_layers: 1
+      pretrain: False
+      frozen: False
+      checkpoint:
+
+  #   num_layers: 2
+  #   d_token: 6
+  #   n_head: 2
+  #   factor: 64
+
+
+optimizer:
+  name: Adam
+  params:
+    lr: 1.e-3 # Note: I didn't adjust hyperparams&schedulers
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR: # Note: I didn't adjust hyperparams&schedulers
+      step_size: 30
+  # "beta":
+  #   BetaScheduler:
+  #     init_beta: 0.01
+  #     factor: 0.7
+  #     patience: 4
+  #     min_beta: 0.00001
+  #     verbose: True
+
+loss:
+  name: DummyLoss
+
+optuna: # Note: It is not valid
+  params:
+    n_trials: 70
+    n_startup_trials: 3
+    request_list: 
+      - 'optimizer.params.weight_decay': 1.5429769361370426e-13
+        'optimizer.params.lr': 0.00016912601015410544
+        'model.encoder.params.hidden_size': 164
+        'model.encoder.params.num_layers': 3
+        'model.encoder.params.dropout': 0.1831228989111418
+        "model.preprocessor.batch_transforms.'0'.TimeToFeatures.process_type": cat
+        'model.preprocessor.num_norm': false
+        'model.preprocessor.cat_emb_dim': 41
+        'model.preprocessor.num_emb_dim': 60
+        'loss.params.mse_weight': 0.5
+        'data_conf.train_transforms.1.TimeToDiff.disable': True
+    target_metric: ${trainer.ckpt_track_metric}
+  suggestions:
+    - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-3, log: True}]]
+    - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
+
+    - ["model.encoder.params.hidden_size", ["suggest_int", {low: 10, high: 1200, log: True}]]
+    - ["model.encoder.params.num_layers", ["suggest_int", {low: 1, high: 7, log: False}]]
+    - ["model.encoder.params.dropout", ["suggest_float", {low: 1.e-10, high: 0.3, log: True}]]
+
+    - ["model.preprocessor.batch_transforms.0.TimeToFeatures.process_type", ["suggest_categorical", {choices: ["diff", "cat", "none"]}]]
+    - 
+      - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
+      - ["suggest_categorical", {choices: [True, False]}]
+    - ["model.preprocessor.num_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.preprocessor.cat_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+    - ["model.preprocessor.num_emb_dim", ["suggest_int", {low: 1, high: 128, log: False}]]
+
+    - ["loss.params.mse_weight", ["suggest_float", {low: 0, high: 1, log: False}]]

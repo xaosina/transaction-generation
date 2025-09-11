@@ -1,0 +1,63 @@
+trainer:
+  metrics_on_train: True
+
+evaluator:
+  devices: ["cuda:0", "cuda:1"]
+
+data_conf:
+  batch_size: 4
+  val_ratio: 0.15
+  train_random_end: time # обрезка последовательности в рандомном месте
+  train_transforms:
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len} # из обрезанной после-ности - отсекается, что предиктить
+
+# MODEL
+model:
+  name: AsynDiffGenerator
+  autoencoder: 
+    name: VAE
+    params:
+      num_layers: 10
+      d_token: 8
+      n_head: 4
+      factor: 28
+      use_time: True
+    pretrain: False
+    frozen: True
+    checkpoint: /trinity/home/j.chen/2.SeqDiff/transaction-generation/diffgen_vaes/vae_age.ckpt
+
+
+  latent_encoder:
+    name: AsynDiffEncoder 
+    params:
+      num_rows:  64
+      latent_size: 32 ## d_token * num_features in training
+      hidden_size: 1152 ## must be the times of laten_size
+      depth: 7
+      num_heads: 16
+      mlp_ratio: 4
+      learn_sigma: False
+      loss_type: l2 # l2,l2-squared and huber
+      mask: False
+      schedule: Async
+      int_ode: rk4
+      generation_len: 32
+      history_len: 32
+
+
+optimizer:
+  name: Adam
+  params:
+    lr: 1.5e-3
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 30
+
+loss:
+  name: DummyLoss
+

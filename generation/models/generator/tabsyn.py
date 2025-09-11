@@ -127,7 +127,7 @@ class LatentDiffusionGenerator(BaseGenerator):
             hist (GenBatch): history batch
 
         """
-
+        breakpoint()
         n_seqs = len(hist)
         hist = deepcopy(hist)
         full_history_seq = self.autoencoder.encoder(hist)

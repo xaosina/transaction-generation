@@ -125,7 +125,6 @@ class ConditionalDiffusionEncoder(BaseModel):
             hstate=history_embedding, 
             rawhist=history_seq
         ) # [B, L*D]
-
         return self.gen_reshaper(
             Seq(
                 tokens=_samp, 

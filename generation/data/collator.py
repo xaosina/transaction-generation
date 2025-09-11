@@ -30,6 +30,7 @@ class SequenceCollator:
             orig_seqs = deepcopy(seqs)
 
         ml = min(seqs["_seq_len"].max(), self.max_seq_len)  # type: ignore
+        #ml = 1024
         bs = len(seqs)
 
         num_features = None
