@@ -5,8 +5,10 @@ from ebes.model import BaseModel, TakeLastHidden
 
 from ...data.data_types import GenBatch, LatentDataConfig
 from ...data.data_types import seq_append, get_seq_tail
-from ..encoders import ConditionalDiffusionEncoder
+# from generation.models.encoders import ConditionalDiffusionEncoder
 from generation.models import autoencoders
+from generation.models import encoders
+
 from generation.utils import freeze_module
 from typing import Any, Dict
 
@@ -47,11 +49,12 @@ class LatentDiffusionGenerator(BaseGenerator):
         encoder_params = model_config.latent_encoder.params or {}
         _set_or_check_match(encoder_params, "input_size", self.autoencoder.encoder.output_dim)
 
-        self.encoder = ConditionalDiffusionEncoder(
-            model_config.latent_encoder.name, encoder_params)
+        self.encoder = getattr(encoders, model_config.latent_encoder.name)(
+             model_config.latent_encoder.name, encoder_params
+        )
         
         self.generation_len = encoder_params['generation_len']
-        self.history_len = encoder_params['history_len']
+        self.history_len = self.encoder.input_history_len
 
         # initializing history encoder
         history_encoder_data = model_config.params.get('history_encoder')
@@ -76,6 +79,8 @@ class LatentDiffusionGenerator(BaseGenerator):
                 self.history_encoder = freeze_module(self.history_encoder)
             
             self.history_pooler = TakeLastHidden()
+        else:
+            print('no history encoder!')
 
         # self.poller = (
         #     TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
