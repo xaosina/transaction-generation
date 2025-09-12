@@ -46,7 +46,7 @@ data_conf:
         scale: 11754.0
     "1":
       TimeToDiff:
-        disable: True
+        disable: False
     "local_shuffle":
       LocalShuffle:
         max_shift: 0

@@ -19,7 +19,7 @@ def pop_arg(args, key):
     while i < len(args):
         if args[i] == key:
             value = args[i + 1]
-            if key in ["--config_factory", "--append_factory"]:
+            if key in ["--config_factory", "--append_factory", "--tail_factory"]:
                 assert value[0] == "[" and value[-1] == "]", "Wrong factory format"
                 value = value[1:-1].split(",")
             i += 2
@@ -29,12 +29,14 @@ def pop_arg(args, key):
     return new_args, value
 
 
-def run_config_factory(config_path, config_factory):
+def run_config_factory(config_path, config_factory, tail_factory):
     if config_factory is not None:
         config_paths = [f"configs/{name}.yaml" for name in config_factory]
     else:
         config_paths = []
     config_paths += [config_path or "config.yaml"]
+    if tail_factory is not None:
+        config_paths += [f"configs/{name}.yaml" for name in tail_factory]
     configs = [OmegaConf.load(path) for path in config_paths]
     merged_config = OmegaConf.merge(*configs)
     merged_config["config_factory"] = None
@@ -46,11 +48,13 @@ def main():
     args, config_factory = pop_arg(args, "--config_factory")
     args, append_factory = pop_arg(args, "--append_factory")
     args, config_path = pop_arg(args, "--config_path")
+    args, tail_factory = pop_arg(args, "--tail_factory")
     path = config_path or "config.yaml"
+
     config_factory = config_factory or OmegaConf.load(path).get("config_factory")
     if append_factory is not None:
         config_factory += append_factory
-    merged_config = run_config_factory(config_path, config_factory)
+    merged_config = run_config_factory(config_path, config_factory, tail_factory)
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as tmpfile:
         OmegaConf.save(config=merged_config, f=tmpfile.name)

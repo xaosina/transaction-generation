@@ -10,6 +10,6 @@ if [ ! -d "$CONFIG_DIR" ]; then
 fi
 
 echo "Найденные конфиги:"
-for cfg in "$CONFIG_DIR"/*.yaml; do
+for cfg in "$CONFIG_DIR"/age/*.yaml; do
   echo "  - $(basename "$cfg")"
 done

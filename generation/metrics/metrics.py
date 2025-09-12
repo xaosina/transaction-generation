@@ -439,14 +439,17 @@ class Levenshtein(BinaryMetric):
 
 @dataclass
 class Accuracy(BinaryMetric):
-
+    first_k: int = 0
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
-        acc_m = accuracy_score(gt, pred)
+        if self.first_k < 1:
+            acc_m = accuracy_score(gt, pred)
+        else:
+            acc_m = accuracy_score(gt[:self.first_k], pred[:self.first_k])
         return acc_m
 
     def __repr__(self):
-        return f"Accuracy on {self.data_conf.target_token}"
+        return f"Accuracy {f'first@{self.first_k}' if self.first_k > 0 else ''} on {self.data_conf.target_token}"
 
 
 @dataclass
