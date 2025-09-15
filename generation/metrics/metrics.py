@@ -87,7 +87,7 @@ def get_perfect_score(score, max_shift, gen_len):
         j_indices = np.arange(gen_len)
         distance_from_diagonal = np.abs(i_indices - j_indices)  # L, L
         mask_outside_band = distance_from_diagonal > max_shift
-        cost[:, mask_outside_band] = np.inf
+        cost[:, mask_outside_band] = -1e12
 
     L, B, D = score.shape[1:]
     perfect_score = np.zeros_like(score, shape=(B, D))
