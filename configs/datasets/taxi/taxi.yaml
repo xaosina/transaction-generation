@@ -1,0 +1,47 @@
+trainer:
+  total_iters: 1000000
+  total_epochs: null
+  ckpt_track_metric: 'loss'
+  iters_per_epoch: null
+  patience: -1
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+data_conf:
+  dataset_name: taxi
+  cat_cardinalities:
+    - ["type_event", 10]
+  num_names:
+    - time_since_last_event
+  index_name: client_id
+  time_name: time_since_start
+  focus_on:
+  target_token: "type_event"
+
+  test_path: 'data/taxi/preprocessed/test'
+  train_path: 'data/taxi/preprocessed/train'
+  val_ratio: 0.1
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 4
+
+  min_history_len: &min_history_len 20
+  generation_len: &generation_len 10
+  max_seq_len: &max_seq_len 1024
+
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  
+  train_transforms:
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len
+
+  val_transforms:
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len
+

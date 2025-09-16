@@ -3,13 +3,13 @@ trainer:
   total_epochs: null
   ckpt_track_metric: 'loss'
   iters_per_epoch: null
-  patience: -1
+  patience: 10
   profiling: false
   verbose: True
   ckpt_resume: null
 
 data_conf:
-  dataset_name: age
+  dataset_name: age_small
   cat_cardinalities:
     - ["age", 5]
     - ["small_group", 203]
@@ -20,12 +20,12 @@ data_conf:
   focus_on:
   target_token: "small_group"
 
-  test_path: 'data/age/preprocessed/test'
-  train_path: 'data/age/preprocessed/train'
-  val_ratio: 0.15
+  test_path: 'data/age_small/preprocessed/test'
+  train_path: 'data/age_small/preprocessed/train'
+  val_ratio: 0.5
   num_workers: 4
   train_resamples: 1
-  batch_size: 128
+  batch_size: 4
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32

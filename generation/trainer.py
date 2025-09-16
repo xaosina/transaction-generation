@@ -338,13 +338,15 @@ class Trainer:
                     self._opt.zero_grad()
 
                 prof.step()
-
+                self._last_iter += 1 ## debug: control number of iterations
+            #breakpoint()
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
                 self._last_epoch + 1,
                 log_losses.mean()["loss"],
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
+            
         return {"loss_ema": loss_ema} | log_losses.mean()
 
     @torch.inference_mode()
@@ -428,8 +430,9 @@ class Trainer:
 
         best_metric = float("-inf")
         patience = self._patience
-
+        self._opt.ema_start()
         while self._last_iter < self._total_iters:
+            print(self._last_iter,self._total_iters)
             train_iters = min(
                 self._total_iters - self._last_iter,
                 self._iters_per_epoch,
@@ -443,6 +446,7 @@ class Trainer:
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
 
+            #breakpoint()
             self._last_epoch += 1
             self.save_ckpt()
 

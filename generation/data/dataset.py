@@ -139,6 +139,7 @@ class ShardDataset(IterableDataset):
                     else []
                 ),
             )
+            #data = data[data["_seq_len"] > 100]
             data = self._preprocess(data, worker_rng)
 
             if self.shuffle:

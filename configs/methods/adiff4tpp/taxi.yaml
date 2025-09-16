@@ -1,0 +1,63 @@
+config_factory: [start, metrics/detection, datasets/age/age, methods/adiff4tpp/base]
+
+trainer:
+  metrics_on_train: False
+  total_iters: 1000000
+
+data_conf:
+  batch_size: 4
+  min_history_len: 28
+  generation_len: 10
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: True
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: True
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+model:
+  name: ADiffGenerator
+  autoencoder: 
+    name: Model_VAE
+    params:
+      num_layers: 2
+      d_token: 32
+      n_head: 1
+      factor: 32
+      use_time: True
+    pretrain: False
+    frozen: True
+    checkpoint: /trinity/home/j.chen/2.SeqDiff/adiff4tpp/train_vae/ckpt/taxi/32transformer0.01/model.pt
+
+
+  latent_encoder:
+    name: ADiffEncoder 
+    params:
+      num_rows:  38
+      latent_size: 96 ## d_token * num_features in training
+      hidden_size: 1152 ## must be the times of laten_size
+      depth: 7
+      num_heads: 16
+      mlp_ratio: 4
+      learn_sigma: False
+      loss_type: l2 # l2,l2-squared and huber
+      mask: True
+      schedule: Async
+      int_ode: rk4
+      generation_len: 10
+      history_len: 28
+      #checkpoint: /trinity/home/j.chen/2.SeqDiff/adiff4tpp/taxi_test/flow_model_1000000_ema.pth
+
+optimizer:
+  name: Adam
+  params:
+    lr: 1e-5
+    weight_decay: 1.e-9
+
+evaluator:
+  devices: ["cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)

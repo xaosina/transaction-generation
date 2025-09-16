@@ -17,7 +17,7 @@ from ..utils import (
 )
 
 from .utils import PipelineConfig
-
+from .EMA import EMA 
 
 class GenerationTrainer(Runner):
     def pipeline(self, cfg: Mapping) -> dict[str, float]:
@@ -31,6 +31,7 @@ class GenerationTrainer(Runner):
             cfg.device
         )
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
+        optimizer = EMA(optimizer, ema_decay=0.9999)
         loss = get_loss(internal_dataconf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
         log_dir = Path(cfg.log_dir) / cfg.run_name

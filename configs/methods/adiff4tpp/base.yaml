@@ -45,7 +45,7 @@ model:
       mlp_ratio: 4
       learn_sigma: False
       loss_type: l2 # l2,l2-squared and huber
-      mask: False
+      mask: True
       schedule: Async
       int_ode: rk4
       generation_len: 32

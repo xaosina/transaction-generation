@@ -2,7 +2,9 @@ config_factory: [start, metrics/detection, datasets/age/age, methods/adiff4tpp/b
 
 
 data_conf:
-  batch_size: 4
+  batch_size: 10
+  min_history_len: 100
+  generation_len: 20
   train_transforms:
     '1':
       TimeToDiff:
@@ -11,6 +13,23 @@ data_conf:
     '1':
       TimeToDiff:
         disable: True
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+model:
+  latent_encoder:
+    name: AsynDiffEncoder 
+    params:
+      num_rows:  100
+      generation_len: 20
+      history_len: 80
+
+optimizer:
+  name: Adam
+  params:
+    lr: 1e-5
+    weight_decay: 1.e-9
 
 evaluator:
   devices: ["cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)

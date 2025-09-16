@@ -50,7 +50,7 @@ def get_loss_func(loss_type: str):
     
     return loss_func
 
-class AsynDiffEncoder(BaseModel):
+class ADiffEncoder(BaseModel):
 
     def __init__(self, name: str, params: dict = None):
 
@@ -70,10 +70,10 @@ class AsynDiffEncoder(BaseModel):
         self.gen_reshaper = Reshaper(params['generation_len'])
         self.mask = params['mask']
         self.generation_len = params['generation_len']
+        #self.model.load_state_dict(torch.load(params['checkpoint'], map_location = 'cpu'))
         
-    def forward(self,target_seq: GenBatch,A):
-        z = target_seq.tokens ## shape of tokens: T*B*(total_features*d_token)
-        z = z.permute(1, 0, 2) ## B*T*(total_features*d_token)
+    def forward(self,z,A):
+
         attn_mask = A.attn_mask.to("cuda")
 
         noise_fixed = torch.randn_like(z,device="cuda")
@@ -98,12 +98,11 @@ class AsynDiffEncoder(BaseModel):
     def generate(self,z,gen_len,A,batch_len) -> GenBatch:
 
         # Create a mask
-        z_tokens = z.tokens.permute(1, 0, 2)  ## B*T*(total_features*d_token)
-        col_indices = torch.arange(z_tokens.shape[1]).unsqueeze(0).to("cuda")
+        col_indices = torch.arange(z.shape[1]).unsqueeze(0).to("cuda")
         mask = col_indices < (batch_len - gen_len).unsqueeze(1)
 
         # Initiate noise
-        noise_fixed = torch.rand_like(z_tokens)
+        noise_fixed = torch.rand_like(z)
 
         # Define the ODE function for solving the reverse flow
         def ode_func(t, x):
@@ -113,7 +112,7 @@ class AsynDiffEncoder(BaseModel):
             # Compute vector field: x_0 - epsilon
             v = self.model(x,A_t)
             # Fix vector fields for preceding events
-            v[mask] = (z_tokens-noise_fixed)[mask]
+            v[mask] = (z-noise_fixed)[mask]
             return A_t_dot*v
 
         # Sample t, zt
@@ -122,11 +121,11 @@ class AsynDiffEncoder(BaseModel):
         
         x_restored = solution[-1]
 
-        pred = x_restored[:,self.params["history_len"]:,:].view(z_tokens.shape[0],-1)
+        pred = x_restored[:,self.params["history_len"]:,:].view(z.shape[0],-1)
         return self.gen_reshaper(
             Seq(
                 tokens=pred, 
-                lengths=torch.ones((z_tokens.shape[0],)).to("cuda") * self.generation_len, 
+                lengths=torch.ones((z.shape[0],)).to("cuda") *self.generation_len, 
                 time=None
             )
         )
