@@ -1,5 +1,4 @@
 evaluator:
-  devices: ["cuda:1", "cuda:2"]
   metrics:
     - Density:
         log_cols: []

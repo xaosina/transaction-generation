@@ -8,6 +8,19 @@ trainer:
   verbose: True
   ckpt_resume: null
 
+evaluator:
+  metrics:
+    - OTD
+    - OTD: {f1_average: micro}
+    - OTD: {focus_on: [amnt]}
+    - OTD: {focus_on: [hours_since_first_tx]}
+    - OTD: {focus_on: [mcc_category]}
+    - OTD: {focus_on: [mcc_category], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: [amnt]}
+    - OTD: {max_shift: 0, focus_on: [hours_since_first_tx]}
+    - OTD: {max_shift: 0, focus_on: [mcc_category]}
+    - OTD: {max_shift: 0, focus_on: [mcc_category], f1_average: micro}
+    - Cardinality
 
 # DATA
 data_conf:

@@ -175,7 +175,10 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             rawhist_length=params['history_len'],
         )
 
-        self.diffusion = KarrasDenoiser(pred_mode='ve') #TODO: adapt parametersm, understand what they mean!
+        self.diffusion = KarrasDenoiser(
+            pred_mode=params['pred_mode'], 
+            weight_schedule=params["weight_schedule"],
+        ) #TODO: adapt parametersm, understand what they mean!
         self.schedule_sampler = create_named_schedule_sampler(
             params['schedule_sampler'], self.diffusion)
 

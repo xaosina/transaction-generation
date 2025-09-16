@@ -1,3 +1,7 @@
 # MODEL
 model:
   name: BaselineRepeater
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple
