@@ -225,7 +225,8 @@ class OTD(BaseMetric):
             seq_cols = [n for n in seq_cols if n in self.focus_on]
             focus_num = [n for n in focus_num if n in self.focus_on]
             focus_cat = [n for n in focus_cat if n in self.focus_on]
-
+            if seq_cols == []:
+                return 0
         orig[seq_cols] = orig[seq_cols].map(lambda x: x[-gen_len:])
         gen[seq_cols] = gen[seq_cols].map(lambda x: x[-gen_len:])
 
@@ -296,11 +297,11 @@ class OTD(BaseMetric):
         elif self.max_shift > 0:
             res += f" {self.max_shift}"
         if len(self.focus_on or []) == 1:
-            if self.focus_on[0] in self.data_conf.focus_num:
-                res += f" R1 {self.focus_on[0]}"
-            elif self.focus_on[0] in self.data_conf.focus_cat:
-                res += f" F1 {self.focus_on[0]}"
-            
+            if self.focus_on[0] in (self.data_conf.num_names or []):
+                res += " R1"
+            elif self.focus_on[0] in (self.data_conf.cat_cardinalities or []):
+                res += " F1"
+            res += f" {self.focus_on[0]}"
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
         if self.f1_average != "macro":
