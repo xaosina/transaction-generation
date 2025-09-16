@@ -8,6 +8,17 @@ trainer:
   verbose: True
   ckpt_resume: null
 
+evaluator:
+  metrics:
+    - OTD
+    - OTD: {focus_on: [amount_rur]}
+    - OTD: {focus_on: [trans_date]}
+    - OTD: {focus_on: [small_group]}
+    - OTD: {max_shift: 0, focus_on: [amount_rur]}
+    - OTD: {max_shift: 0, focus_on: [trans_date]}
+    - OTD: {max_shift: 0, focus_on: [small_group]}
+    - Cardinality
+
 data_conf:
   dataset_name: age
   cat_cardinalities:
