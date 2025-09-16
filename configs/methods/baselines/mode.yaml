@@ -11,3 +11,7 @@ data_conf:
     "1":
       TimeToDiff:
         disable: False
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple

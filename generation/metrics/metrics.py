@@ -87,7 +87,7 @@ def get_perfect_score(score, max_shift, gen_len):
         j_indices = np.arange(gen_len)
         distance_from_diagonal = np.abs(i_indices - j_indices)  # L, L
         mask_outside_band = distance_from_diagonal > max_shift
-        cost[:, mask_outside_band] = np.inf
+        cost[:, mask_outside_band] = -1e12
 
     L, B, D = score.shape[1:]
     perfect_score = np.zeros_like(score, shape=(B, D))
@@ -151,43 +151,45 @@ def smape_score(true_num, pred_num):
 def f1_macro(true_cat, pred_cat):
     L, B, D = true_cat.shape
     result = np.zeros((L, L, B, D))
-    
+
     for d in range(D):
         y_true = true_cat[:, :, d]  # (L, B)
         y_pred = pred_cat[:, :, d]  # (L, B)
-        
+
         # 1. Create match matrix
-        match = (y_pred[:, None, :] == y_true[None, :, :])  # (L, L, B)
-        
+        match = y_pred[:, None, :] == y_true[None, :, :]  # (L, L, B)
+
         # 2. Compute class counts PER BATCH
         max_class = max(np.max(y_true), np.max(y_pred)) + 1
         n_true = np.zeros((max_class, B))
         n_pred = np.zeros((max_class, B))
-        
+
         for b in range(B):
             n_true[:, b] = np.bincount(y_true[:, b], minlength=max_class)
             n_pred[:, b] = np.bincount(y_pred[:, b], minlength=max_class)
-        
+
         denom = n_true + n_pred  # (max_class, B)
         denom[denom == 0] = 1  # Avoid div/0 (safe since TP=0 when denom=0)
-        
+
         # For each (i,j,b), we need denom[y_pred[i,b], b]
         batch_indices = np.arange(B)[None, None, :]  # (1, 1, B)
-        class_indices = y_pred[:, None, :]           # (L, 1, B)
-        
+        class_indices = y_pred[:, None, :]  # (L, 1, B)
+
         # Broadcast to (L, L, B) and index denom
         denom_vals = denom[class_indices, batch_indices]  # (L, L, B)
-        
+
         # 4. Compute F1 contribution ONLY where match=True
         f1_contrib = np.where(match, 2 / denom_vals, 0)  # (L, L, B)
-        
+
         # 5. Normalize by number of unique classes PER BATCH
-        unique_counts = np.array([
-            len(np.unique(np.concatenate([y_true[:, b], y_pred[:, b]]))) 
-            for b in range(B)
-        ])
+        unique_counts = np.array(
+            [
+                len(np.unique(np.concatenate([y_true[:, b], y_pred[:, b]])))
+                for b in range(B)
+            ]
+        )
         result[:, :, :, d] = f1_contrib / unique_counts[None, None, :]
-    
+
     return result
 
 
@@ -202,6 +204,8 @@ class OTD(BaseMetric):
     max_shift: int = -1
     num_metric: str = "r1"
     f1_average: str = "macro"
+    focus_on: list[str] = None
+    detailed: bool = False
 
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
@@ -216,14 +220,20 @@ class OTD(BaseMetric):
         # Cut gen_len
         gen_len = self.data_conf.generation_len
         seq_cols = self.data_conf.focus_on
+        focus_num, focus_cat = self.data_conf.focus_num, self.data_conf.focus_cat
+        if self.focus_on:
+            seq_cols = [n for n in seq_cols if n in self.focus_on]
+            focus_num = [n for n in focus_num if n in self.focus_on]
+            focus_cat = [n for n in focus_cat if n in self.focus_on]
+
         orig[seq_cols] = orig[seq_cols].map(lambda x: x[-gen_len:])
         gen[seq_cols] = gen[seq_cols].map(lambda x: x[-gen_len:])
 
         # Prepare num arrays
         num_metric = np.empty((gen_len, gen_len, orig.shape[0], 0))
-        if self.data_conf.focus_num:
-            true_num = orig[self.data_conf.focus_num].values  # B, D
-            pred_num = gen[self.data_conf.focus_num].values  # B, D
+        if focus_num:
+            true_num = orig[focus_num].values  # B, D
+            pred_num = gen[focus_num].values  # B, D
 
             B, D = true_num.shape
             true_num = np.transpose(
@@ -246,9 +256,9 @@ class OTD(BaseMetric):
 
         # Prepare cat arrays
         cat_metric = np.empty((gen_len, gen_len, orig.shape[0], 0))
-        if self.data_conf.focus_cat:
-            true_cat = orig[self.data_conf.focus_cat].values  # B, D
-            pred_cat = gen[self.data_conf.focus_cat].values  # B, D
+        if focus_cat:
+            true_cat = orig[focus_cat].values  # B, D
+            pred_cat = gen[focus_cat].values  # B, D
 
             B, D = true_cat.shape
             true_cat = np.transpose(
@@ -268,20 +278,29 @@ class OTD(BaseMetric):
 
         full_score = np.concatenate([num_metric, cat_metric], axis=-1)  # [L, L, B, D]
         perfect_score = get_perfect_score(full_score, self.max_shift, gen_len)
-        results = dict(
-            zip(self.data_conf.focus_num + self.data_conf.focus_cat, perfect_score)
-        )
-        if self.f1_average == "micro":
-            return {"overall": np.mean(list(results.values()))}
+        results = dict(zip(focus_num + focus_cat, perfect_score))
+        if not self.detailed:
+            return np.mean(list(results.values()))
         return {
             "overall": np.mean(list(results.values())),
             **results,
         }
 
     def __repr__(self):
-        res = "OTD"
-        if self.max_shift >= 0:
+        if self.focus_on is None:
+            res = "GenOTD"
+        else:
+            res = "Matched"
+        if self.max_shift == 0:
+            res = "Paired"
+        elif self.max_shift > 0:
             res += f" {self.max_shift}"
+        if len(self.focus_on or []) == 1:
+            if self.focus_on[0] in self.data_conf.focus_num:
+                res += f" R1 {self.focus_on[0]}"
+            elif self.focus_on[0] in self.data_conf.focus_cat:
+                res += f" F1 {self.focus_on[0]}"
+            
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
         if self.f1_average != "macro":

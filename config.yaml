@@ -1,1 +1,1 @@
-config_factory: [start, metrics/default, datasets/alphabattle_small/alphabattle_small, methods/vae]
+config_factory: [start, datasets/age/age, methods/baselines/repeat]
