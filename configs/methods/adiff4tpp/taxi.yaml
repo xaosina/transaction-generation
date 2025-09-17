@@ -1,7 +1,7 @@
 config_factory: [start, metrics/detection, datasets/age/age, methods/adiff4tpp/base]
 
 trainer:
-  metrics_on_train: False
+  metrics_on_train: True
   total_iters: 1000000
 
 data_conf:
@@ -51,12 +51,12 @@ model:
       int_ode: rk4
       generation_len: 10
       history_len: 28
-      #checkpoint: /trinity/home/j.chen/2.SeqDiff/adiff4tpp/taxi_test/flow_model_1000000_ema.pth
+      #checkpoint: /trinity/home/j.chen/2.SeqDiff/adiff4tpp/taxi_test/flow_model_50000_ema.pth
 
 optimizer:
   name: Adam
   params:
-    lr: 1e-5
+    lr: 3e-5
     weight_decay: 1.e-9
 
 evaluator:
