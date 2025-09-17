@@ -10,8 +10,10 @@ CHECKPOINT_DIR="${EXPERIMENT_ROOT}/seed_0/ckpt/"
 CHECKPOINT_FILE=$(ls -t "$CHECKPOINT_DIR"*.ckpt | head -n1)
 
 # Define parameter ranges — temperature starts at 1
-TEMPERATURES=(1.0 1.5 2.0 5.0 10.0 20.0 50.0 100.0)
-TOPK_VALUES=(1 5 10 20 40 80)
+TEMPERATURES=(1.0)
+#  1.5 2.0 5.0 10.0 20.0 50.0 100.0)
+TOPK_VALUES=(1)
+#  5 10 20 40 80)
 
 # Grid search loop
 for temp in "${TEMPERATURES[@]}"; do

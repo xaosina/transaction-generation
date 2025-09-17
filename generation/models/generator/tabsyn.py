@@ -82,15 +82,6 @@ class LatentDiffusionGenerator(BaseGenerator):
         else:
             print('no history encoder!')
 
-        # self.poller = (
-        #     TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
-        # )
-        # self.reshaper = Reshaper(data_conf.generation_len)
-
-        # self.projector = Projection(
-        #     self.encoder.output_dim // data_conf.generation_len,
-        #     self.encoder.output_dim,
-        # )
 
     def forward(self, x: GenBatch) -> torch.Tensor:
         """
