@@ -15,6 +15,7 @@ from ..utils import (
     get_optimizer,
     suggest_conf,
 )
+from ema_pytorch import EMA
 
 from .utils import PipelineConfig
 
@@ -30,6 +31,15 @@ class GenerationTrainer(Runner):
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
+
+        # ema
+        ema_model = None
+        if ('ema' in cfg.model.params) and (cfg.model.params['ema'] is not None):
+            ema_model = EMA(
+                model, 
+                **cfg.model.params['ema']
+            )
+
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         loss = get_loss(internal_dataconf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
@@ -43,6 +53,7 @@ class GenerationTrainer(Runner):
         )
         trainer = Trainer(
             model=model,
+            ema_model=ema_model,
             loss=loss,
             optimizer=optimizer,
             scheduler=scheduler,
