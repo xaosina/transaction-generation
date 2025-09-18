@@ -713,6 +713,7 @@ class ShannonEntropy(StatisticMetric):
 @dataclass
 class GenVsHistoryMetric(BaseMetric):
     overall: bool = False
+    calculate_orig: bool = False
 
     @abstractmethod
     def get_scores(row): ...
@@ -728,9 +729,11 @@ class GenVsHistoryMetric(BaseMetric):
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
-        orig_score = self.score_for_df(orig)
+        res = {"gen": gen_score}
+        if self.calculate_orig:
+            res["orig"] = self.score_for_df(orig)
         # score = 1 - (1 + abs(gen_score - orig_score))
-        return {"gen": gen_score, "orig": orig_score}  # "score": score,
+        return res # "score": score,
 
 
 @dataclass
@@ -916,7 +919,7 @@ class Detection(BaseMetric):
             devices=self.devices,
             verbose=self.verbose,
         )
-        acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
+        acc = discr_res.loc["train_val_MulticlassAccuracy"].loc["mean"]
         err = (1 - acc) * 2
         return float(err)
 

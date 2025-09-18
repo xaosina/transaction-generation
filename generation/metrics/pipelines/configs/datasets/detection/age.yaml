@@ -1,4 +1,4 @@
-patience: 5
+patience: 20
 n_classes: 2
 main_metric: MulticlassAccuracy
 main_loss: 
@@ -24,8 +24,8 @@ data:
 
     split_sizes: 
       - 0.7   # train
-      - 0.15  # train_val
-      - 0.15  # test
+      - 0.3  # train_val
+      - 0.  # test
 
   preprocessing:
     common_pipeline: &common_pipeline

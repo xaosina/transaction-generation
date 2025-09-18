@@ -1,7 +1,8 @@
-from copy import deepcopy
 import logging
 import os
+import subprocess
 from collections.abc import Iterable, Sized
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -12,10 +13,12 @@ import torch
 from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
+
 from generation.schedulers.schedulers import CompositeScheduler
+
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, get_profiler, record_function, MeanDict
+from .utils import LoadTime, MeanDict, get_profiler, record_function
 
 logger = logging.getLogger(__name__)
 
@@ -390,7 +393,7 @@ class Trainer:
         assert self._train_loader is not None, "Set a train loader to run full cycle"
         assert self._val_loader is not None, "Set a val loader to run full cycle"
         assert self._model is not None
-
+        logger.info("commit: %s", subprocess.getoutput("git rev-parse HEAD"))
         logger.info("run %s started", self._run_name)
 
         if self._ckpt_resume is not None:
