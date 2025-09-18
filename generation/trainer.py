@@ -121,6 +121,7 @@ class Trainer:
             self._model = model.to(device)
         
         self._ema_model = ema_model
+        self._ema_model_start_updates = False
 
         self._loss = None
         if loss is not None:
@@ -284,9 +285,19 @@ class Trainer:
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
+        
+        assert self._ema_metric_values
 
+        metrics = {k: v for k, v in self._ema_metric_values.items() if np.isscalar(v)}
 
-        fname = f"epoch__{self._last_epoch:04d}_-_beta__{self.ema_model.beta}.ckpt"
+        fname = f"epoch__{self._last_epoch:04d}_-_beta__{self.ema_model.beta}"
+        metrics_str = "_-_".join(
+            f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
+        )
+
+        if len(metrics_str) > 0:
+            fname = "_-_".join((fname, metrics_str))
+        fname += ".ckpt"
 
         torch.save(ckpt, ckpt_path / Path(fname))
 
@@ -388,6 +399,7 @@ class Trainer:
                     self.ema_model.update()
                     ema_starts = (self.ema_model.step.item() - self.ema_model.update_after_step) == 0
                     if ema_starts:
+                        self._ema_model_start_updates = True
                         logger.info("Epoch %04d, iter %06d : ema model activated", self._last_epoch + 1, self._last_iter)
 
                 prof.step()
@@ -407,16 +419,18 @@ class Trainer:
         remove=True,
         get_loss: bool = True,
         get_metrics: bool = False,
+        use_ema_model: bool = False,
     ) -> dict[str, Any]:
-        assert self._model is not None
+        _model = self.model if not use_ema_model else self.ema_model.ema_model
+        assert _model is not None
         assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
             if self._val_loader is None:
                 raise ValueError("Either set val loader or provide loader explicitly")
             loader = self._val_loader
         logger.info("Epoch %04d: validation started", self._last_epoch + 1)
-        self._model.eval()
-        self._metric_values = {}
+        _model.eval()
+        _metric_values = {}
 
         if get_loss:
             orig_collate, orig_random_end = loader.collate_fn, loader.dataset.random_end
@@ -426,23 +440,28 @@ class Trainer:
             with torch.no_grad():
                 for batch in tqdm(loader, disable=not self._verbose):
                     batch.to(self._device)
-                    pred = self._model(batch)
+                    pred = _model(batch)
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
             loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
-            self._metric_values |= {k: -v for k, v in log_losses.mean().items()}
+            _metric_values |= {k: -v for k, v in log_losses.mean().items()}
 
         if get_metrics:
-            self._metric_values |= self._sample_evaluator.evaluate(
-                self._model, loader, remove=remove
+            _metric_values |= self._sample_evaluator.evaluate(
+                _model, loader, remove=remove
             )
         logger.info(
-            "Epoch %04d: metrics: %s",
+            "Epoch %04d, ema-%s:  metrics: %s",
             self._last_epoch + 1,
-            str(self._metric_values),
+            use_ema_model,
+            str(_metric_values),
         )
+        if use_ema_model:
+            self._ema_metric_values = _metric_values
+        else:
+            self._metric_values = _metric_values
 
-        return self._metric_values
+        return _metric_values
 
     def run(self) -> None:
         """Train and validate model."""
@@ -495,10 +514,14 @@ class Trainer:
             self._metric_values = None
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
+            self._ema_metric_values = None
+            if (self._sample_evaluator is not None) and self._ema_model_start_updates:
+                self.validate(get_metrics=self._metrics_on_train, use_ema_model=True)
 
             self._last_epoch += 1
             self.save_ckpt()
-            self.save_ema_ckpt()
+            if self._ema_model_start_updates:
+                self.save_ema_ckpt()
 
             assert (
                 self._metric_values is not None
