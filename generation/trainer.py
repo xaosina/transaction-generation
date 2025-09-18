@@ -41,6 +41,7 @@ class Trainer:
         self,
         *,
         model: nn.Module | None = None,
+        ema_model: nn.Module | None = None,
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
         scheduler: CompositeScheduler | None = None,
@@ -118,6 +119,8 @@ class Trainer:
         self._model = None
         if model is not None:
             self._model = model.to(device)
+        
+        self._ema_model = ema_model
 
         self._loss = None
         if loss is not None:
@@ -136,6 +139,10 @@ class Trainer:
         self._metric_values: dict[str, Any] | None = None
         self._last_iter = 0
         self._last_epoch = 0
+    
+    @property
+    def ema_model(self) -> nn.Module | None:
+        return self._ema_model
 
     @property
     def model(self) -> nn.Module | None:
@@ -242,6 +249,55 @@ class Trainer:
         for p in all_ckpt:
             if p != best_ckpt:
                 p.unlink()
+    
+    def save_ema_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
+        """Save states of ema model (if it is supported).
+
+        Args:
+            ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
+                checkpoint will be saved there with epoch and ema's beta in the
+                filename. If full path is specified, the checkpoint will be
+                saved exactly there. If `None` `ckpt_dir` from construct is used with
+                subfolder named `ema`.
+        """
+        if ckpt_path is None and self._ckpt_dir is None:
+            logger.warning(
+                "`ckpt_path` was not passned to `save_ema_ckpt` and `ckpt_dir` "
+                "was not set in Trainer. No checkpoint will be saved."
+            )
+            return
+
+        if ckpt_path is None:
+            assert self._ckpt_dir is not None
+            ckpt_path = Path(self._ckpt_dir) / 'ema'
+
+        ckpt_path = Path(ckpt_path)
+        ckpt_path.mkdir(parents=True, exist_ok=True)
+
+        ckpt: dict[str, Any] = {
+            "last_iter": self._last_iter,
+            "last_epoch": self._last_epoch,
+        }
+        if self.ema_model:
+            ckpt["model"] = self.ema_model.ema_model.state_dict()
+
+        if not ckpt_path.is_dir():
+            torch.save(ckpt, ckpt_path)
+            return
+
+
+        fname = f"epoch__{self._last_epoch:04d}_-_beta__{self.ema_model.beta}.ckpt"
+
+        torch.save(ckpt, ckpt_path / Path(fname))
+
+        if not self._ckpt_replace:
+            return
+
+        all_ckpt = list(ckpt_path.glob("*.ckpt"))
+        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
+        for p in all_ckpt:
+            if p != last_ckpt:
+                p.unlink()
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
         """Load model, optimizer and scheduler states.
@@ -328,6 +384,8 @@ class Trainer:
 
                 self._opt.zero_grad()
                 self._last_iter += 1
+                if self.ema_model:
+                    self.ema_model.update()
 
                 prof.step()
 
@@ -437,6 +495,7 @@ class Trainer:
 
             self._last_epoch += 1
             self.save_ckpt()
+            self.save_ema_ckpt()
 
             assert (
                 self._metric_values is not None
@@ -476,3 +535,18 @@ class Trainer:
 
         best_ckpt = self.best_checkpoint()
         self.load_ckpt(best_ckpt)
+    
+    def ema_checkpoint(self) -> Path:
+        '''
+        Return the path to the ema checkpoint
+        '''
+        assert self._ckpt_dir is not None
+        ckpt_path = Path(self._ckpt_dir) / 'ema'
+        all_ckpt = list(ckpt_path.glob("*.ckpt"))
+        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
+
+        return last_ckpt
+    
+    def load_ema_model(self) -> None:
+        ema_ckpt = self.ema_checkpoint()
+        self.load_ckpt(ema_ckpt)
