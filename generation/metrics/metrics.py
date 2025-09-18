@@ -919,7 +919,7 @@ class Detection(BaseMetric):
             devices=self.devices,
             verbose=self.verbose,
         )
-        acc = discr_res.loc["train_val_MulticlassAccuracy"].loc["mean"]
+        acc = discr_res.loc["MulticlassAUROC"].loc["mean"]
         err = (1 - acc) * 2
         return float(err)
 
