@@ -15,7 +15,7 @@ from Levenshtein import distance as lev_score
 from scipy.optimize import linear_sum_assignment
 from scipy.stats import entropy, gaussian_kde
 from sdmetrics.reports.single_table import QualityReport
-from sklearn.metrics import accuracy_score, r2_score as r2_sklearn, f1_score
+from sklearn.metrics import accuracy_score, r2_score as r2_sklearn
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -470,19 +470,6 @@ class Accuracy(BinaryMetric):
 
 
 @dataclass
-class F1Score(BinaryMetric):
-    average: str = "macro"
-
-    def get_scores(self, row):
-        gt, pred = row["gt"], row["pred"]
-        f1 = f1_score(gt, pred, average=self.average)
-        return f1
-
-    def __repr__(self):
-        return f"F1 score {self.average} on {self.data_conf.target_token}"
-
-
-@dataclass
 class PR(BinaryMetric):
     @staticmethod
     def get_statistics(gt: np.ndarray, pred: np.ndarray) -> UserStatistic:
@@ -567,7 +554,7 @@ class Recall(PR):
 
 
 @dataclass
-class MultisetF1Metric(BinaryMetric):
+class F1Metric(BinaryMetric):
     average: str = "macro"
 
     @staticmethod
@@ -642,7 +629,7 @@ class MultisetF1Metric(BinaryMetric):
         return f1
 
     def __repr__(self):
-        return f"MultisetF1_{self.average} on {self.data_conf.target_token}"
+        return f"F1_{self.average} on {self.data_conf.target_token}"
 
 
 @dataclass

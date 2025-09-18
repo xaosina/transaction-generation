@@ -521,7 +521,6 @@ class Unet1DDiffusion(nn.Module):
             class_labels : torch.Tensor | None = None, 
             hstate : torch.Tensor | None = None,
             rawhist: torch.Tensor | None = None,
-            xT: torch.Tensor | None = None, # dummy variable, used for consistency with bridge models
         ):
         emb = self.map_noise(noise_labels)
         emb = (

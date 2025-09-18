@@ -352,12 +352,6 @@ class PredBatch:
                     probs = F.softmax(logits, dim=-1)
                     samples = torch.multinomial(probs, num_samples=1).squeeze(1)
                     samples = samples.view(shape[:-1])
-                elif topk == -1:
-                    shape = cat_tensor.shape
-                    logits = (cat_tensor).view(-1, shape[-1])
-                    probs = F.softmax(logits, dim=-1)
-                    samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(shape[:-1])
                 else:
                     samples = cat_tensor.argmax(dim=-1)
                 cat_features.append(samples)

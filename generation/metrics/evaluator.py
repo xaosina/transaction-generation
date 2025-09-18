@@ -52,7 +52,6 @@ class SampleEvaluator:
             or []
         )
         self.verbose = verbose
-        self._n_last_time_generated_seqs = 0
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
@@ -62,7 +61,7 @@ class SampleEvaluator:
         gt_dir, gen_dir = self.generate_samples(
             model, loader, log_dir, blim, buffer_size
         )
-        logger.info(f"Sampling done. Number of generated seqs: {self._n_last_time_generated_seqs}")
+        logger.info("Sampling done.")
         results = self.estimate_metrics(gt_dir, gen_dir)
         logger.info("Metrics done.")
         if remove:
@@ -81,7 +80,6 @@ class SampleEvaluator:
         model.eval()
         buffer_gt, buffer_gen = [], []
         part_counter = 0
-        self._n_last_time_generated_seqs = 0
 
         for batch_idx, (batch_input, orig_seqs) in enumerate(
             tqdm(data_loader, disable=not self.verbose)
@@ -97,7 +95,6 @@ class SampleEvaluator:
                     topk=self.eval_config.topk,
                     temperature=self.eval_config.temperature,
                 )
-            self._n_last_time_generated_seqs += len(batch_input)
             gen = _concat_samples(batch_input, batch_pred)
             gen = data_loader.collate_fn.reverse(gen.to("cpu"))
 

@@ -12,14 +12,12 @@ from ..data.utils import get_dataloaders
 from ..losses import get_loss
 from ..metrics.evaluator import SampleEvaluator
 from ..trainer import Trainer
-from typing import Literal
 
 
 from .utils import PipelineConfig
 
 logger = logging.getLogger(__name__)
 
-GENERATION_EVALUATOR_DATA: Literal['test', 'val'] = 'test' # 'val' | 'test'
 
 class GenerationEvaluator(Runner):
     def pipeline(self, cfg: Mapping) -> dict[str, float]:
@@ -59,38 +57,18 @@ class GenerationEvaluator(Runner):
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
-        if GENERATION_EVALUATOR_DATA == 'test':
-            test_metrics = trainer.validate(
-                test_loader, remove=False, get_loss=False, get_metrics=True
-            )
-            test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
-            return dict(
-                **test_metrics
-            )
-
-        elif GENERATION_EVALUATOR_DATA == 'val':
-            val_metrics = trainer.validate(
-                val_loader, remove=False, get_loss=False, get_metrics=True
-            )
-            val_metrics = {k: v for k, v in val_metrics.items()}
-
-            return dict(
-                **val_metrics
-            )
-        else:
-            raise Exception(f'Undefined data to evaluate: {GENERATION_EVALUATOR_DATA}')
-
+        # val_metrics = trainer.validate(val_loader, remove=False)
         # train_metrics = trainer.validate(train_loader, remove=False)
-        # test_metrics = trainer.validate(
-        #     test_loader, remove=False, get_loss=False, get_metrics=True
-        # )
+        test_metrics = trainer.validate(
+            test_loader, remove=False, get_loss=False, get_metrics=True
+        )
 
         # val_metrics = {k: v for k, v in val_metrics.items()}
         # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
-        # test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
+        test_metrics = {k: v for k, v in test_metrics.items()}
 
-        # return dict(
-        #     # **train_metrics,
-        #     **val_metrics
-        #     # **test_metrics
-        # )
+        return dict(
+            # **train_metrics,
+            # **val_metrics,
+            **test_metrics
+        )
