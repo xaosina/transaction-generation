@@ -386,6 +386,9 @@ class Trainer:
                 self._last_iter += 1
                 if self.ema_model:
                     self.ema_model.update()
+                    ema_starts = (self.ema_model.step.item() - self.ema_model.update_after_step) == 0
+                    if ema_starts:
+                        logger.info("Epoch %04d, iter %06d : ema model activated", self._last_epoch + 1, self._last_iter)
 
                 prof.step()
 
