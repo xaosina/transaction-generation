@@ -1,8 +1,7 @@
+from copy import deepcopy
 import logging
 import os
-import subprocess
 from collections.abc import Iterable, Sized
-from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,12 +12,10 @@ import torch
 from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
-
 from generation.schedulers.schedulers import CompositeScheduler
-
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, MeanDict, get_profiler, record_function
+from .utils import LoadTime, get_profiler, record_function, MeanDict
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +121,7 @@ class Trainer:
             self._model = model.to(device)
         
         self._ema_model = ema_model
+        self._ema_model_start_updates = False
 
         self._loss = None
         if loss is not None:
@@ -189,16 +187,23 @@ class Trainer:
 
         return key_extractor
 
-    def save_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
+    def save_ckpt(
+            self, 
+            ckpt_path: str | os.PathLike | None = None, 
+            use_ema_model: bool = False,
+        ) -> None:
         """Save model, optimizer and scheduler states.
 
         Args:
             ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch, loss an metrics in the
-                filename. All scalar metrics returned from `compute_metrics` are used to
-                construct a filename. If full path is specified, the checkpoint will be
-                saved exectly there. If `None` `ckpt_dir` from construct is used with
-                subfolder named `run_name` from Trainer's constructor.
+                checkpoint will be saved there with epoch, loss and metrics (and beta 
+                if `use_ema_model` = True ) in the filename. All scalar metrics 
+                returned from `compute_metrics` are used to construct a filename. 
+                If full path is specified, the checkpoint will be
+                saved exectly there. If `None` `ckpt_dir` from construct is used 
+                 - without any additions, if current model is stored
+                 - with `ema` subfolder
+            use_ema_model: bool. Whether to use ema-averaged model, or current model
         """
 
         if ckpt_path is None and self._ckpt_dir is None:
@@ -211,6 +216,8 @@ class Trainer:
         if ckpt_path is None:
             assert self._ckpt_dir is not None
             ckpt_path = self._ckpt_dir
+            if use_ema_model:
+                ckpt_path = ckpt_path / 'ema'
 
         ckpt_path = Path(ckpt_path)
         ckpt_path.mkdir(parents=True, exist_ok=True)
@@ -221,17 +228,35 @@ class Trainer:
         }
         if self._model:
             ckpt["model"] = self._model.state_dict()
-        if self._opt:
-            ckpt["opt"] = self._opt.state_dict()
-        if self._sched:
-            ckpt["sched"] = self._sched.state_dict()
+        if not use_ema_model:
+            if self._opt:
+                ckpt["opt"] = self._opt.state_dict()
+            if self._sched:
+                ckpt["sched"] = self._sched.state_dict()
 
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
-        assert self._metric_values
+        
+        try:
+            metric_values = self._ema_metric_values if use_ema_model else self._metric_values
+            assert metric_values
+        except:
+            logger.warning(
+                "No precomputed metric values are found to store ckpt! "
+                "No checkpoint will be saved."
+            )
+            return
 
-        metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
+        metrics = {k: v for k, v in metric_values.items() if np.isscalar(v)}
+
+        if not self._ckpt_track_metric in metrics.keys():
+            logger.warning(
+                f"Tracked metric '{self._ckpt_track_metric}' not found"
+                f" int computed metrics, {metrics.keys()}. "
+                "No checkpoint will be saved."
+            )
+            return
 
         fname = f"epoch__{self._last_epoch:04d}"
         metrics_str = "_-_".join(
@@ -251,55 +276,6 @@ class Trainer:
         best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
         for p in all_ckpt:
             if p != best_ckpt:
-                p.unlink()
-    
-    def save_ema_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
-        """Save states of ema model (if it is supported).
-
-        Args:
-            ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch and ema's beta in the
-                filename. If full path is specified, the checkpoint will be
-                saved exactly there. If `None` `ckpt_dir` from construct is used with
-                subfolder named `ema`.
-        """
-        if ckpt_path is None and self._ckpt_dir is None:
-            logger.warning(
-                "`ckpt_path` was not passned to `save_ema_ckpt` and `ckpt_dir` "
-                "was not set in Trainer. No checkpoint will be saved."
-            )
-            return
-
-        if ckpt_path is None:
-            assert self._ckpt_dir is not None
-            ckpt_path = Path(self._ckpt_dir) / 'ema'
-
-        ckpt_path = Path(ckpt_path)
-        ckpt_path.mkdir(parents=True, exist_ok=True)
-
-        ckpt: dict[str, Any] = {
-            "last_iter": self._last_iter,
-            "last_epoch": self._last_epoch,
-        }
-        if self.ema_model:
-            ckpt["model"] = self.ema_model.ema_model.state_dict()
-
-        if not ckpt_path.is_dir():
-            torch.save(ckpt, ckpt_path)
-            return
-
-
-        fname = f"epoch__{self._last_epoch:04d}_-_beta__{self.ema_model.beta}.ckpt"
-
-        torch.save(ckpt, ckpt_path / Path(fname))
-
-        if not self._ckpt_replace:
-            return
-
-        all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
-        for p in all_ckpt:
-            if p != last_ckpt:
                 p.unlink()
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
@@ -391,6 +367,7 @@ class Trainer:
                     self.ema_model.update()
                     ema_starts = (self.ema_model.step.item() - self.ema_model.update_after_step) == 0
                     if ema_starts:
+                        self._ema_model_start_updates = True
                         logger.info("Epoch %04d, iter %06d : ema model activated", self._last_epoch + 1, self._last_iter)
 
                 prof.step()
@@ -410,16 +387,18 @@ class Trainer:
         remove=True,
         get_loss: bool = True,
         get_metrics: bool = False,
+        use_ema_model: bool = False,
     ) -> dict[str, Any]:
-        assert self._model is not None
+        _model = self.model if not use_ema_model else self.ema_model.ema_model
+        assert _model is not None
         assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
             if self._val_loader is None:
                 raise ValueError("Either set val loader or provide loader explicitly")
             loader = self._val_loader
         logger.info("Epoch %04d: validation started", self._last_epoch + 1)
-        self._model.eval()
-        self._metric_values = {}
+        _model.eval()
+        _metric_values = {}
 
         if get_loss:
             orig_collate, orig_random_end = loader.collate_fn, loader.dataset.random_end
@@ -429,23 +408,28 @@ class Trainer:
             with torch.no_grad():
                 for batch in tqdm(loader, disable=not self._verbose):
                     batch.to(self._device)
-                    pred = self._model(batch)
+                    pred = _model(batch)
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
             loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
-            self._metric_values |= {k: -v for k, v in log_losses.mean().items()}
+            _metric_values |= {k: -v for k, v in log_losses.mean().items()}
 
         if get_metrics:
-            self._metric_values |= self._sample_evaluator.evaluate(
-                self._model, loader, remove=remove
+            _metric_values |= self._sample_evaluator.evaluate(
+                _model, loader, remove=remove
             )
         logger.info(
-            "Epoch %04d: metrics: %s",
+            "Epoch %04d, ema-%s:  metrics: %s",
             self._last_epoch + 1,
-            str(self._metric_values),
+            use_ema_model,
+            str(_metric_values),
         )
+        if use_ema_model:
+            self._ema_metric_values = _metric_values
+        else:
+            self._metric_values = _metric_values
 
-        return self._metric_values
+        return _metric_values
 
     def run(self) -> None:
         """Train and validate model."""
@@ -454,7 +438,7 @@ class Trainer:
         assert self._train_loader is not None, "Set a train loader to run full cycle"
         assert self._val_loader is not None, "Set a val loader to run full cycle"
         assert self._model is not None
-        logger.info("commit: %s", subprocess.getoutput("git rev-parse HEAD"))
+
         logger.info("run %s started", self._run_name)
 
         if self._ckpt_resume is not None:
@@ -498,10 +482,14 @@ class Trainer:
             self._metric_values = None
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
+            self._ema_metric_values = None
+            if (self._sample_evaluator is not None) and self._ema_model_start_updates:
+                self.validate(get_metrics=self._metrics_on_train, use_ema_model=True)
 
             self._last_epoch += 1
             self.save_ckpt()
-            self.save_ema_ckpt()
+            if self._ema_model_start_updates:
+                self.save_ckpt(use_ema_model=True)
 
             assert (
                 self._metric_values is not None
@@ -522,12 +510,14 @@ class Trainer:
         logger.info("run '%s' finished successfully", self._run_name)
         return
 
-    def best_checkpoint(self) -> Path:
+    def best_checkpoint(self, use_ema_model: bool = False) -> Path:
         """
         Return the path to the best checkpoint
         """
         assert self._ckpt_dir is not None
         ckpt_path = Path(self._ckpt_dir)
+        if use_ema_model:
+            ckpt_path = ckpt_path / 'ema'
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
         best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
@@ -542,17 +532,9 @@ class Trainer:
         best_ckpt = self.best_checkpoint()
         self.load_ckpt(best_ckpt)
     
-    def ema_checkpoint(self) -> Path:
-        '''
-        Return the path to the ema checkpoint
-        '''
-        assert self._ckpt_dir is not None
-        ckpt_path = Path(self._ckpt_dir) / 'ema'
-        all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
-
-        return last_ckpt
-    
     def load_ema_model(self) -> None:
-        ema_ckpt = self.ema_checkpoint()
+        """
+        Loads the best ema model to self._model according to the track metric.
+        """
+        ema_ckpt = self.best_checkpoint(use_ema_model=True)
         self.load_ckpt(ema_ckpt)
