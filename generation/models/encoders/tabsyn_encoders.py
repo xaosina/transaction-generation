@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .tabsyn.model import Unet1DDiffusion
 
@@ -7,15 +10,23 @@ from .tabsyn.model import Unet1DDiffusion
 from .tabsyn.model import EDM
 from .tabsyn.diffusion_utils import sample
 
+# # bridge
+# from .tabsyn.ddbm.karras_diffusion import (
+#     KarrasDenoiser,
+#     karras_sample
+# )
+# from .tabsyn.ddbm.resample import (
+#     create_named_schedule_sampler,
+#     LossAwareSampler
+# )
+
 # bridge
-from .tabsyn.ddbm.karras_diffusion import (
-    KarrasDenoiser,
-    karras_sample
+from .tabsyn.dbim.train_util import (
+    get_diffusion,
+    get_sampling_params
 )
-from .tabsyn.ddbm.resample import (
-    create_named_schedule_sampler,
-    LossAwareSampler
-)
+from .tabsyn.dbim.karras_diffusion import karras_sample
+from .tabsyn.dbim.resample import create_named_schedule_sampler
 
 from ebes.model.seq2seq import BaseSeq2Seq
 # from ...generator import Reshaper
@@ -175,12 +186,13 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             rawhist_length=params['history_len'],
         )
 
-        self.diffusion = KarrasDenoiser(
-            pred_mode=params['pred_mode'], 
-            weight_schedule=params["weight_schedule"],
-        ) #TODO: adapt parametersm, understand what they mean!
+        assert not set(['noise_schedule', 'gen_sampler', 'sampling_nfe']) - set(params.keys())
+
+        self.sampling_params = get_sampling_params(params)
+        logger.info(f'Bridge diffusion: used sampling params: {self.sampling_params}')
+        self.diffusion = get_diffusion(params)
         self.schedule_sampler = create_named_schedule_sampler(
-            params['schedule_sampler'], self.diffusion)
+            "real-uniform", self.diffusion)
 
         self.gen_reshaper = Reshaper(params['generation_len'])
 
@@ -234,11 +246,6 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                 xT=history_seq,
             )
         )
-
-        if isinstance(self.schedule_sampler, LossAwareSampler):
-            self.schedule_sampler.update_with_local_losses(
-                t, losses["loss"].detach()
-            )
         
         loss = (losses["loss"] * weights).mean()
 
@@ -261,12 +268,13 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
         
-        _samp, path, nfe = karras_sample(
+        _samp, _, _, _, _, _ = karras_sample(
             self.diffusion,
             self.denoise_fn,
             history_seq,
             None,
-            steps=40, #TODO: to config!
+            steps=self.sampling_params['steps'],
+            mask=None,
             model_kwargs=dict(
                 hstate=history_embedding,
                 rawhist=history_seq if self.history_condition_len > 0 else None,
@@ -274,12 +282,11 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                 xT=history_seq,
             ),
             device=history_seq.device,
-            sampler="heun",
-            sigma_min=self.diffusion.sigma_min,
-            sigma_max=self.diffusion.sigma_max,
-            churn_step_ratio=0., #TODO: to config
-            rho=7.0, #TODO: to config
-            guidance=1., #TODO: what is it? to config!
+            rho = self.sampling_params['rho'],
+            sampler=self.sampling_params['sampler'],
+            churn_step_ratio=self.sampling_params['churn_step_ratio'],
+            eta=self.sampling_params['eta'],
+            order=self.sampling_params['order'],
         )
 
         return self.gen_reshaper(
