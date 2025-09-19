@@ -187,16 +187,23 @@ class Trainer:
 
         return key_extractor
 
-    def save_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
+    def save_ckpt(
+            self, 
+            ckpt_path: str | os.PathLike | None = None, 
+            use_ema_model: bool = False,
+        ) -> None:
         """Save model, optimizer and scheduler states.
 
         Args:
             ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch, loss an metrics in the
-                filename. All scalar metrics returned from `compute_metrics` are used to
-                construct a filename. If full path is specified, the checkpoint will be
-                saved exectly there. If `None` `ckpt_dir` from construct is used with
-                subfolder named `run_name` from Trainer's constructor.
+                checkpoint will be saved there with epoch, loss and metrics (and beta 
+                if `use_ema_model` = True ) in the filename. All scalar metrics 
+                returned from `compute_metrics` are used to construct a filename. 
+                If full path is specified, the checkpoint will be
+                saved exectly there. If `None` `ckpt_dir` from construct is used 
+                 - without any additions, if current model is stored
+                 - with `ema` subfolder
+            use_ema_model: bool. Whether to use ema-averaged model, or current model
         """
 
         if ckpt_path is None and self._ckpt_dir is None:
@@ -209,6 +216,8 @@ class Trainer:
         if ckpt_path is None:
             assert self._ckpt_dir is not None
             ckpt_path = self._ckpt_dir
+            if use_ema_model:
+                ckpt_path = ckpt_path / 'ema'
 
         ckpt_path = Path(ckpt_path)
         ckpt_path.mkdir(parents=True, exist_ok=True)
@@ -219,17 +228,35 @@ class Trainer:
         }
         if self._model:
             ckpt["model"] = self._model.state_dict()
-        if self._opt:
-            ckpt["opt"] = self._opt.state_dict()
-        if self._sched:
-            ckpt["sched"] = self._sched.state_dict()
+        if not use_ema_model:
+            if self._opt:
+                ckpt["opt"] = self._opt.state_dict()
+            if self._sched:
+                ckpt["sched"] = self._sched.state_dict()
 
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
-        assert self._metric_values
+        
+        try:
+            metric_values = self._ema_metric_values if use_ema_model else self._metric_values
+            assert metric_values
+        except:
+            logger.warning(
+                "No precomputed metric values are found to store ckpt! "
+                "No checkpoint will be saved."
+            )
+            return
 
-        metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
+        metrics = {k: v for k, v in metric_values.items() if np.isscalar(v)}
+
+        if not self._ckpt_track_metric in metrics.keys():
+            logger.warning(
+                f"Tracked metric '{self._ckpt_track_metric}' not found"
+                f" int computed metrics, {metrics.keys()}. "
+                "No checkpoint will be saved."
+            )
+            return
 
         fname = f"epoch__{self._last_epoch:04d}"
         metrics_str = "_-_".join(
@@ -249,65 +276,6 @@ class Trainer:
         best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
         for p in all_ckpt:
             if p != best_ckpt:
-                p.unlink()
-    
-    def save_ema_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
-        """Save states of ema model (if it is supported).
-
-        Args:
-            ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch and ema's beta in the
-                filename. If full path is specified, the checkpoint will be
-                saved exactly there. If `None` `ckpt_dir` from construct is used with
-                subfolder named `ema`.
-        """
-        if ckpt_path is None and self._ckpt_dir is None:
-            logger.warning(
-                "`ckpt_path` was not passned to `save_ema_ckpt` and `ckpt_dir` "
-                "was not set in Trainer. No checkpoint will be saved."
-            )
-            return
-
-        if ckpt_path is None:
-            assert self._ckpt_dir is not None
-            ckpt_path = Path(self._ckpt_dir) / 'ema'
-
-        ckpt_path = Path(ckpt_path)
-        ckpt_path.mkdir(parents=True, exist_ok=True)
-
-        ckpt: dict[str, Any] = {
-            "last_iter": self._last_iter,
-            "last_epoch": self._last_epoch,
-        }
-        if self.ema_model:
-            ckpt["model"] = self.ema_model.ema_model.state_dict()
-
-        if not ckpt_path.is_dir():
-            torch.save(ckpt, ckpt_path)
-            return
-        
-        assert self._ema_metric_values
-
-        metrics = {k: v for k, v in self._ema_metric_values.items() if np.isscalar(v)}
-
-        fname = f"epoch__{self._last_epoch:04d}_-_beta__{self.ema_model.beta}"
-        metrics_str = "_-_".join(
-            f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
-        )
-
-        if len(metrics_str) > 0:
-            fname = "_-_".join((fname, metrics_str))
-        fname += ".ckpt"
-
-        torch.save(ckpt, ckpt_path / Path(fname))
-
-        if not self._ckpt_replace:
-            return
-
-        all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
-        for p in all_ckpt:
-            if p != last_ckpt:
                 p.unlink()
 
     def load_ckpt(self, ckpt_fname: str | os.PathLike, strict: bool = True) -> None:
@@ -521,7 +489,7 @@ class Trainer:
             self._last_epoch += 1
             self.save_ckpt()
             if self._ema_model_start_updates:
-                self.save_ema_ckpt()
+                self.save_ckpt(use_ema_model=True)
 
             assert (
                 self._metric_values is not None
@@ -542,12 +510,14 @@ class Trainer:
         logger.info("run '%s' finished successfully", self._run_name)
         return
 
-    def best_checkpoint(self) -> Path:
+    def best_checkpoint(self, use_ema_model: bool = False) -> Path:
         """
         Return the path to the best checkpoint
         """
         assert self._ckpt_dir is not None
         ckpt_path = Path(self._ckpt_dir)
+        if use_ema_model:
+            ckpt_path = ckpt_path / 'ema'
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
         best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
@@ -562,17 +532,9 @@ class Trainer:
         best_ckpt = self.best_checkpoint()
         self.load_ckpt(best_ckpt)
     
-    def ema_checkpoint(self) -> Path:
-        '''
-        Return the path to the ema checkpoint
-        '''
-        assert self._ckpt_dir is not None
-        ckpt_path = Path(self._ckpt_dir) / 'ema'
-        all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        last_ckpt = max(all_ckpt, key=self._make_key_extractor('epoch'))
-
-        return last_ckpt
-    
     def load_ema_model(self) -> None:
-        ema_ckpt = self.ema_checkpoint()
+        """
+        Loads the best ema model to self._model according to the track metric.
+        """
+        ema_ckpt = self.best_checkpoint(use_ema_model=True)
         self.load_ckpt(ema_ckpt)
