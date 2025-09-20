@@ -49,6 +49,7 @@ loss:
 
 
 data_conf:
+  batch_size: 32
   train_transforms:
     "0":
       RescaleTime:
