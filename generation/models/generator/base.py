@@ -249,7 +249,6 @@ class OneShotGenerator(BaseGenerator):
         x = self.autoencoder.encoder(hist)
         x = self.encoder(x)  # [L, B, D]
         x = self.poller(x)  # [B, D]
-        breakpoint()
         return x
 
 class OneShotDistributionGenerator(BaseGenerator):
