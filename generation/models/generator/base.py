@@ -330,7 +330,7 @@ class OneShotDistributionGenerator(BaseGenerator):
         device = counts.device
         arange = torch.arange(counts.size(1), device=device)
 
-        idx_rows = [torch.repeat_interleave(arange, row) for row in counts]
+        idx_rows = [torch.repeat_interleave(arange, row)[torch.randperm(self.gen_len)] for row in counts]
         return torch.stack(idx_rows)
 
     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:

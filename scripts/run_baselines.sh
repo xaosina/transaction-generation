@@ -11,3 +11,5 @@ for MODEL in "${MODELS[@]}"; do
 done
 
 # python main.py --run_name GRU
+# data = pd.read_parquet("/home/dev/2025/transaction-generation/log/generation/age/BaselineRepeater(9)/seed_0/evaluation/samples/gen/part-0000.parquet")
+# data.explode(["trans_date", "amount_rur", "small_group"]).to_parquet("age-repeat.parquet")
