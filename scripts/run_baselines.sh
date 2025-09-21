@@ -7,7 +7,7 @@ MODELS=("GroundTruthGenerator" "ModeGenerator" "BaselineRepeater" "BaselineHistS
 # Loop over each model
 for MODEL in "${MODELS[@]}"; do
     echo "Running with model: $MODEL"
-    python main.py --config_factory "[start,metrics/paper,datasets/age/age,methods/gru,1to1]" --runner.name GenerationEvaluator --model.name "$MODEL" --run_name "$MODEL"
+    python main.py --config_factory "[start,datasets/alphabattle_small/alphabattle_small,methods/gru]" --runner.name GenerationEvaluator --model.name "$MODEL" --run_name "$MODEL"
 done
 
 # python main.py --run_name GRU

@@ -1,4 +1,4 @@
-config_factory: [start, datasets/megamarket/megamarket, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
+config_factory: [start, datasets/megamarket/megamarket, methods/oneshot/gru, methods/oneshot/matched, allto1]
 
 optimizer:
   params:

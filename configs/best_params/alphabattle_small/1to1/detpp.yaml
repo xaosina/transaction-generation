@@ -1,0 +1,23 @@
+config_factory: [start, metrics/default, datasets/alphabattle_small/alphabattle_small, methods/detpp]
+
+optimizer:
+  params:
+    weight_decay: 3.899839311479075e-05
+    lr: 0.006128647195385248
+model:
+  latent_encoder:
+    params:
+      hidden_size: 62
+      num_layers: 1
+      dropout: 1.1865467123508176e-09
+  params:
+    k_factor: 1.3392816872850382
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 124
+      num_emb_dim: 104
+loss:
+  params:
+    matching_weights:
+      _presence: 9.101424598366462

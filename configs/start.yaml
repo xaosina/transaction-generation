@@ -3,6 +3,11 @@ log_dir: log/generation/${data_conf.dataset_name}
 device: "cuda:0"
 common_seed: 0
 
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  topk: 1
+  temperature: 1.
+
 runner:
   name: GenerationTrainer
   run_type: simple
