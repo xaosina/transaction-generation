@@ -1,6 +1,6 @@
-patience: 3
+patience: 20
 n_classes: 2
-main_metric: MulticlassAccuracy
+main_metric: MulticlassAUROC
 main_loss: 
   name: nn.CrossEntropyLoss
 

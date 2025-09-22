@@ -30,6 +30,7 @@ temp/
 *gpickle
 .hypothesis*
 *.out
+res
 
 bpe_post_process.py
 temp*
