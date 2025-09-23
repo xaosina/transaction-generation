@@ -40,3 +40,4 @@ notebooks/
 *.csv
 *.sh
 embeddings/
+*.code-workspace
