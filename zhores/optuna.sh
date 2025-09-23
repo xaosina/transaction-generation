@@ -41,7 +41,7 @@ srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif 
     nvidia-smi;
     python main.py \
         --run_name optuna/${method} \
-        --config_factory [start,metrics/default,datasets/${dataset}/${dataset},methods/${method},optuna]
+        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},optuna]
 '
 EOT
 

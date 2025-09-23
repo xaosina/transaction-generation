@@ -18,11 +18,12 @@ class DeTPPLoss(Module):
         self,
         data_conf: LatentDataConfig,
         loss_subset: float = 0.25,
+        k_gen: int = None,
         matching_weights: dict = None,
     ):
         super().__init__()
         self.matching_weights = matching_weights or {}
-        self._k = data_conf.generation_len
+        self._k = k_gen or data_conf.generation_len
         self._loss_subset = loss_subset
 
         self.data_conf = data_conf

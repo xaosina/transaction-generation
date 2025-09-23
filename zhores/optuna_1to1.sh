@@ -41,7 +41,7 @@ srun singularity exec --bind /home/${login}/dev/:/home -f --nv image_trans.sif b
     nvidia-smi;
     python main.py \
         --run_name 1to1/optuna/${method} \
-        --config_factory [start,metrics/default,datasets/${dataset}/${dataset},methods/${method},optuna,1to1]
+        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},optuna,1to1]
 '
 EOT
 

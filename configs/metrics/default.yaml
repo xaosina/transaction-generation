@@ -1,0 +1,11 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  topk: 1
+  temperature: 1.
+  metrics:
+    - OTD:
+        detailed: True
+    - OTD:
+        f1_average: micro
+    - Cardinality
+

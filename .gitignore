@@ -14,6 +14,7 @@ scripts/sync.sh
 zhores/configs/
 **.parquet
 
+notebooks/analysis_param.ipynb
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -30,6 +31,7 @@ temp/
 *gpickle
 .hypothesis*
 *.out
+res
 
 bpe_post_process.py
 temp*

@@ -1,5 +1,9 @@
 evaluator:
   metrics:
+    - OTD:
+        detailed: True
+    - OTD: {f1_average: micro}
+    - Cardinality
     - Detection:
         condition_len: ${data_conf.generation_len}
         verbose: True
