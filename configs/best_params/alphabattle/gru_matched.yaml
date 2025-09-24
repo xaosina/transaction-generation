@@ -1,0 +1,23 @@
+config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 5.524825471120337e-05
+    lr: 0.0004502785175506802
+model:
+  latent_encoder:
+    params:
+      hidden_size: 404
+      num_layers: 9
+      dropout: 2.9609607947405753e-10
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 23
+      num_emb_dim: 49
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false
