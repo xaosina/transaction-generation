@@ -5,5 +5,6 @@ evaluator:
     - OTD: {f1_average: micro}
     - Cardinality
     - Detection:
+        report_std: True
         condition_len: ${data_conf.generation_len}
         verbose: True

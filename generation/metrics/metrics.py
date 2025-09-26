@@ -668,9 +668,9 @@ class DistributionMetric(BaseMetric):
 class StatisticMetric(DistributionMetric):
     def get_scores(self, row) -> pd.Series:
         orig_score, gen_score = row.map(self.get_statistic)
-        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
-        score = 1 - (1 + abs(gen_score - orig_score))
-        return pd.Series({"score": score, "relative": relative, "orig": orig_score})
+        # relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        # score = 1 - (1 + abs(gen_score - orig_score))
+        return pd.Series({"gen": gen_score, "orig": orig_score})
 
     @abstractmethod
     def get_statistic(self, p) -> float: ...
@@ -904,6 +904,7 @@ class Detection(BaseMetric):
     """
 
     condition_len: int = 0
+    report_std: bool = False
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
@@ -921,6 +922,9 @@ class Detection(BaseMetric):
         )
         acc = discr_res.loc["MulticlassAUROC"].loc["mean"]
         err = (1 - acc) * 2
+        std = discr_res.loc["MulticlassAUROC"].loc["std"]
+        if self.report_std:
+            return {"mean": float(err), "std": 2 * float(std)}
         return float(err)
 
     def __repr__(self):
