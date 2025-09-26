@@ -18,7 +18,7 @@ echo "🚀 Running: $RUN_NAME"
 
 python main.py \
   --config_path "${CONFIG_FILE}" \
-  --tail_factory "[metrics/paper]" \
+  --overwrite_factory "[metrics/detection]" \
   --trainer.ckpt_resume "${CHECKPOINT_FILE}" \
   --run_name "${RUN_NAME}" \
   --device "${DEVICE}" \
