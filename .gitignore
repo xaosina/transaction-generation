@@ -38,3 +38,8 @@ temp*
 */exps/configs/*
 notebooks/
 *pkl
+*.png
+*.csv
+*.sh
+embeddings/
+*.code-workspace

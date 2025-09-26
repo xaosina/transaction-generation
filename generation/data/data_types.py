@@ -344,16 +344,18 @@ class PredBatch:
         if self.cat_features:
             cat_features = []
             for cat_name, cat_tensor in self.cat_features.items():
-                if topk > 1:
+                assert topk != 0, "Incorrect topk"
+                if topk == 1:
+                    samples = cat_tensor.argmax(dim=-1)
+                else:
                     shape = cat_tensor.shape
                     logits = (cat_tensor / temperature).view(-1, shape[-1])
-                    v, _ = torch.topk(logits, min(topk, logits.size(-1)))
-                    logits[logits < v[..., [-1]]] = -float("Inf")
+                    if topk > 1:
+                        v, _ = torch.topk(logits, min(topk, logits.size(-1)))
+                        logits[logits < v[..., [-1]]] = -float("Inf")
                     probs = F.softmax(logits, dim=-1)
                     samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(shape[:-1])
-                else:
-                    samples = cat_tensor.argmax(dim=-1)
+                    samples = samples.view(shape[:-1])                    
                 cat_features.append(samples)
 
             cat_features = torch.stack(cat_features, dim=-1)
