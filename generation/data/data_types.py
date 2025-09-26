@@ -55,7 +55,7 @@ class DataConfig:
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += self.num_names or []
+        all_num += (self.num_names or [])
         return [col for col in all_num if col in self.focus_on]
 
     @property
@@ -106,7 +106,7 @@ class LatentDataConfig:
 
     @property
     def focus_num(self):
-        names = self.num_names or [] + [self.time_name]
+        names = (self.num_names or []) + [self.time_name]
         return [name for name in names if name in self.focus_on]
 
     def check_focus_on(self, use_time):
