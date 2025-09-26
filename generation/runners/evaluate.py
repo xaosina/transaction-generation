@@ -60,7 +60,7 @@ class GenerationEvaluator(Runner):
         # val_metrics = trainer.validate(val_loader, remove=False)
         # train_metrics = trainer.validate(train_loader, remove=False)
         test_metrics = trainer.validate(
-            val_loader, remove=False, get_loss=False, get_metrics=True
+            test_loader, remove=False, get_loss=False, get_metrics=True
         )
 
         # val_metrics = {k: v for k, v in val_metrics.items()}

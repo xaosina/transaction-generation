@@ -7,7 +7,7 @@ import pytest
 from generation.metrics.metrics import (
     Accuracy,
     Levenshtein,
-    MultisetF1Metric,
+    F1Metric,
     Gini,
     Reconstruction,
     ShannonEntropy,
@@ -295,7 +295,7 @@ def test_gini_metric(
 
 # mini-test for f1-metric at first
 def test_get_statistics_unordered():
-    metric = MultisetF1Metric(
+    metric = F1Metric(
         average="macro",
         devices=["cpu"],
         data_conf=None,
@@ -353,7 +353,7 @@ def test_f1_metric(
 ):
     gt, gen = create_multiple_data(y_true, y_pred)
 
-    f1_macro = MultisetF1Metric(
+    f1_macro = F1Metric(
         average="macro",
         devices=["cpu"],
         data_conf=config.data_conf,
@@ -365,7 +365,7 @@ def test_f1_metric(
         score_macro, expected_macro, atol=1e-5
     ), f"Macro F1: expected {expected_macro}, got {score_macro}"
 
-    f1_micro = MultisetF1Metric(
+    f1_micro = F1Metric(
         average="micro",
         devices=["cpu"],
         data_conf=config.data_conf,

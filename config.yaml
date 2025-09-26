@@ -1,1 +1,1 @@
-config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/oneshot/gru, methods/oneshot/target]
+config_factory: [start, datasets/age/age, methods/baselines/repeat]

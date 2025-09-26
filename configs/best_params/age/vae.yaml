@@ -1,22 +1,27 @@
-config_factory: [start, metrics/default, datasets/age/age, methods/methods/vae]
+config_factory: [start, metrics/default, datasets/age/age, methods/vae]
 
 optimizer:
   params:
-    weight_decay: 5.197155479086596e-09
-    lr: 5.356840503291662e-05
+    weight_decay: 4.064923524024686e-12
+    lr: 0.0042136867096942785
 model:
-  latent_encoder:
-    params:
-      hidden_size: 219
-      num_layers: 8
-      dropout: 0.003871575252178555
   autoencoder:
     params:
-      num_norm: false
-      cat_emb_dim: 84
-      num_emb_dim: 67
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
 data_conf:
   train_transforms:
     '1':
       TimeToDiff:
         disable: true
+schedulers:
+  step:
+    StepLR:
+      step_size: 50
+  beta:
+    BetaScheduler:
+      init_beta: 0.4589620775364838
+      factor: 0.6
+      patience: 3

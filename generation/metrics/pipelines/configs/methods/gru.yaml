@@ -1,3 +1,11 @@
+# hidden_size 128-> 512
+# num_layers 1-> 2
+# dropout 0 -> 0.1
+# wd 1e-7 -> 1e-6
+# num_norm True -> False
+# ValHiddenMean -> LastHiddenMean
+# patience 5 -> 20
+
 method_name: gru
 runner_name: SupervisedRunner
 

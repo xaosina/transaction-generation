@@ -1,19 +1,21 @@
+import os
+import uuid
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import torch
 from ebes.model import BaseModel, TakeLastHidden, ValidHiddenMean
-from ebes.types import Seq
 from ebes.model.seq2seq import Projection
+from ebes.types import Seq
+
+from generation.models import autoencoders
+from generation.models.autoencoders.base import AEConfig
+from generation.utils import freeze_module
 
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
 from ..encoders import AutoregressiveEncoder, LatentEncConfig
-from generation.models.autoencoders.base import AEConfig
-from generation.models import autoencoders
-from generation.utils import freeze_module
-import os, uuid
-import numpy as np
+
 
 @dataclass(frozen=True)
 class ModelConfig:
@@ -34,32 +36,10 @@ class BaseGenerator(BaseModel):
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
 
 
-
-
-
-def save_batch_npz(out_dir, ids_index, tokens_tensor):
-    """
-    out_dir: куда сохранять
-    ids_index: iterable из id (например hist.index)
-    tokens_tensor: torch.Tensor [B, L, D]
-    """
-    os.makedirs(out_dir, exist_ok=True)
-
-    ids = np.asarray(list(ids_index), dtype=np.int64)
-    emb = tokens_tensor.detach().to('cpu', torch.float32).numpy()  # [B, L, D]
-
-    fname = f"batch-{uuid.uuid4().hex}.npz"
-    path = os.path.join(out_dir, fname)
-    np.savez_compressed(path, ids=ids, emb=emb)
-    return path
-
-
-
-
-
 class AutoregressiveGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
+
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
             data_conf, model_config
         )
@@ -108,6 +88,7 @@ class AutoregressiveGenerator(BaseGenerator):
 
         """
         hist = deepcopy(hist)
+
         with torch.no_grad():
             for _ in range(gen_len):
                 x = self.autoencoder.encoder(hist)
@@ -121,24 +102,6 @@ class AutoregressiveGenerator(BaseGenerator):
         else:
             return hist.tail(gen_len)  # Return GenBatch of size [gen_len, B, D]
 
-    def collect(
-        self,
-        hist: GenBatch,
-        with_hist=False,
-        topk=1,
-        temperature=1.0,
-    ) -> GenBatch:
-        """
-        Auto-regressive embedding collecting
-
-        Args:
-            x (Seq): Input sequence [L, B, D]
-
-        """
-        hist = deepcopy(hist)
-        x = self.autoencoder.encoder(hist)
-        x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
-        return x.tokens[0]
 
 class Reshaper(BaseModel):
     def __init__(self, gen_len: int):
@@ -230,7 +193,7 @@ class OneShotGenerator(BaseGenerator):
             return hist  # Return GenBatch of size [L + gen_len, B, D]
         else:
             return pred  # Return GenBatch of size [gen_len, B, D]
-    
+
     def collect(
         self,
         hist: GenBatch,
@@ -250,6 +213,7 @@ class OneShotGenerator(BaseGenerator):
         x = self.encoder(x)  # [L, B, D]
         x = self.poller(x)  # [B, D]
         return x
+
 
 class OneShotDistributionGenerator(BaseGenerator):
 
@@ -329,7 +293,10 @@ class OneShotDistributionGenerator(BaseGenerator):
         device = counts.device
         arange = torch.arange(counts.size(1), device=device)
 
-        idx_rows = [torch.repeat_interleave(arange, row)[torch.randperm(self.gen_len)] for row in counts]
+        idx_rows = [
+            torch.repeat_interleave(arange, row)[torch.randperm(self.gen_len)]
+            for row in counts
+        ]
         return torch.stack(idx_rows)
 
     def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
