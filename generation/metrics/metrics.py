@@ -122,7 +122,7 @@ def r1_score(true_num, pred_num):
         pred_num: [L, B, D]
     """
     gen_len = true_num.shape[0]
-    denominator = np.abs(true_num - np.median(true_num, 0)[0]).sum(
+    denominator = np.abs(true_num - np.median(true_num, 0)).sum(
         axis=0, dtype=np.float64
     )  # B, D
     nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
