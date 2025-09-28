@@ -1,0 +1,23 @@
+config_factory: [start, metrics/default, datasets/age/age, methods/detpp]
+
+optimizer:
+  params:
+    weight_decay: 2.005817028224756e-07
+    lr: 0.0008546773813094806
+model:
+  latent_encoder:
+    params:
+      hidden_size: 452
+      num_layers: 1
+      dropout: 1.023807275114366e-07
+  params:
+    k_factor: 1.4356463521292926
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 33
+      num_emb_dim: 1
+loss:
+  params:
+    matching_weights:
+      _presence: 5.09143415730839

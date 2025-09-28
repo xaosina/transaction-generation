@@ -3,21 +3,9 @@ evaluator:
   topk: 1
   temperature: 1.
   metrics:
-    - OTD
+    - OTD:
+        detailed: True
     - OTD:
         f1_average: micro
     - Cardinality
-    - MultisetF1Metric:
-        average: macro
-    - MultisetF1Metric:
-        average: micro
-    - F1Score:
-        average: macro
-    - F1Score:
-        average: micro
 
-    # - Density:
-    #     log_cols: ["amount_rur"]
-    #     with_timediff: True
-    #     save_details: True
-    #     verbose: False

@@ -10,4 +10,4 @@ runner:
 
 trainer:
   verbose: False
-  ckpt_track_metric: loss
+  # ckpt_track_metric: loss

@@ -15,7 +15,7 @@ from Levenshtein import distance as lev_score
 from scipy.optimize import linear_sum_assignment
 from scipy.stats import entropy, gaussian_kde
 from sdmetrics.reports.single_table import QualityReport
-from sklearn.metrics import accuracy_score, r2_score as r2_sklearn, f1_score
+from sklearn.metrics import accuracy_score, r2_score as r2_sklearn
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -459,27 +459,17 @@ class Levenshtein(BinaryMetric):
 
 @dataclass
 class Accuracy(BinaryMetric):
-
+    first_k: int = 0
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
-        acc_m = accuracy_score(gt, pred)
+        if self.first_k < 1:
+            acc_m = accuracy_score(gt, pred)
+        else:
+            acc_m = accuracy_score(gt[:self.first_k], pred[:self.first_k])
         return acc_m
 
     def __repr__(self):
-        return f"Accuracy on {self.data_conf.target_token}"
-
-
-@dataclass
-class F1Score(BinaryMetric):
-    average: str = "macro"
-
-    def get_scores(self, row):
-        gt, pred = row["gt"], row["pred"]
-        f1 = f1_score(gt, pred, average=self.average)
-        return f1
-
-    def __repr__(self):
-        return f"F1 score {self.average} on {self.data_conf.target_token}"
+        return f"Accuracy {f'first@{self.first_k}' if self.first_k > 0 else ''} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -567,7 +557,7 @@ class Recall(PR):
 
 
 @dataclass
-class MultisetF1Metric(BinaryMetric):
+class F1Metric(BinaryMetric):
     average: str = "macro"
 
     @staticmethod
@@ -642,7 +632,7 @@ class MultisetF1Metric(BinaryMetric):
         return f1
 
     def __repr__(self):
-        return f"MultisetF1_{self.average} on {self.data_conf.target_token}"
+        return f"F1_{self.average} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -681,9 +671,9 @@ class DistributionMetric(BaseMetric):
 class StatisticMetric(DistributionMetric):
     def get_scores(self, row) -> pd.Series:
         orig_score, gen_score = row.map(self.get_statistic)
-        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
-        score = 1 - (1 + abs(gen_score - orig_score))
-        return pd.Series({"score": score, "relative": relative, "orig": orig_score})
+        # relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        # score = 1 - (1 + abs(gen_score - orig_score))
+        return pd.Series({"gen": gen_score, "orig": orig_score})
 
     @abstractmethod
     def get_statistic(self, p) -> float: ...
@@ -917,6 +907,7 @@ class Detection(BaseMetric):
     """
 
     condition_len: int = 0
+    report_std: bool = False
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
@@ -934,6 +925,9 @@ class Detection(BaseMetric):
         )
         acc = discr_res.loc["MulticlassAUROC"].loc["mean"]
         err = (1 - acc) * 2
+        std = discr_res.loc["MulticlassAUROC"].loc["std"]
+        if self.report_std:
+            return {"mean": float(err), "std": 2 * float(std)}
         return float(err)
 
     def __repr__(self):

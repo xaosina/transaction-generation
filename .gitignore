@@ -14,6 +14,7 @@ scripts/sync.sh
 zhores/configs/
 **.parquet
 
+notebooks/analysis_param.ipynb
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -37,3 +38,8 @@ temp*
 */exps/configs/*
 notebooks/
 *pkl
+*.png
+*.csv
+*.sh
+embeddings/
+*.code-workspace

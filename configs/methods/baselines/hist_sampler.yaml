@@ -1,0 +1,7 @@
+# MODEL
+model:
+  name: BaselineHistSampler
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple

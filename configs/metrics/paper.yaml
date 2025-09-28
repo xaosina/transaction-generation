@@ -1,0 +1,14 @@
+evaluator:
+  devices: ["cuda:0", "cuda:0"] # ALWAYS SET MORE THAN 1 DEVICE
+  topk: 1
+  temperature: 1.
+  metrics:
+    - Levenshtein
+    - OTD:
+        focus_on: [artist_id]
+        f1_average: micro
+    - Cardinality
+    - F1Score:
+        average: macro
+    - F1Score:
+        average: micro

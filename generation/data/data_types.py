@@ -55,7 +55,7 @@ class DataConfig:
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += self.num_names or []
+        all_num += (self.num_names or [])
         return [col for col in all_num if col in self.focus_on]
 
     @property
@@ -106,7 +106,7 @@ class LatentDataConfig:
 
     @property
     def focus_num(self):
-        names = self.num_names or [] + [self.time_name]
+        names = (self.num_names or []) + [self.time_name]
         return [name for name in names if name in self.focus_on]
 
     def check_focus_on(self, use_time):
@@ -344,22 +344,18 @@ class PredBatch:
         if self.cat_features:
             cat_features = []
             for cat_name, cat_tensor in self.cat_features.items():
-                if topk > 1:
+                assert topk != 0, "Incorrect topk"
+                if topk == 1:
+                    samples = cat_tensor.argmax(dim=-1)
+                else:
                     shape = cat_tensor.shape
                     logits = (cat_tensor / temperature).view(-1, shape[-1])
-                    v, _ = torch.topk(logits, min(topk, logits.size(-1)))
-                    logits[logits < v[..., [-1]]] = -float("Inf")
+                    if topk > 1:
+                        v, _ = torch.topk(logits, min(topk, logits.size(-1)))
+                        logits[logits < v[..., [-1]]] = -float("Inf")
                     probs = F.softmax(logits, dim=-1)
                     samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(shape[:-1])
-                elif topk == -1:
-                    shape = cat_tensor.shape
-                    logits = (cat_tensor).view(-1, shape[-1])
-                    probs = F.softmax(logits, dim=-1)
-                    samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(shape[:-1])
-                else:
-                    samples = cat_tensor.argmax(dim=-1)
+                    samples = samples.view(shape[:-1])                    
                 cat_features.append(samples)
 
             cat_features = torch.stack(cat_features, dim=-1)

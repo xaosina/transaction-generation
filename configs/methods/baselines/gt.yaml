@@ -1,0 +1,7 @@
+# MODEL
+model:
+  name: GroundTruthGenerator
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple
