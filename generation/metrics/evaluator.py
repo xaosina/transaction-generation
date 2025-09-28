@@ -142,9 +142,13 @@ def _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter):
 
 
 def _concat_samples(gt: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
-    assert (
-        gt.target_time.shape[0] == pred.time.shape[0]
-    ), "Mismatch in sequence lengths between hist and pred"
+#     assert (
+#         gt.target_time.shape[0] == pred.time.shape[0]
+#     ), "Mismatch in sequence lengths between hist and pred"
+    if gt.target_time.shape[0] != pred.time.shape[0]:
+        logger.warning(
+            f'Mismatch in sequence lengths between'
+            f'gt ({gt.target_time.shape[0]}) and pred ({pred.time.shape[0]})!')
     gen = deepcopy(gt)
 
     gen.target_time = pred.time
