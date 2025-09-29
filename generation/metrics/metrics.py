@@ -314,7 +314,7 @@ class OTD(BaseMetric):
         if self.f1_average != "macro":
             res += f" {self.f1_average}"
         if not self.global_denom:
-            res += " userwise_denom"
+            res = "---" + res + " userwise_denom"
         return res
 
 
