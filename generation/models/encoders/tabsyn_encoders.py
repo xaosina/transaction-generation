@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import logging
+from typing import Tuple, List
 
 logger = logging.getLogger(__name__)
 
@@ -256,7 +257,8 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             n_seqs: int, 
             class_labels: torch.Tensor | None = None, 
             history_embedding: torch.Tensor | None = None, 
-            history_seq: Seq | None = None
+            history_seq: Seq | None = None,
+            return_path : bool = False,
         ) -> Seq :
 
         assert history_seq is not None
@@ -268,7 +270,7 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
         
-        _samp, _, _, _, _, _ = karras_sample(
+        _samp, _path, _, _, _, _ = karras_sample(
             self.diffusion,
             self.denoise_fn,
             history_seq,
@@ -289,10 +291,24 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             order=self.sampling_params['order'],
         )
 
-        return self.gen_reshaper(
-            Seq(
-                tokens=_samp, 
-                lengths=torch.ones((n_seqs,)).to(_samp.device) * self.generation_len, 
-                time=None
-            )
-        ) # [L, B, D]
+        samp = self.gen_reshaper(
+                Seq(
+                    tokens=_samp, 
+                    lengths=torch.ones((n_seqs,)).to(_samp.device) * self.generation_len, 
+                    time=None
+                )
+            ) # [L, B, D]
+
+        if not return_path:
+            return samp
+        else:
+            path = [
+                    self.gen_reshaper(
+                        Seq(
+                            tokens=path_inst, 
+                            lengths=torch.ones((n_seqs,)).to(path_inst.device) * self.generation_len, 
+                            time=None
+                        )
+                ) for path_inst in _path
+            ]
+            return samp, path
