@@ -97,7 +97,7 @@ def get_perfect_score(score, max_shift, gen_len):
     return perfect_score.mean(0)
 
 
-def r2_score(true_num, pred_num):
+def r2_score(true_num, pred_num, global_denom=True):
     """R2 score for numerical
     Input:
         true_num: [L, B, D]
@@ -107,6 +107,9 @@ def r2_score(true_num, pred_num):
     denominator = ((true_num - true_num.mean(0)) ** 2).sum(
         axis=0, dtype=np.float64
     )  # B, D
+    if global_denom:
+        denominator = denominator.mean(0)[None].repeat(true_num.shape[1], axis=0)
+
     nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
     denominator[nominator.sum(0).sum(0) == 0] = 1
     nominator[:, :, (denominator == 0)] = 1 / gen_len
@@ -115,7 +118,7 @@ def r2_score(true_num, pred_num):
     return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
 
 
-def r1_score(true_num, pred_num):
+def r1_score(true_num, pred_num, global_denom=True):
     """R1 score for numerical(MAE analog for R2)
     Input:
         true_num: [L, B, D]
@@ -125,6 +128,9 @@ def r1_score(true_num, pred_num):
     denominator = np.abs(true_num - np.median(true_num, 0)).sum(
         axis=0, dtype=np.float64
     )  # B, D
+    if global_denom:
+        denominator = denominator.mean(0)[None].repeat(true_num.shape[1], axis=0)
+
     nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
     denominator[nominator.sum(0).sum(0) == 0] = 1
     nominator[:, :, (denominator == 0)] = 1 / gen_len
@@ -206,6 +212,7 @@ class OTD(BaseMetric):
     f1_average: str = "macro"
     focus_on: list[str] = None
     detailed: bool = False
+    global_denom: bool = True
 
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
@@ -249,7 +256,7 @@ class OTD(BaseMetric):
             if self.num_metric == "r2":
                 num_metric = r2_score(true_num, pred_num)
             elif self.num_metric == "r1":
-                num_metric = r1_score(true_num, pred_num)
+                num_metric = r1_score(true_num, pred_num, self.global_denom)
             elif self.num_metric == "smape":
                 num_metric = smape_score(true_num, pred_num)
             else:
@@ -306,6 +313,8 @@ class OTD(BaseMetric):
             res += f" {self.num_metric}"
         if self.f1_average != "macro":
             res += f" {self.f1_average}"
+        if not self.global_denom:
+            res = "---" + res + " userwise_denom"
         return res
 
 
@@ -460,12 +469,13 @@ class Levenshtein(BinaryMetric):
 @dataclass
 class Accuracy(BinaryMetric):
     first_k: int = 0
+
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
         if self.first_k < 1:
             acc_m = accuracy_score(gt, pred)
         else:
-            acc_m = accuracy_score(gt[:self.first_k], pred[:self.first_k])
+            acc_m = accuracy_score(gt[: self.first_k], pred[: self.first_k])
         return acc_m
 
     def __repr__(self):
@@ -736,7 +746,7 @@ class GenVsHistoryMetric(BaseMetric):
         if self.calculate_orig:
             res["orig"] = self.score_for_df(orig)
         # score = 1 - (1 + abs(gen_score - orig_score))
-        return res # "score": score,
+        return res  # "score": score,
 
 
 @dataclass

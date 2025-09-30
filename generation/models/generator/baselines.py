@@ -78,6 +78,53 @@ class ModeGenerator(BaseGenerator):
             return gen_batch
 
 
+class TargetModeGenerator(BaseGenerator):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x: GenBatch):
+        raise "No need to train a repeator."
+
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs: Any) -> GenBatch:
+        def get_mode(tensor, discrete=True):
+            if tensor is None:
+                return None
+            shape = list(tensor.shape)
+            shape[0] = 1
+            B = shape[1]
+            res = torch.empty(*shape, device=tensor.device, dtype=tensor.dtype)
+            for b in range(B):
+                valid_tensor = tensor[:, b]
+                if discrete:
+                    mode_value, _ = torch.mode(valid_tensor, dim=0)
+                    res[0, b] = mode_value
+                else:
+                    median_value = torch.median(valid_tensor, dim=0)[0]
+                    res[0, b] = median_value
+            new_shape = [1] * len(res.shape)
+            new_shape[0] = gen_len
+            return res.repeat(new_shape)  # [gen_len, B, D]
+
+        assert isinstance(hist.time, torch.Tensor)
+        assert hist.monotonic_time, "Vpadlu delat dlya ne monotonic"
+        hist = deepcopy(hist)
+        gen_batch = replace(
+            hist,
+            lengths=torch.ones_like(hist.lengths) * gen_len,
+            time=get_mode(hist.target_time, False),
+            num_features=get_mode(hist.target_num_features, False),
+            cat_features=get_mode(hist.target_cat_features),
+            cat_mask=None,
+            num_mask=None,
+        )
+        if with_hist:
+            hist.append(gen_batch)
+            return hist
+        else:
+            return gen_batch
+
+
+
 class BaselineRepeater(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         self.shift = (model_config.params or {}).get("shift", 0)

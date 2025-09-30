@@ -1,0 +1,17 @@
+# MODEL
+model:
+  name: TargetModeGenerator
+
+data_conf:
+  train_transforms:
+    "1":
+      TimeToDiff:
+        disable: True
+  val_transforms:
+    "1":
+      TimeToDiff:
+        disable: True
+
+runner:
+  name: GenerationEvaluator
+  run_type: simple
