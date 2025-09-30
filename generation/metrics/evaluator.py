@@ -97,6 +97,13 @@ class SampleEvaluator:
                     topk=self.eval_config.topk,
                     temperature=self.eval_config.temperature,
                 )
+#             with torch.no_grad():
+#                 batch_pred = model.generate_traj(
+#                     deepcopy(batch_input),
+#                     path_idss=[0, 1, 2, 5, 10, 20, 30, 40, 50, 60, 62, 63, 64],
+#                     with_x0_pred = True,
+#                     with_path = True,
+#                 )
             self._n_last_time_generated_seqs += len(batch_input)
             gen = _concat_samples(batch_input, batch_pred)
             gen = data_loader.collate_fn.reverse(gen.to("cpu"))
@@ -111,6 +118,9 @@ class SampleEvaluator:
 
         if buffer_gt:
             _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
+#         print('gt dir: ', gt_dir)
+#         print('gen dir: ', gen_dir)
+#         assert False
 
         return gt_dir, gen_dir
 
@@ -148,7 +158,7 @@ def _concat_samples(gt: GenBatch, pred: GenBatch) -> tuple[GenBatch, GenBatch]:
     if gt.target_time.shape[0] != pred.time.shape[0]:
         logger.warning(
             f'Mismatch in sequence lengths between'
-            f'gt ({gt.target_time.shape[0]}) and pred ({pred.time.shape[0]})!')
+            f' gt ({gt.target_time.shape[0]}) and pred ({pred.time.shape[0]})!')
     gen = deepcopy(gt)
 
     gen.target_time = pred.time

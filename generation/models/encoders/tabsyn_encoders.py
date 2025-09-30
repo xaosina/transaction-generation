@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import logging
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,8 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             history_embedding: torch.Tensor | None = None, 
             history_seq: Seq | None = None,
             return_path : bool = False,
-        ) -> Seq :
+            return_x0_pred : bool = False,
+        ) -> Seq | Tuple[Seq, Dict[str, Any]]:
 
         assert history_seq is not None
 
@@ -270,7 +271,7 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
         
-        _samp, _path, _, _, _, _ = karras_sample(
+        _samp, _path, _, _pred_x0, _, _ = karras_sample(
             self.diffusion,
             self.denoise_fn,
             history_seq,
@@ -299,16 +300,28 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                 )
             ) # [L, B, D]
 
-        if not return_path:
+        if (not return_path) and (not return_x0_pred):
             return samp
         else:
-            path = [
-                    self.gen_reshaper(
-                        Seq(
-                            tokens=path_inst, 
-                            lengths=torch.ones((n_seqs,)).to(path_inst.device) * self.generation_len, 
-                            time=None
-                        )
-                ) for path_inst in _path
-            ]
-            return samp, path
+            bridge_traj = dict()
+            if return_path:
+                bridge_traj['path'] = [
+                            self.gen_reshaper(
+                                Seq(
+                                    tokens=path_inst, 
+                                    lengths=torch.ones((n_seqs,)).to(path_inst.device) * self.generation_len, 
+                                    time=None
+                                )
+                        ) for path_inst in _path
+                    ]
+            if return_x0_pred:
+                bridge_traj['x0_pred'] = [
+                            self.gen_reshaper(
+                                Seq(
+                                    tokens=pred_x0_inst, 
+                                    lengths=torch.ones((n_seqs,)).to(pred_x0_inst.device) * self.generation_len, 
+                                    time=None
+                                )
+                        ) for pred_x0_inst in _pred_x0
+                    ]
+            return samp, bridge_traj

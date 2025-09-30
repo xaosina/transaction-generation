@@ -4,7 +4,7 @@ import torch
 from ebes.model import BaseModel, TakeLastHidden
 
 from ...data.data_types import GenBatch, LatentDataConfig
-from ...data.data_types import seq_append, get_seq_tail
+from ...data.data_types import seq_append, get_seq_tail, seq_to_device
 # from generation.models.encoders import ConditionalDiffusionEncoder
 from generation.models import autoencoders
 from generation.models import encoders
@@ -115,7 +115,13 @@ class LatentDiffusionGenerator(BaseGenerator):
         return loss
     
     @torch.no_grad()
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs) -> GenBatch:
+    def generate(
+        self, 
+        hist: GenBatch, 
+        gen_len: int, 
+        with_hist=False,
+        **kwargs
+    ) -> GenBatch:
         """
         Diffusion generation
 
@@ -166,12 +172,14 @@ class LatentDiffusionGenerator(BaseGenerator):
     
 
     @torch.no_grad()
-    def generate_path(
+    def generate_traj(
         self, 
         hist: GenBatch, 
         *args,
         path_idss: List[int] | None = None,
-        with_hist=False,  
+        with_hist: bool = False,
+        with_path: bool = False,
+        with_x0_pred: bool = False,
         **kwargs
     ) -> GenBatch:
         """
@@ -181,8 +189,12 @@ class LatentDiffusionGenerator(BaseGenerator):
             hist (GenBatch): history batch
 
         """
-
         gen_len = self.generation_len
+        
+        if (not with_path) and (not with_x0_pred):
+            logger.warning('generate_traj reduces to generate!')
+            return self.generate(hist, gen_len, with_hist=with_hist)
+
         n_seqs = len(hist)
         hist = deepcopy(hist)
         full_history_seq = self.autoencoder.encoder(hist)
@@ -201,38 +213,60 @@ class LatentDiffusionGenerator(BaseGenerator):
             history_seq = get_seq_tail(full_history_seq, self.history_len)
         
         try:
-            sampled_seq, path_seqs = self.encoder.generate(
+            sampled_seq, traj = self.encoder.generate(
                 n_seqs, 
                 None, 
                 history_embedding, 
                 history_seq, 
-                return_path = True
+                return_path = with_path,
+                return_x0_pred = with_x0_pred,
             ) # Seq [L, B, D]
         except:
             raise Exception('Latent diffusion encoder does not supports path trace yet!')
         
-        if path_idss is not None:
-            assert max(path_seqs) < len(path_seqs), (
-                f'Too large path index {max(path_seqs)} is requested;'
-                f' number of generation steps is {len(path_seqs)}.'
-            )
-            path_seqs = [path_seqs[idx] for idx in path_idss]
+        assert isinstance(traj, dict)
+        assert len(traj) > 0
         
-        paths_batch = None
-        for path_seq in path_seqs:
-            path_batch = self.autoencoder.decoder.generate(path_seq)
-            if paths_batch is None:
-                paths_batch = path_batch
-            else:
-                paths_batch.append(path_batch)
-
+        def _process_traj_list(traj_list):
+            
+            if path_idss is not None:
+                traj_len = len(traj_list)
+                assert max(path_idss) < traj_len, (
+                    f'Too large path index {max(path_idss)} is requested;'
+                    f' number of generation steps is {traj_len}.'
+                )
+                
+                traj_list = [traj_list[idx] for idx in path_idss]
+                
+            traj_batch = None
+            
+            for traj_inst in traj_list:
+            
+                _temp = self.autoencoder.decoder.generate(
+                    seq_to_device(traj_inst, sampled_seq.tokens.device)
+                )
+                if traj_batch is None:
+                    traj_batch = _temp
+                else:
+                    traj_batch.append(_temp)
+            
+            return traj_batch
+                
         sampled_batch = self.autoencoder.decoder.generate(sampled_seq)
-        paths_batch.append(sampled_batch)
+        
+        if with_path:
+            sampled_batch.append( 
+                _process_traj_list(traj['path']) 
+            )
+        if with_x0_pred:
+            sampled_batch.append(
+                _process_traj_list(traj['x0_pred'])
+            )
         
         if with_hist:
-            hist.append(paths_batch)
+            hist.append(sampled_batch)
             return hist
-        return paths_batch
+        return sampled_batch
 
 
 class LatentForeseeGenerator(BaseGenerator):

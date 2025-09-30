@@ -457,3 +457,18 @@ def valid_mask(x: Seq | GenBatch):
     L = x.lengths.max()
     valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths  # L, B
     return valid_mask
+
+
+# Note: original Seq.to does not work if some of the fields
+# (tokens, lengths, time) are None
+def seq_to_device(seq: Seq, device) -> Seq:
+    
+    def _set_device_or_none(data: torch.Tensor):
+        return data.to(device) if (data is not None) else None
+    
+    seq.tokens = _set_device_or_none(seq.tokens)
+    seq.lengths = _set_device_or_none(seq.lengths)
+    seq.time = _set_device_or_none(seq.time)
+    seq.masks = _set_device_or_none(seq.masks)
+    
+    return seq
