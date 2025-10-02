@@ -94,16 +94,22 @@ def get_transforms(data_conf: DataConfig):
     return tfs, data_conf
 
 
-def get_dataloaders(outter_data_conf: DataConfig, seed: int):
+def get_dataloaders(outter_data_conf: DataConfig, seed: int, get_trainval_dataset: bool = False):
     transforms, data_conf = get_transforms(outter_data_conf)
 
     # Create datasets
-    train_dataset, val_dataset = ShardDataset.train_val_split(
+    datasets = ShardDataset.train_val_split(
         outter_data_conf.train_path,
         outter_data_conf,
         split_seed=seed,
         transforms=transforms,
+        get_trainval_subset=get_trainval_dataset,
     )
+    if get_trainval_dataset:
+        train_dataset, trainval_dataset, val_dataset = datasets
+    else:
+        train_dataset, val_dataset = datasets
+
     test_dataset = ShardDataset(
         outter_data_conf.test_path,
         outter_data_conf,
@@ -137,4 +143,14 @@ def get_dataloaders(outter_data_conf: DataConfig, seed: int):
         collate_fn=val_collator,
         num_workers=data_conf.num_workers,
     )
-    return (train_loader, val_loader, test_loader), (internal_dataconf, data_conf)
+
+    if not get_trainval_dataset:
+        return (train_loader, val_loader, test_loader), (internal_dataconf, data_conf)
+    
+    trainval_loader = DataLoader(
+        trainval_dataset,
+        batch_size=None,
+        collate_fn=val_collator,
+        num_workers=data_conf.num_workers,
+    )
+    return (train_loader, trainval_loader, val_loader, test_loader), (internal_dataconf, data_conf)

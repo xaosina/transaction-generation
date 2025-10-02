@@ -25,12 +25,19 @@ class GenerationTrainer(Runner):
         cfg = from_dict(PipelineConfig, cfg, Config(strict=True))
         assert isinstance(cfg, PipelineConfig)
 
-        (train_loader, val_loader, test_loader), (internal_dataconf, cfg.data_conf) = (
-            get_dataloaders(cfg.data_conf, cfg.common_seed)
+        use_trainval = cfg.trainer.use_trainval
+        loaders, (internal_dataconf, cfg.data_conf) = (
+            get_dataloaders(cfg.data_conf, cfg.common_seed, use_trainval)
         )
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
+
+        if not use_trainval:
+            train_loader, val_loader, test_loader = loaders
+            trainval_loader = None
+        else:
+            train_loader, trainval_loader, val_loader, test_loader = loaders
 
         # ema
         ema_model = None
@@ -59,6 +66,7 @@ class GenerationTrainer(Runner):
             scheduler=scheduler,
             evaluator=sample_evaluator,
             train_loader=train_loader,
+            trainval_loader=trainval_loader,
             val_loader=val_loader,
             run_name=cfg.run_name,
             ckpt_dir=log_dir / "ckpt",
@@ -72,7 +80,10 @@ class GenerationTrainer(Runner):
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
         val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
-        train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        if use_trainval:
+            train_metrics = trainer.validate(trainval_loader, get_loss=True, get_metrics=True)
+        else:
+            train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
         test_metrics = trainer.validate(test_loader, get_loss=True, get_metrics=True)
 
         val_metrics = {k: v for k, v in val_metrics.items()}

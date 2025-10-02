@@ -75,7 +75,8 @@ class ShardDataset(IterableDataset):
         data_conf: DataConfig,
         split_seed: int = None,
         transforms: list = None,
-    ) -> tuple["ShardDataset", "ShardDataset"]:
+        get_trainval_subset: bool = False,
+    ) -> tuple["ShardDataset", "ShardDataset"] | tuple["ShardDataset", "ShardDataset", "ShardDataset"]:
         assert isinstance(data_path, str)
         fragments = {
             f.path: f.count_rows() for f in pq.ParquetDataset(data_path).fragments
@@ -86,6 +87,7 @@ class ShardDataset(IterableDataset):
         val_size = int(len(paths) * data_conf.val_ratio)
         val_paths = paths[:val_size]
         train_paths = paths[val_size:]
+        trainval_paths = paths[val_size:2*val_size]
         actual_val_size = sum(fragments[p] for p in val_paths) / total_rows
         logger.warning(f"Actual val size is {actual_val_size}")
 
@@ -106,7 +108,18 @@ class ShardDataset(IterableDataset):
             transforms=transforms,
         )
 
-        return train_dataset, val_dataset
+        if not get_trainval_subset:
+            return train_dataset, val_dataset
+        
+        trainval_dataset = cls(
+            trainval_paths,
+            data_conf,
+            seed=0,
+            random_end=data_conf.val_random_end,
+            shuffle=False,
+            transforms=transforms,
+        )
+        return train_dataset, trainval_dataset, val_dataset
 
     def __iter__(self):
         worker_info = torch.utils.data.get_worker_info()

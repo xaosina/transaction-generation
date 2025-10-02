@@ -35,6 +35,7 @@ class TrainConfig:
     profiling: bool = False
     verbose: bool = True
     metrics_on_train: bool = False
+    use_trainval: bool = False
 
 
 class Trainer:
@@ -49,6 +50,7 @@ class Trainer:
         optimizer: torch.optim.Optimizer | None = None,
         scheduler: CompositeScheduler | None = None,
         train_loader: Iterable[GenBatch] | None = None,
+        trainval_loader: Iterable[GenBatch] | None = None,
         val_loader: Iterable[GenBatch] | None = None,
         evaluator: SampleEvaluator | None = None,
         run_name: str | None = None,
@@ -65,6 +67,7 @@ class Trainer:
         verbose: bool = True,
         grad_clip: float = 1,
         metrics_on_train: bool = False,
+        use_trainval: bool = False,
     ):
         """Initialize trainer.
 
@@ -136,6 +139,7 @@ class Trainer:
         self._sched = scheduler
         self._train_loader = train_loader
         self._val_loader = val_loader
+        self._trainval_loader = trainval_loader
 
         self._train_collator = deepcopy(train_loader.collate_fn)
         self._train_random_end = deepcopy(train_loader.dataset.random_end)
@@ -159,6 +163,10 @@ class Trainer:
     @property
     def val_loader(self) -> Iterable[GenBatch] | None:
         return self._val_loader
+    
+    @property
+    def trainval_loader(self) -> Iterable[GenBatch] | None:
+        return self._trainval_loader
 
     @property
     def optimizer(self) -> torch.optim.Optimizer | None:
@@ -484,10 +492,21 @@ class Trainer:
 
             self._metric_values = None
             if self._sample_evaluator is not None:
+                logger.info('Start validation with val')
                 self.validate(get_metrics=self._metrics_on_train)
+                if self.trainval_loader is not None:
+                    logger.info('Start validation with trainval')
+                    self.validate(self.trainval_loader, get_metrics=self._metrics_on_train)
             self._ema_metric_values = None
             if (self._sample_evaluator is not None) and self._ema_model_start_updates:
+                logger.info('Start validation with val and ema')
                 self.validate(get_metrics=self._metrics_on_train, use_ema_model=True)
+                # if self.trainval_loader is not None:
+                #     self.validate(
+                #         self.trainval_loader, 
+                #         get_metrics=self._metrics_on_train, 
+                #         use_ema_model=True
+                #     )
 
             self._last_epoch += 1
             self.save_ckpt()
