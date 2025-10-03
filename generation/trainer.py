@@ -31,10 +31,12 @@ class TrainConfig:
     iters_per_epoch: Optional[int] = 10_000
     ckpt_replace: bool = True
     ckpt_track_metric: str = "epoch"
+    ckpt_ema_track_metric: str = "epoch"
     ckpt_resume: Optional[str] = None
     profiling: bool = False
     verbose: bool = True
     metrics_on_train: bool = False
+    ema_metrics_on_train: bool = False
     use_trainval: bool = False
 
 
@@ -61,12 +63,14 @@ class Trainer:
         ckpt_dir: str | os.PathLike | None = None,
         ckpt_replace: bool = True,
         ckpt_track_metric: str = "epoch",
+        ckpt_ema_track_metric: str = "epoch",
         ckpt_resume: str | os.PathLike | None = None,
         device: str = "cpu",
         profiling: bool = False,
         verbose: bool = True,
         grad_clip: float = 1,
         metrics_on_train: bool = False,
+        ema_metrics_on_train: bool = False,
         use_trainval: bool = False,
     ):
         """Initialize trainer.
@@ -116,11 +120,13 @@ class Trainer:
         self._ckpt_dir = ckpt_dir
         self._ckpt_replace = ckpt_replace
         self._ckpt_track_metric = ckpt_track_metric
+        self._ckpt_ema_track_metric = ckpt_ema_track_metric
         self._ckpt_resume = ckpt_resume
         self._device = device
         self._verbose = verbose
         self._grad_clip = grad_clip
         self._metrics_on_train = metrics_on_train
+        self._ema_metrics_on_train = ema_metrics_on_train
 
         self._model = None
         if model is not None:
@@ -222,6 +228,8 @@ class Trainer:
                  - with `ema` subfolder
             use_ema_model: bool. Whether to use ema-averaged model, or current model
         """
+        
+        ckpt_track_metric = self._ckpt_ema_track_metric if use_ema_model else self._ckpt_track_metric
 
         if ckpt_path is None and self._ckpt_dir is None:
             logger.warning(
@@ -267,17 +275,16 @@ class Trainer:
 
         metrics = {k: v for k, v in metric_values.items() if np.isscalar(v)}
 
-        if not self._ckpt_track_metric in metrics.keys():
+        if not ckpt_track_metric in metrics.keys():
             logger.warning(
-                f"Tracked metric '{self._ckpt_track_metric}' not found"
-                f" int computed metrics, {metrics.keys()}. "
-                "No checkpoint will be saved."
+                f"Tracked metric '{ckpt_track_metric}' not found"
+                f" among the computed metrics, {metrics.keys()}. "
+                "Probably, no checkpoint will be saved."
             )
-            return
 
         fname = f"epoch__{self._last_epoch:04d}"
         metrics_str = "_-_".join(
-            f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
+            f"{k}__{v:.4g}" for k, v in metrics.items() if k == ckpt_track_metric
         )
 
         if len(metrics_str) > 0:
@@ -290,7 +297,7 @@ class Trainer:
             return
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(ckpt_track_metric))
         for p in all_ckpt:
             if p != best_ckpt:
                 p.unlink()
@@ -447,7 +454,7 @@ class Trainer:
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
             loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
-            _metric_values |= {k: -float(v) for k, v in log_losses.mean().items()}
+            _metric_values |= {k: -v for k, v in log_losses.mean().items()}
 
         if get_metrics:
             _metric_values |= self._sample_evaluator.evaluate(
@@ -518,7 +525,7 @@ class Trainer:
 
             self._metric_values = None
             if self._sample_evaluator is not None:
-                if self._use_trainval is not None:
+                if self._use_trainval:
                     self.validate(
                         self.trainval_loader, 
                         get_metrics=self._metrics_on_train, 
@@ -529,7 +536,7 @@ class Trainer:
             self._ema_metric_values = None
             if (self._sample_evaluator is not None) and self._ema_model_start_updates:
                 self.validate(
-                    get_metrics=self._metrics_on_train, 
+                    get_metrics=self._ema_metrics_on_train, 
                     use_ema_model=True
                 )
 
@@ -538,10 +545,11 @@ class Trainer:
             if self._ema_model_start_updates:
                 self.save_ckpt(use_ema_model=True)
 
-            assert (
-                self._metric_values is not None
-                and self._ckpt_track_metric in self._metric_values
-            )
+#             assert (
+#                 self._metric_values is not None
+#                 and self._ckpt_track_metric in self._metric_values
+#             )
+
             target_metric = self._metric_values[self._ckpt_track_metric]
             if target_metric > best_metric:
                 best_metric = target_metric
@@ -567,7 +575,8 @@ class Trainer:
             ckpt_path = ckpt_path / 'ema'
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
+        ckpt_track_metric = self._ckpt_ema_track_metric if use_ema_model else self._ckpt_track_metric
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(ckpt_track_metric))
 
         return best_ckpt
 

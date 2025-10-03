@@ -290,19 +290,25 @@ def _auto_import_subclasses(current_dir, package_name, global_dict, parent_class
 def __numpy_array_representer(dumper, data):
     return dumper.represent_list(data.tolist())
 
+__numpy_cast_types = {
+    np.int16: 'int',
+    np.int32: 'int',
+    np.int64: 'int',
+    np.float64: 'float',
+    np.float32: 'float',
+    np.float16: 'float',
+    np.bool_: 'bool'
+}
+
 def __numpy_scalar_representer(dumper, data):
     return dumper.represent_scalar(
-        u'tag:yaml.org,2002:' + {
-            np.integer: 'int',
-            np.floating: 'float',
-            np.bool_: 'bool'
-        }.get(type(data), 'str'),
+        u'tag:yaml.org,2002:' + __numpy_cast_types.get(type(data), 'str'),
         str(data.item())
     )
 
 # Register handlers once
 yaml.add_representer(np.ndarray, __numpy_array_representer)
-for scalar_type in (np.integer, np.floating, np.bool_):
+for scalar_type in __numpy_cast_types.keys():
     yaml.add_multi_representer(scalar_type, __numpy_scalar_representer)
 
 def dictprettyprint(data: Dict):
