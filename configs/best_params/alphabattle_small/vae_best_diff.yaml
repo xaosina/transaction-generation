@@ -1,0 +1,30 @@
+# Params taken from log/generation/alphabattle_small/optuna/vae/19
+# Top 13 KL
+# 0.999936 Reconstruction
+config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/vae]
+
+optimizer:
+  params:
+    weight_decay: 0.0018705049518172746
+    lr: 0.005081739308188706
+model:
+  autoencoder:
+    params:
+      d_token: 72
+      num_layers: 2
+      n_head: 1
+      factor: 3
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false
+schedulers:
+  step:
+    StepLR:
+      step_size: 50
+  beta:
+    BetaScheduler:
+      init_beta: 0.13511738551311722
+      factor: 0.5
+      patience: 10

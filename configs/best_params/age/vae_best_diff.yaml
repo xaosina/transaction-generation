@@ -1,0 +1,30 @@
+# Params taken from log/generation/age/optuna/vae/16
+# Top 5 best kl
+# 0.999357	Reconstruction
+config_factory: [start, datasets/age/age, methods/vae]
+
+optimizer:
+  params:
+    weight_decay: 1.3888834792375396e-08
+    lr: 0.010291686188292216
+model:
+  autoencoder:
+    params:
+      d_token: 40
+      num_layers: 4
+      n_head: 1
+      factor: 5
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false
+schedulers:
+  step:
+    StepLR:
+      step_size: 30
+  beta:
+    BetaScheduler:
+      init_beta: 0.8679596887726543
+      factor: 0.2
+      patience: 8
