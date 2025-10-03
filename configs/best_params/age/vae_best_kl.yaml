@@ -1,5 +1,6 @@
 # Params taken from log/generation/age/optuna/vae/120
 # 0.998108	Reconstruction
+# 64108.0 memory
 
 config_factory: [start, datasets/age/age, methods/vae]
 

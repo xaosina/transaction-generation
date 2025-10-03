@@ -1,6 +1,8 @@
 # Params taken from log/generation/age/optuna/vae/16
 # Top 5 best kl
 # 0.999357	Reconstruction
+# 36692.0 memory
+
 config_factory: [start, datasets/age/age, methods/vae]
 
 optimizer:

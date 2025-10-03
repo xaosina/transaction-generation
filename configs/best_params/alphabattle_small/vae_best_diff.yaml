@@ -1,6 +1,7 @@
 # Params taken from log/generation/alphabattle_small/optuna/vae/19
 # Top 13 KL
 # 0.999936 Reconstruction
+# 15302.0 memory
 config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/vae]
 
 optimizer:
