@@ -26,18 +26,12 @@ class GenerationTrainer(Runner):
         assert isinstance(cfg, PipelineConfig)
 
         use_trainval = cfg.trainer.use_trainval
-        loaders, (internal_dataconf, cfg.data_conf) = (
-            get_dataloaders(cfg.data_conf, cfg.common_seed, use_trainval)
+        (train_loader, trainval_loader, val_loader, test_loader), (internal_dataconf, cfg.data_conf) = (
+            get_dataloaders(cfg.data_conf, cfg.common_seed, get_trainval_dataset=True)
         )
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
-
-        if not use_trainval:
-            train_loader, val_loader, test_loader = loaders
-            trainval_loader = None
-        else:
-            train_loader, trainval_loader, val_loader, test_loader = loaders
 
         # ema
         ema_model = None
@@ -80,17 +74,17 @@ class GenerationTrainer(Runner):
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
         val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
-        if use_trainval:
-            train_metrics = trainer.validate(trainval_loader, get_loss=True, get_metrics=True)
-        else:
-            train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        # I validate on trainval_subset - to prevent quite slow validation on full train!
+        # train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        trainval_metrics = trainer.validate(trainval_loader, get_loss=True, get_metrics=True)
         test_metrics = trainer.validate(test_loader, get_loss=True, get_metrics=True)
 
         val_metrics = {k: v for k, v in val_metrics.items()}
-        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        trainval_metrics = {"trainval_" + k: v for k, v in trainval_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
-        return dict(**train_metrics, **val_metrics, **test_metrics)
+        return dict(**trainval_metrics, **val_metrics, **test_metrics)
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)

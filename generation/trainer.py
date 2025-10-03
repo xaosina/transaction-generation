@@ -18,7 +18,7 @@ from generation.schedulers.schedulers import CompositeScheduler
 
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, MeanDict, get_profiler, record_function
+from .utils import LoadTime, MeanDict, get_profiler, record_function, dictprettyprint
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,12 @@ class Trainer:
         self._train_loader = train_loader
         self._val_loader = val_loader
         self._trainval_loader = trainval_loader
+        if use_trainval:
+            assert self._trainval_loader is not None, (
+                "'use_trainval' flag is True, but "
+                "trainval_loader not provided!"
+            )
+        self._use_trainval = use_trainval
 
         self._train_collator = deepcopy(train_loader.collate_fn)
         self._train_random_end = deepcopy(train_loader.dataset.random_end)
@@ -399,6 +405,7 @@ class Trainer:
         get_loss: bool = True,
         get_metrics: bool = False,
         use_ema_model: bool = False,
+        loader_title: str | None = None
     ) -> dict[str, Any]:
         _model = self.model if not use_ema_model else self.ema_model.ema_model
         assert _model is not None
@@ -407,7 +414,24 @@ class Trainer:
             if self._val_loader is None:
                 raise ValueError("Either set val loader or provide loader explicitly")
             loader = self._val_loader
-        logger.info("Epoch %04d: validation started", self._last_epoch + 1)
+            if loader_title is None:
+                loader_title = 'val'
+        
+        loader_logger_msg = ''
+        if loader_title is not None:
+            loader_logger_msg = ', loader-{}'.format(loader_title)
+        
+        ema_logger_msg = ''
+        if use_ema_model:
+            ema_logger_msg = ', EMA'
+        
+        logger.info(
+            "Epoch %04d %s%s: validation started", 
+            self._last_epoch + 1,
+            loader_logger_msg,
+            ema_logger_msg,
+        )
+        
         _model.eval()
         _metric_values = {}
 
@@ -423,17 +447,19 @@ class Trainer:
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
             loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
-            _metric_values |= {k: -v for k, v in log_losses.mean().items()}
+            _metric_values |= {k: -float(v) for k, v in log_losses.mean().items()}
 
         if get_metrics:
             _metric_values |= self._sample_evaluator.evaluate(
                 _model, loader, remove=remove
             )
+        
         logger.info(
-            "Epoch %04d, ema-%s:  metrics: %s",
+            "Epoch %04d %s%s:  metrics: \n%s",
             self._last_epoch + 1,
-            use_ema_model,
-            str(_metric_values),
+            ema_logger_msg,
+            loader_logger_msg,
+            dictprettyprint(_metric_values),
         )
         if use_ema_model:
             self._ema_metric_values = _metric_values
@@ -492,21 +518,20 @@ class Trainer:
 
             self._metric_values = None
             if self._sample_evaluator is not None:
-                logger.info('Start validation with val')
+                if self._use_trainval is not None:
+                    self.validate(
+                        self.trainval_loader, 
+                        get_metrics=self._metrics_on_train, 
+                        loader_title='trainval',
+                    )
                 self.validate(get_metrics=self._metrics_on_train)
-                if self.trainval_loader is not None:
-                    logger.info('Start validation with trainval')
-                    self.validate(self.trainval_loader, get_metrics=self._metrics_on_train)
+
             self._ema_metric_values = None
             if (self._sample_evaluator is not None) and self._ema_model_start_updates:
-                logger.info('Start validation with val and ema')
-                self.validate(get_metrics=self._metrics_on_train, use_ema_model=True)
-                # if self.trainval_loader is not None:
-                #     self.validate(
-                #         self.trainval_loader, 
-                #         get_metrics=self._metrics_on_train, 
-                #         use_ema_model=True
-                #     )
+                self.validate(
+                    get_metrics=self._metrics_on_train, 
+                    use_ema_model=True
+                )
 
             self._last_epoch += 1
             self.save_ckpt()
