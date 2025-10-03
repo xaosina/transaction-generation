@@ -1,0 +1,23 @@
+config_factory: [start, datasets/shakespeare/shakespeare, methods/oneshot/gru, methods/oneshot/target, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 7.2542328790778045e-06
+    lr: 0.00014440096964703661
+model:
+  latent_encoder:
+    params:
+      hidden_size: 495
+      num_layers: 1
+      dropout: 6.611882897620654e-10
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 70
+      num_emb_dim: 47
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

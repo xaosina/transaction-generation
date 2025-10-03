@@ -1,0 +1,22 @@
+config_factory: [start, datasets/retail/retail, methods/gru, 1to1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 1.483872449005945e-14
+    lr: 5.5254624210876215e-05
+model:
+  latent_encoder:
+    params:
+      hidden_size: 671
+      num_layers: 2
+      dropout: 0.21058901457548881
+  autoencoder:
+    params:
+      num_norm: false
+      cat_emb_dim: 105
+      num_emb_dim: 87
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

@@ -1,0 +1,23 @@
+config_factory: [start, datasets/zvuk/zvuk, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 1.3968714805992923e-05
+    lr: 0.000116014069552604
+model:
+  latent_encoder:
+    params:
+      hidden_size: 298
+      num_layers: 1
+      dropout: 0.0013224379683697942
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 109
+      num_emb_dim: 24
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false

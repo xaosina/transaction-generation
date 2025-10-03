@@ -1,0 +1,27 @@
+config_factory: [start, metrics/default, datasets/alphabattle_small/alphabattle_small, methods/vae]
+
+optimizer:
+  params:
+    weight_decay: 7.072885716351395e-15
+    lr: 0.0012753976600284236
+model:
+  autoencoder:
+    params:
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+schedulers:
+  step:
+    StepLR:
+      step_size: 50
+  beta:
+    BetaScheduler:
+      init_beta: 0.003161808097708105
+      factor: 0.7000000000000001
+      patience: 5

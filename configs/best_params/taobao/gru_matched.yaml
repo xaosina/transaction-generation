@@ -1,0 +1,23 @@
+config_factory: [start, datasets/taobao/taobao, methods/oneshot/gru, methods/oneshot/matched, allto1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 5.909404261161594e-15
+    lr: 0.0008081305134878478
+model:
+  latent_encoder:
+    params:
+      hidden_size: 735
+      num_layers: 1
+      dropout: 1.3706157727545385e-06
+  pooler: last
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 114
+      num_emb_dim: 28
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: false
