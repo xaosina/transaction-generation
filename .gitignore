@@ -19,6 +19,7 @@ notebooks/analysis_param.ipynb
 __pycache__/
 *.py[cod]
 *$py.class
+**.ipynb_checkpoints**
 
 build/*
 
