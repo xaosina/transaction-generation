@@ -14,6 +14,11 @@ from generation.models.generator import BaseGenerator
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
 from . import metrics as m
+from ..generation_setup import (
+    ForecastGenSetupBatchProcessor,
+    IdentityGenSetupBatchProcessor,
+    GenerationSetupType
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +39,7 @@ class SampleEvaluator:
         eval_config: EvaluatorConfig,
         device: str = "cpu",
         verbose: bool = True,
+        generation_setup: str = 'forecast',
     ):
         self.log_dir = Path(log_dir)
         self.data_config = data_conf
@@ -53,6 +59,10 @@ class SampleEvaluator:
         )
         self.verbose = verbose
         self._n_last_time_generated_seqs = 0
+        if generation_setup == 'forecast':
+            self._gensetup_batch_processor = ForecastGenSetupBatchProcessor()
+        else:
+            self._gensetup_batch_processor = IdentityGenSetupBatchProcessor()
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))
@@ -90,9 +100,10 @@ class SampleEvaluator:
                 break
 
             batch_input = batch_input.to(self.device)
+            _batch_input = self._gensetup_batch_processor.on_input(batch_input)
             with torch.no_grad():
                 batch_pred = model.generate(
-                    deepcopy(batch_input),
+                    deepcopy(_batch_input),
                     self.data_config.generation_len,
                     topk=self.eval_config.topk,
                     temperature=self.eval_config.temperature,

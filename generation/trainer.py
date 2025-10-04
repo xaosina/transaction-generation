@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 
 import numpy as np
 import torch
@@ -18,7 +18,18 @@ from generation.schedulers.schedulers import CompositeScheduler
 
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, MeanDict, get_profiler, record_function, dictprettyprint
+from .utils import (
+    LoadTime, 
+    MeanDict, 
+    get_profiler, 
+    record_function, 
+    dictprettyprint
+)
+from .generation_setup import (
+    ForecastGenSetupBatchProcessor,
+    IdentityGenSetupBatchProcessor,
+    GenerationSetupType
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +49,7 @@ class TrainConfig:
     metrics_on_train: bool = False
     ema_metrics_on_train: bool = False
     use_trainval: bool = False
+    generation_setup: str = 'forecast'
 
 
 class Trainer:
@@ -72,6 +84,7 @@ class Trainer:
         metrics_on_train: bool = False,
         ema_metrics_on_train: bool = False,
         use_trainval: bool = False,
+        generation_setup: GenerationSetupType = 'forecast'
     ):
         """Initialize trainer.
 
@@ -127,6 +140,10 @@ class Trainer:
         self._grad_clip = grad_clip
         self._metrics_on_train = metrics_on_train
         self._ema_metrics_on_train = ema_metrics_on_train
+        if generation_setup == 'forecast':
+            self._gensetup_batch_processor = ForecastGenSetupBatchProcessor()
+        else:
+            self._gensetup_batch_processor = IdentityGenSetupBatchProcessor()
 
         self._model = None
         if model is not None:
@@ -363,6 +380,7 @@ class Trainer:
 
         with self._profiler as prof:
             for batch, i in LoadTime(pbar, disable=pbar.disable):
+                batch = self._gensetup_batch_processor.on_input(batch) 
                 batch.to(self._device)
 
                 with record_function("forward"):
@@ -449,6 +467,7 @@ class Trainer:
             log_losses: MeanDict = MeanDict()
             with torch.no_grad():
                 for batch in tqdm(loader, disable=not self._verbose):
+                    batch = self._gensetup_batch_processor.on_input(batch)
                     batch.to(self._device)
                     pred = _model(batch)
                     loss_dict = self._loss(batch, pred)
