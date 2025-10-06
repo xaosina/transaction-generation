@@ -4,11 +4,13 @@ import torch
 from ebes.model import BaseModel, TakeLastHidden
 
 from ...data.data_types import GenBatch, LatentDataConfig
-from ...data.data_types import seq_append, get_seq_tail
-from ..encoders import ConditionalDiffusionEncoder
+from ...data.data_types import seq_append, get_seq_tail, seq_to_device
+# from generation.models.encoders import ConditionalDiffusionEncoder
 from generation.models import autoencoders
+from generation.models import encoders
+
 from generation.utils import freeze_module
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from . import BaseGenerator, ModelConfig
 import logging
@@ -47,11 +49,12 @@ class LatentDiffusionGenerator(BaseGenerator):
         encoder_params = model_config.latent_encoder.params or {}
         _set_or_check_match(encoder_params, "input_size", self.autoencoder.encoder.output_dim)
 
-        self.encoder = ConditionalDiffusionEncoder(
-            model_config.latent_encoder.name, encoder_params)
+        self.encoder = getattr(encoders, model_config.latent_encoder.name)(
+             model_config.latent_encoder.name, encoder_params
+        )
         
         self.generation_len = encoder_params['generation_len']
-        self.history_len = encoder_params['history_len']
+        self.history_len = self.encoder.input_history_len
 
         # initializing history encoder
         history_encoder_data = model_config.params.get('history_encoder')
@@ -76,6 +79,8 @@ class LatentDiffusionGenerator(BaseGenerator):
                 self.history_encoder = freeze_module(self.history_encoder)
             
             self.history_pooler = TakeLastHidden()
+        else:
+            print('no history encoder!')
 
 
     def forward(self, x: GenBatch) -> torch.Tensor:
@@ -110,7 +115,13 @@ class LatentDiffusionGenerator(BaseGenerator):
         return loss
     
     @torch.no_grad()
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs) -> GenBatch:
+    def generate(
+        self, 
+        hist: GenBatch, 
+        gen_len: int, 
+        with_hist=False,
+        **kwargs
+    ) -> GenBatch:
         """
         Diffusion generation
 
@@ -158,3 +169,164 @@ class LatentDiffusionGenerator(BaseGenerator):
             hist.append(pred_batch)
             return hist
         return pred_batch
+    
+
+    @torch.no_grad()
+    def generate_traj(
+        self, 
+        hist: GenBatch, 
+        *args,
+        path_idss: List[int] | None = None,
+        with_hist: bool = False,
+        with_path: bool = False,
+        with_x0_pred: bool = False,
+        **kwargs
+    ) -> GenBatch:
+        """
+        Diffusion generation
+
+        Args:
+            hist (GenBatch): history batch
+
+        """
+        gen_len = self.generation_len
+        
+        if (not with_path) and (not with_x0_pred):
+            logger.warning('generate_traj reduces to generate!')
+            return self.generate(hist, gen_len, with_hist=with_hist)
+
+        n_seqs = len(hist)
+        hist = deepcopy(hist)
+        full_history_seq = self.autoencoder.encoder(hist)
+
+        history_embedding = None
+        history_seq = None
+
+        if self.history_encoder:
+            history_embedding = self.history_pooler(
+                self.history_encoder(
+                    full_history_seq
+                )
+            )
+        
+        if self.history_len > 0:
+            history_seq = get_seq_tail(full_history_seq, self.history_len)
+        
+        try:
+            sampled_seq, traj = self.encoder.generate(
+                n_seqs, 
+                None, 
+                history_embedding, 
+                history_seq, 
+                return_path = with_path,
+                return_x0_pred = with_x0_pred,
+            ) # Seq [L, B, D]
+        except:
+            raise Exception('Latent diffusion encoder does not supports path trace yet!')
+        
+        assert isinstance(traj, dict)
+        assert len(traj) > 0
+        
+        def _process_traj_list(traj_list):
+            
+            if path_idss is not None:
+                traj_len = len(traj_list)
+                assert max(path_idss) < traj_len, (
+                    f'Too large path index {max(path_idss)} is requested;'
+                    f' number of generation steps is {traj_len}.'
+                )
+                
+                traj_list = [traj_list[idx] for idx in path_idss]
+                
+            traj_batch = None
+            
+            for traj_inst in traj_list:
+            
+                _temp = self.autoencoder.decoder.generate(
+                    seq_to_device(traj_inst, sampled_seq.tokens.device)
+                )
+                if traj_batch is None:
+                    traj_batch = _temp
+                else:
+                    traj_batch.append(_temp)
+            
+            return traj_batch
+                
+        sampled_batch = self.autoencoder.decoder.generate(sampled_seq)
+        
+        if with_path:
+            sampled_batch.append( 
+                _process_traj_list(traj['path']) 
+            )
+        if with_x0_pred:
+            sampled_batch.append(
+                _process_traj_list(traj['x0_pred'])
+            )
+        
+        if with_hist:
+            hist.append(sampled_batch)
+            return hist
+        return sampled_batch
+
+
+class LatentForeseeGenerator(BaseGenerator):
+
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+        super().__init__()
+
+        # initializing autoencoder
+        self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
+            data_conf, model_config
+        )
+        if model_config.autoencoder.checkpoint:
+            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
+            msg = self.autoencoder.load_state_dict(
+                ckpt["model"], strict=False
+            )
+        else:
+            raise Exception(f"A checkpoint of pretrained autoencoder should be provided!")
+        
+        self.autoencoder = freeze_module(self.autoencoder)
+        if not model_config.autoencoder.frozen:
+            logger.warning(f"The autoencoder is frozen, although the `frozen` flag is not set to True")
+        
+        logger.info(f"Tabsyn latent dimension is {self.autoencoder.encoder.output_dim}")
+        
+        self.generation_len = data_conf.generation_len
+
+
+    def forward(self, x: GenBatch) -> torch.Tensor:
+        """
+        Forward pass of Latent diffusion model with inherent loss compute
+        Args:
+            x (GenBatch): Input sequence [L, B, D]
+
+        """
+        raise "No need to train a latent foresee generator!"
+    
+    @torch.no_grad()
+    def generate(self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs) -> GenBatch:
+        """
+        Diffusion generation
+
+        Args:
+            hist (GenBatch): history batch
+
+        """
+        assert hist.target_time.shape[0] == gen_len
+
+        gen_batch = deepcopy(hist)
+        target_batch = gen_batch.get_target_batch()
+        latent_seq = self.autoencoder.encoder(target_batch)
+        vae_target_batch = self.autoencoder.decoder(latent_seq).to_batch()
+
+        gen_batch.append(vae_target_batch)
+
+        gen_batch.target_time = None
+        gen_batch.target_num_features = None
+        gen_batch.target_cat_features = None
+
+        if with_hist:
+            return gen_batch  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return gen_batch.tail(gen_len)

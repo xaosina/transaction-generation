@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import time
 from typing import Any, Dict, Mapping, Optional, Sequence
+import numpy as np
 
 import torch
 from torch.nn import Module
@@ -97,10 +98,6 @@ def get_profiler(activate: bool = False, save_path=None):
         if activate
         else DummyProfiler()
     )
-
-
-def dictprettyprint(data: Dict):
-    return yaml.dump(data, default_flow_style=False)
 
 
 class DataParallelAttrAccess(torch.nn.DataParallel):
@@ -285,3 +282,34 @@ def _auto_import_subclasses(current_dir, package_name, global_dict, parent_class
             except Exception as e:
                 print(f"Error importing {full_module_name}: {e}")
                 continue
+
+
+# Printing dict values in a nice way
+
+# --- Representers ---
+def __numpy_array_representer(dumper, data):
+    return dumper.represent_list(data.tolist())
+
+__numpy_cast_types = {
+    np.int16: 'int',
+    np.int32: 'int',
+    np.int64: 'int',
+    np.float64: 'float',
+    np.float32: 'float',
+    np.float16: 'float',
+    np.bool_: 'bool'
+}
+
+def __numpy_scalar_representer(dumper, data):
+    return dumper.represent_scalar(
+        u'tag:yaml.org,2002:' + __numpy_cast_types.get(type(data), 'str'),
+        str(data.item())
+    )
+
+# Register handlers once
+yaml.add_representer(np.ndarray, __numpy_array_representer)
+for scalar_type in __numpy_cast_types.keys():
+    yaml.add_multi_representer(scalar_type, __numpy_scalar_representer)
+
+def dictprettyprint(data: Dict):
+    return yaml.dump(data, default_flow_style=False)
