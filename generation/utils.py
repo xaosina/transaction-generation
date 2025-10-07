@@ -313,3 +313,8 @@ for scalar_type in __numpy_cast_types.keys():
 
 def dictprettyprint(data: Dict):
     return yaml.dump(data, default_flow_style=False)
+
+def flatten_rnn_params(model):
+    for module in model.modules():
+        if isinstance(module, (torch.nn.RNN, torch.nn.GRU, torch.nn.LSTM)):
+            module.flatten_parameters()
