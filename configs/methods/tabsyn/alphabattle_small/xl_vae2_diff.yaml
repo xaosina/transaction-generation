@@ -14,12 +14,6 @@ model:
     params:
       base_factor: 512 # unetXL
 
-  params:
-    ema:
-      beta: 0.999
-      update_after_step: 3000
-      update_every: 10
-
 data_conf:
   train_resamples: 10
   val_ratio: 0.15

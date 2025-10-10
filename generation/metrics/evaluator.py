@@ -122,9 +122,6 @@ class SampleEvaluator:
 
         if buffer_gt:
             _save_buffers(buffer_gt, buffer_gen, gt_dir, gen_dir, part_counter)
-#         print('gt dir: ', gt_dir)
-#         print('gen dir: ', gen_dir)
-#         assert False
 
         return gt_dir, gen_dir
 

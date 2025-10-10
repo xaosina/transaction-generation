@@ -10,6 +10,7 @@ from typing import Any, Optional, Literal
 
 import numpy as np
 import torch
+from ema_pytorch import EMA
 from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
@@ -20,7 +21,8 @@ from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
 from .utils import (
     LoadTime, 
-    MeanDict, 
+    MeanDict,
+    flatten_rnn_params, 
     get_profiler, 
     record_function, 
     dictprettyprint
@@ -38,11 +40,11 @@ class TrainConfig:
     iters_per_epoch: Optional[int] = 10_000
     ckpt_replace: bool = True
     ckpt_track_metric: str = "epoch"
-    ckpt_ema_track_metric: str = "epoch"
     ckpt_resume: Optional[str] = None
     profiling: bool = False
     verbose: bool = True
     metrics_on_train: bool = False
+    ema: Optional[dict] = None
     ema_metrics_on_train: bool = False
     use_trainval: bool = False
     generation_setup: str = 'forecast'
@@ -55,7 +57,6 @@ class Trainer:
         self,
         *,
         model: nn.Module | None = None,
-        ema_model: nn.Module | None = None,
         loss: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
         scheduler: CompositeScheduler | None = None,
@@ -71,8 +72,8 @@ class Trainer:
         ckpt_dir: str | os.PathLike | None = None,
         ckpt_replace: bool = True,
         ckpt_track_metric: str = "epoch",
-        ckpt_ema_track_metric: str = "epoch",
         ckpt_resume: str | os.PathLike | None = None,
+        ema: Optional[dict] = None,
         device: str = "cpu",
         profiling: bool = False,
         verbose: bool = True,
@@ -129,7 +130,6 @@ class Trainer:
         self._ckpt_dir = ckpt_dir
         self._ckpt_replace = ckpt_replace
         self._ckpt_track_metric = ckpt_track_metric
-        self._ckpt_ema_track_metric = ckpt_ema_track_metric
         self._ckpt_resume = ckpt_resume
         self._device = device
         self._verbose = verbose
@@ -141,9 +141,11 @@ class Trainer:
         self._model = None
         if model is not None:
             self._model = model.to(device)
-        
-        self._ema_model = ema_model
-        self._ema_model_start_updates = False
+
+        if ema is None:
+            self._ema_model = None
+        else:
+            self._ema_model = EMA(model, **ema)
 
         self._loss = None
         if loss is not None:
@@ -169,7 +171,7 @@ class Trainer:
         self._metric_values: dict[str, Any] | None = None
         self._last_iter = 0
         self._last_epoch = 0
-    
+
     @property
     def ema_model(self) -> nn.Module | None:
         return self._ema_model
@@ -220,26 +222,17 @@ class Trainer:
 
         return key_extractor
 
-    def save_ckpt(
-            self, 
-            ckpt_path: str | os.PathLike | None = None, 
-            use_ema_model: bool = False,
-        ) -> None:
+    def save_ckpt(self, ckpt_path: str | os.PathLike | None = None) -> None:
         """Save model, optimizer and scheduler states.
 
         Args:
             ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch, loss and metrics (and beta 
-                if `use_ema_model` = True ) in the filename. All scalar metrics 
-                returned from `compute_metrics` are used to construct a filename. 
-                If full path is specified, the checkpoint will be
-                saved exectly there. If `None` `ckpt_dir` from construct is used 
-                 - without any additions, if current model is stored
-                 - with `ema` subfolder
-            use_ema_model: bool. Whether to use ema-averaged model, or current model
+                checkpoint will be saved there with epoch, loss and metrics in the
+                filename. All scalar metrics returned from `compute_metrics` are used to
+                construct a filename. If full path is specified, the checkpoint will be
+                saved exectly there. If `None` `ckpt_dir` from construct is used with
+                subfolder named `run_name` from Trainer's constructor.
         """
-        
-        ckpt_track_metric = self._ckpt_ema_track_metric if use_ema_model else self._ckpt_track_metric
 
         if ckpt_path is None and self._ckpt_dir is None:
             logger.warning(
@@ -251,8 +244,6 @@ class Trainer:
         if ckpt_path is None:
             assert self._ckpt_dir is not None
             ckpt_path = self._ckpt_dir
-            if use_ema_model:
-                ckpt_path = ckpt_path / 'ema'
 
         ckpt_path = Path(ckpt_path)
         ckpt_path.mkdir(parents=True, exist_ok=True)
@@ -263,38 +254,23 @@ class Trainer:
         }
         if self._model:
             ckpt["model"] = self._model.state_dict()
-        if not use_ema_model:
-            if self._opt:
-                ckpt["opt"] = self._opt.state_dict()
-            if self._sched:
-                ckpt["sched"] = self._sched.state_dict()
+        if self._ema_model:
+            ckpt["ema"] = self._ema_model.state_dict()
+        if self._opt:
+            ckpt["opt"] = self._opt.state_dict()
+        if self._sched:
+            ckpt["sched"] = self._sched.state_dict()
 
         if not ckpt_path.is_dir():
             torch.save(ckpt, ckpt_path)
             return
-        
-        try:
-            metric_values = self._ema_metric_values if use_ema_model else self._metric_values
-            assert metric_values
-        except:
-            logger.warning(
-                "No precomputed metric values are found to store ckpt! "
-                "No checkpoint will be saved."
-            )
-            return
+        assert self._metric_values
 
-        metrics = {k: v for k, v in metric_values.items() if np.isscalar(v)}
-
-        if not ckpt_track_metric in metrics.keys():
-            logger.warning(
-                f"Tracked metric '{ckpt_track_metric}' not found"
-                f" among the computed metrics, {metrics.keys()}. "
-                "Probably, no checkpoint will be saved."
-            )
+        metrics = {k: v for k, v in self._metric_values.items() if np.isscalar(v)}
 
         fname = f"epoch__{self._last_epoch:04d}"
         metrics_str = "_-_".join(
-            f"{k}__{v:.4g}" for k, v in metrics.items() if k == ckpt_track_metric
+            f"{k}__{v:.4g}" for k, v in metrics.items() if k == self._ckpt_track_metric
         )
 
         if len(metrics_str) > 0:
@@ -307,7 +283,7 @@ class Trainer:
             return
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        best_ckpt = max(all_ckpt, key=self._make_key_extractor(ckpt_track_metric))
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
         for p in all_ckpt:
             if p != best_ckpt:
                 p.unlink()
@@ -325,6 +301,9 @@ class Trainer:
         if "model" in ckpt:
             msg = self._model.load_state_dict(ckpt["model"], strict=strict)
             logger.info(msg)
+        if "ema" in ckpt:
+            msg = self._ema_model.load_state_dict(ckpt["ema"], strict=strict)
+            logger.info("EMA: " + str(msg))
         if "opt" in ckpt:
             if self._opt is None:
                 logger.warning(
@@ -400,10 +379,6 @@ class Trainer:
                 self._last_iter += 1
                 if self.ema_model:
                     self.ema_model.update()
-                    ema_starts = (self.ema_model.step.item() - self.ema_model.update_after_step) == 0
-                    if ema_starts:
-                        self._ema_model_start_updates = True
-                        logger.info("Epoch %04d, iter %06d : ema model activated", self._last_epoch + 1, self._last_iter)
 
                 prof.step()
 
@@ -425,7 +400,10 @@ class Trainer:
         use_ema_model: bool = False,
         loader_title: str | None = None
     ) -> dict[str, Any]:
-        _model = self.model if not use_ema_model else self.ema_model.ema_model
+        _model = self.model 
+        if use_ema_model:
+            _model = self._ema_model.ema_model
+            flatten_rnn_params(_model)
         assert _model is not None
         assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
@@ -439,17 +417,13 @@ class Trainer:
         if loader_title is not None:
             loader_logger_msg = ', loader-{}'.format(loader_title)
         
-        ema_logger_msg = ''
-        if use_ema_model:
-            ema_logger_msg = ', EMA'
-        
         logger.info(
-            "Epoch %04d %s%s: validation started", 
+            "Epoch %04d: %s%s validation started",
             self._last_epoch + 1,
             loader_logger_msg,
-            ema_logger_msg,
+            "EMA" if use_ema_model else "",
         )
-        
+
         _model.eval()
         _metric_values = {}
 
@@ -472,18 +446,15 @@ class Trainer:
             _metric_values |= self._sample_evaluator.evaluate(
                 _model, loader, remove=remove
             )
-        
         logger.info(
             "Epoch %04d %s%s:  metrics: \n%s\n%s",
             self._last_epoch + 1,
-            ema_logger_msg,
+            "EMA" if use_ema_model else "",
             loader_logger_msg,
             _metric_values, # in some cases, it is more convenient to copy raw dict
             dictprettyprint(_metric_values),
         )
-        if use_ema_model:
-            self._ema_metric_values = _metric_values
-        else:
+        if not use_ema_model:
             self._metric_values = _metric_values
 
         return _metric_values
@@ -546,23 +517,18 @@ class Trainer:
                     )
                 self.validate(get_metrics=self._metrics_on_train)
 
-            self._ema_metric_values = None
-            if (self._sample_evaluator is not None) and self._ema_model_start_updates:
-                self.validate(
-                    get_metrics=self._ema_metrics_on_train, 
-                    use_ema_model=True
-                )
+                if self.ema_model.step.item() >= self.ema_model.update_after_step:
+                    self.validate(
+                        get_metrics=self._ema_metrics_on_train, use_ema_model=True
+                    )
 
             self._last_epoch += 1
             self.save_ckpt()
-            if self._ema_model_start_updates:
-                self.save_ckpt(use_ema_model=True)
 
-#             assert (
-#                 self._metric_values is not None
-#                 and self._ckpt_track_metric in self._metric_values
-#             )
-
+            assert (
+                self._metric_values is not None
+                and self._ckpt_track_metric in self._metric_values
+            )
             target_metric = self._metric_values[self._ckpt_track_metric]
             if target_metric > best_metric:
                 best_metric = target_metric
@@ -578,18 +544,15 @@ class Trainer:
         logger.info("run '%s' finished successfully", self._run_name)
         return
 
-    def best_checkpoint(self, use_ema_model: bool = False) -> Path:
+    def best_checkpoint(self) -> Path:
         """
         Return the path to the best checkpoint
         """
         assert self._ckpt_dir is not None
         ckpt_path = Path(self._ckpt_dir)
-        if use_ema_model:
-            ckpt_path = ckpt_path / 'ema'
 
         all_ckpt = list(ckpt_path.glob("*.ckpt"))
-        ckpt_track_metric = self._ckpt_ema_track_metric if use_ema_model else self._ckpt_track_metric
-        best_ckpt = max(all_ckpt, key=self._make_key_extractor(ckpt_track_metric))
+        best_ckpt = max(all_ckpt, key=self._make_key_extractor(self._ckpt_track_metric))
 
         return best_ckpt
 
@@ -600,10 +563,3 @@ class Trainer:
 
         best_ckpt = self.best_checkpoint()
         self.load_ckpt(best_ckpt)
-    
-    def load_ema_model(self) -> None:
-        """
-        Loads the best ema model to self._model according to the track metric.
-        """
-        ema_ckpt = self.best_checkpoint(use_ema_model=True)
-        self.load_ckpt(ema_ckpt)

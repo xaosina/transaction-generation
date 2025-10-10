@@ -1,0 +1,21 @@
+evaluator:
+  metrics:
+    - OTD
+    - OTD: {f1_average: micro}
+    - OTD: {focus_on: [amount_rur]}
+    - OTD: {focus_on: [trans_date]}
+    - OTD: {focus_on: [small_group]}
+    - OTD: {focus_on: [small_group], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: [amount_rur]}
+    - OTD: {max_shift: 0, focus_on: [trans_date]}
+    - OTD: {max_shift: 0, focus_on: [small_group]}
+    - OTD: {max_shift: 0, focus_on: [small_group], f1_average: micro}
+    - Cardinality
+    - Detection:
+        report_std: True
+        condition_len: ${data_conf.generation_len}
+        verbose: True
+
+    - OTD: {global_denom: False}
+    - OTD: {focus_on: [amount_rur], global_denom: False}
+    - OTD: {focus_on: [trans_date], global_denom: False}
