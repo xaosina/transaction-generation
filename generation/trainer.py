@@ -415,13 +415,13 @@ class Trainer:
         
         loader_logger_msg = ''
         if loader_title is not None:
-            loader_logger_msg = ', loader-{}'.format(loader_title)
+            loader_logger_msg = ' loader-{}'.format(loader_title)
         
         logger.info(
-            "Epoch %04d: %s%s validation started",
+            "Epoch %04d:%s%s validation started",
             self._last_epoch + 1,
             loader_logger_msg,
-            "EMA" if use_ema_model else "",
+            " EMA" if use_ema_model else "",
         )
 
         _model.eval()
@@ -447,10 +447,10 @@ class Trainer:
                 _model, loader, remove=remove
             )
         logger.info(
-            "Epoch %04d %s%s:  metrics: \n%s\n%s",
+            "Epoch %04d:%s%s metrics: \n%s\n%s",
             self._last_epoch + 1,
-            "EMA" if use_ema_model else "",
             loader_logger_msg,
+            " EMA" if use_ema_model else "",
             _metric_values, # in some cases, it is more convenient to copy raw dict
             dictprettyprint(_metric_values),
         )
