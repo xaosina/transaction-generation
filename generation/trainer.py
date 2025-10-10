@@ -25,11 +25,7 @@ from .utils import (
     record_function, 
     dictprettyprint
 )
-from .generation_setup import (
-    ForecastGenSetupBatchProcessor,
-    IdentityGenSetupBatchProcessor,
-    GenerationSetupType
-)
+from .generation_setup import get_gensetup_batch_processor
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +80,7 @@ class Trainer:
         metrics_on_train: bool = False,
         ema_metrics_on_train: bool = False,
         use_trainval: bool = False,
-        generation_setup: GenerationSetupType = 'forecast'
+        generation_setup: str = 'forecast'
     ):
         """Initialize trainer.
 
@@ -140,10 +136,7 @@ class Trainer:
         self._grad_clip = grad_clip
         self._metrics_on_train = metrics_on_train
         self._ema_metrics_on_train = ema_metrics_on_train
-        if generation_setup == 'forecast':
-            self._gensetup_batch_processor = ForecastGenSetupBatchProcessor()
-        else:
-            self._gensetup_batch_processor = IdentityGenSetupBatchProcessor()
+        self._gensetup_batch_processor = get_gensetup_batch_processor(generation_setup)
 
         self._model = None
         if model is not None:
@@ -481,10 +474,11 @@ class Trainer:
             )
         
         logger.info(
-            "Epoch %04d %s%s:  metrics: \n%s",
+            "Epoch %04d %s%s:  metrics: \n%s\n%s",
             self._last_epoch + 1,
             ema_logger_msg,
             loader_logger_msg,
+            _metric_values, # in some cases, it is more convenient to copy raw dict
             dictprettyprint(_metric_values),
         )
         if use_ema_model:

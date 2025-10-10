@@ -14,11 +14,7 @@ from generation.models.generator import BaseGenerator
 from ..data.data_types import DataConfig, GenBatch
 from ..utils import create_instances_from_module, get_unique_folder_suffix
 from . import metrics as m
-from ..generation_setup import (
-    ForecastGenSetupBatchProcessor,
-    IdentityGenSetupBatchProcessor,
-    GenerationSetupType
-)
+from ..generation_setup import get_gensetup_batch_processor
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +55,7 @@ class SampleEvaluator:
         )
         self.verbose = verbose
         self._n_last_time_generated_seqs = 0
-        if generation_setup == 'forecast':
-            self._gensetup_batch_processor = ForecastGenSetupBatchProcessor()
-        else:
-            self._gensetup_batch_processor = IdentityGenSetupBatchProcessor()
+        self._gensetup_batch_processor = get_gensetup_batch_processor(generation_setup)
 
     def evaluate(self, model, loader, blim=None, buffer_size=None, remove=False):
         log_dir = Path(str(self.log_dir) + get_unique_folder_suffix(self.log_dir))

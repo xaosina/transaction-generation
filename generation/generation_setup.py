@@ -15,8 +15,24 @@ class GenSetupBatchProcessor:
     def on_generated(self, batch: GenBatch) -> GenBatch:
         return deepcopy(batch)
 
+def get_gensetup_batch_processor(
+        gensetup_type: GenerationSetupType, 
+        *args, 
+        **kwargs,
+    ) -> GenSetupBatchProcessor:
+
+    if gensetup_type == 'forecast':
+        return ForecastGenSetupBatchProcessor()
+    
+    if gensetup_type == 'identity':
+        return IdentityGenSetupBatchProcessor()
+    
+    raise Exception(f"Unsupported gensetup type '{gensetup_type}'!")
+
+
 class ForecastGenSetupBatchProcessor(GenSetupBatchProcessor):
     pass
+
 
 class IdentityGenSetupBatchProcessor(GenSetupBatchProcessor):
 
@@ -27,5 +43,4 @@ class IdentityGenSetupBatchProcessor(GenSetupBatchProcessor):
         return batch
     
     def on_generated(self, batch):
-        # TODO
         return deepcopy(batch)
