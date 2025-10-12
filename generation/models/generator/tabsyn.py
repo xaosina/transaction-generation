@@ -1,20 +1,23 @@
+import logging
 from copy import deepcopy
+from typing import Any, Dict, List
 
 import torch
 from ebes.model import BaseModel, TakeLastHidden
 
-from ...data.data_types import GenBatch, LatentDataConfig
-from ...data.data_types import seq_append, get_seq_tail, seq_to_device
-
 # from generation.models.encoders import ConditionalDiffusionEncoder
-from generation.models import autoencoders
-from generation.models import encoders
-
+from generation.models import autoencoders, encoders
 from generation.utils import freeze_module
-from typing import Any, Dict, List
 
+from ...data.data_types import (
+    GenBatch,
+    LatentDataConfig,
+    get_seq_tail,
+    seq_append,
+    seq_to_device,
+)
 from . import BaseGenerator, ModelConfig
-import logging
+from .utils import match_seqs
 
 logger = logging.getLogger()
 
@@ -32,7 +35,8 @@ class LatentDiffusionGenerator(BaseGenerator):
 
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
-
+        self.data_conf = data_conf
+        self.model_config = model_config
         # initializing autoencoder
         self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
             data_conf, model_config
@@ -58,6 +62,8 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         self.generation_len = encoder_params["generation_len"]
         self.history_len = self.encoder.input_history_len
+
+        self.repeat_matching = model_config.params.get("repeat_matching", False)
 
         # initializing history encoder
         history_encoder_data = model_config.params.get("history_encoder")
@@ -98,7 +104,12 @@ class LatentDiffusionGenerator(BaseGenerator):
             x (GenBatch): Input sequence [L, B, D]
 
         """
-        target_seq = self.autoencoder.encoder(x.get_target_batch())
+        target_seq = x.get_target_batch()
+        if self.repeat_matching:
+            repeat = x.tail(self.history_len)
+            target_seq = match_seqs(repeat, target_seq, self.data_conf)
+
+        target_seq = self.autoencoder.encoder(target_seq)
 
         history_embedding = None
         if self.history_encoder:
@@ -138,7 +149,7 @@ class LatentDiffusionGenerator(BaseGenerator):
                 setattr(pred, attr, tensor)
             # Clipping
             last_time = hist.tail(1).time  # 1, B
-            if not linear_clip:  # Clip
+            if not linear_clip:  # Simple Clip
                 mask = pred.time < last_time
                 pred.time[mask] = last_time.expand(pred.time.shape)[mask]
             else:
@@ -196,8 +207,10 @@ class LatentDiffusionGenerator(BaseGenerator):
             sampled_batch = self.autoencoder.generate(
                 sampled_seq
             )  # TODO: check it is correct
-
-            # sampled_batch = self._post_process(sampled_batch, hist)
+            if self.repeat_matching or self.model_config.latent_encoder.params.get(
+                "matching", False
+            ):
+                sampled_batch = self._post_process(sampled_batch, hist)
 
             if pred_batch is None:
                 pred_batch = sampled_batch

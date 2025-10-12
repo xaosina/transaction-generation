@@ -92,6 +92,10 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         self.history_len = params['history_len']
         self.latent_dim = params['input_size']
         self.history_encoder_dim = params['history_encoder_dim']
+        if params.get("matching", False):
+            self.match_emb_size = self.generation_len
+        else:
+            self.match_emb_size = None
     
     @property
     def input_history_len(self):
@@ -127,6 +131,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             class_labels,
             history_embedding,
             history_seq,
+            match_emb_size=self.match_emb_size,
         ) # returns loss
     
     def generate(
