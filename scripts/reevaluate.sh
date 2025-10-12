@@ -1,7 +1,7 @@
 #!/bin/bash
 
 EXPERIMENT_ROOT="$1"
-RUN_NAME_BASE="${2:-evaluation_run}"
+RUN_NAME_BASE="${2:-evaluation_run/-}"
 DEVICE="${3:-cuda:2}"
 
 DATASET="${EXPERIMENT_ROOT#log/generation/}"
@@ -34,7 +34,8 @@ for temp in "${TEMPERATURES[@]}"; do
       --trainer.verbose True \
       --evaluator.topk ${topk} \
       --evaluator.temperature ${temp} \
-      --overwrite_factory "[metrics/with_detection/${DATASET}]"
+      --overwrite_factory "[metrics/with_detection/${DATASET}]" \
+      --device "cuda:0"
     # Optional: prevent resource spikes
     sleep 2
   done

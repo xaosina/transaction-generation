@@ -268,7 +268,7 @@ class Trainer:
         """
 
         assert self._model is not None
-        ckpt = torch.load(ckpt_fname, map_location=self._device)
+        ckpt = torch.load(ckpt_fname, map_location="cpu")
 
         if "model" in ckpt:
             msg = self._model.load_state_dict(ckpt["model"], strict=strict)
