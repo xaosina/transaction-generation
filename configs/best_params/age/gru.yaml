@@ -1,20 +1,22 @@
-config_factory: [start, datasets/age/age, methods/gru, 1to1, metrics/default]
+# Params taken from log/generation/age/optuna/gru/67
+
+config_factory: [start, datasets/age/age, methods/gru]
 
 optimizer:
   params:
-    weight_decay: 6.882913563594073e-15
-    lr: 0.006812002660997401
+    weight_decay: 1.4354480582332636e-15
+    lr: 0.004779672721437556
 model:
   latent_encoder:
     params:
-      hidden_size: 200
+      hidden_size: 480
       num_layers: 1
-      dropout: 0.0007779770138537455
+      dropout: 9.594490213419128e-06
   autoencoder:
     params:
-      num_norm: false
-      cat_emb_dim: 127
-      num_emb_dim: 116
+      num_norm: true
+      cat_emb_dim: 51
+      num_emb_dim: 18
 data_conf:
   train_transforms:
     '1':
