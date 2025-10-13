@@ -22,6 +22,10 @@ evaluator:
     - OTD: {max_shift: 0, focus_on: [mcc_category], f1_average: micro}
     - Cardinality
 
+    - OTD: {global_denom: False}
+    - OTD: {focus_on: [amnt], global_denom: False}
+    - OTD: {focus_on: [hours_since_first_tx], global_denom: False}
+
 # DATA
 data_conf:
   dataset_name: alphabattle_small

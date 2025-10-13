@@ -55,7 +55,7 @@ class DataConfig:
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += self.num_names or []
+        all_num += (self.num_names or [])
         return [col for col in all_num if col in self.focus_on]
 
     @property
@@ -106,7 +106,7 @@ class LatentDataConfig:
 
     @property
     def focus_num(self):
-        names = self.num_names or [] + [self.time_name]
+        names = (self.num_names or []) + [self.time_name]
         return [name for name in names if name in self.focus_on]
 
     def check_focus_on(self, use_time):
@@ -457,3 +457,18 @@ def valid_mask(x: Seq | GenBatch):
     L = x.lengths.max()
     valid_mask = torch.arange(L, device=x.lengths.device)[:, None] < x.lengths  # L, B
     return valid_mask
+
+
+# Note: original Seq.to does not work if some of the fields
+# (tokens, lengths, time) are None
+def seq_to_device(seq: Seq, device) -> Seq:
+    
+    def _set_device_or_none(data: torch.Tensor):
+        return data.to(device) if (data is not None) else None
+    
+    seq.tokens = _set_device_or_none(seq.tokens)
+    seq.lengths = _set_device_or_none(seq.lengths)
+    seq.time = _set_device_or_none(seq.time)
+    seq.masks = _set_device_or_none(seq.masks)
+    
+    return seq

@@ -13,6 +13,7 @@ model:
   latent_encoder:
     params:
       base_factor: 512 # unetXL
+      matching: True
 data_conf:
   train_transforms:
     '1':

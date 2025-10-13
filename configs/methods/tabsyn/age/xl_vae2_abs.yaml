@@ -4,16 +4,19 @@ config_factory: [start, datasets/age/age, methods/tabsyn/base]
 model:
   autoencoder:
     params:
-      d_token: 8
-      num_layers: 10
-      n_head: 4
-      factor: 28
-    checkpoint: /home/transaction-generation/log/generation/ready/old_vae_age.ckpt
+      d_token: 72
+      num_layers: 7
+      n_head: 1
+      factor: 2
+    checkpoint: /home/transaction-generation/log/generation/ready/age_kl_vae.ckpt
   
   latent_encoder:
     params:
       base_factor: 512 # unetXL
+
 data_conf:
+  train_resamples: 50
+  batch_size: 1024
   train_transforms:
     '1':
       TimeToDiff:
@@ -22,6 +25,18 @@ data_conf:
     '1':
       TimeToDiff:
         disable: true
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 5.e-4
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 10
+      gamma: 0.2
 
 evaluator:
   devices: ["cuda:0", "cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)

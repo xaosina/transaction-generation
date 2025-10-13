@@ -4,11 +4,11 @@ config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/ta
 model:
   autoencoder:
     params:
-      d_token: 64
-      num_layers: 8
-      n_head: 4
-      factor: 10
-    checkpoint: /home/transaction-generation/log/generation/
+      d_token: 88
+      num_layers: 1
+      n_head: 1
+      factor: 4
+    checkpoint: /home/transaction-generation/log/generation/ready/alpha_kl_vae.ckpt
   
   latent_encoder:
     params:
@@ -16,7 +16,7 @@ model:
 
 data_conf:
   train_resamples: 10
-  val_ratio: 0.12
+  val_ratio: 0.15
   train_transforms:
     '1':
       TimeToDiff:
@@ -25,6 +25,18 @@ data_conf:
     '1':
       TimeToDiff:
         disable: true
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 5.e-4
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 10
+      gamma: 0.2
 
 evaluator:
   devices: ["cuda:0", "cuda:0", "cuda:0"]
