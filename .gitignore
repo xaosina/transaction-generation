@@ -34,7 +34,6 @@ temp/
 res
 
 bpe_post_process.py
-temp*
 */exps/configs/*
 notebooks/
 *pkl
