@@ -204,7 +204,7 @@ class LatentDiffusionGenerator(BaseGenerator):
             sampled_seq = self.encoder.generate(
                 n_seqs, None, history_embedding, history_seq
             )  # Seq [L, B, D]
-            sampled_batch = self.autoencoder.generate(
+            sampled_batch = self.autoencoder.decoder.generate(
                 sampled_seq
             )  # TODO: check it is correct
             if self.repeat_matching or self.model_config.latent_encoder.params.get(

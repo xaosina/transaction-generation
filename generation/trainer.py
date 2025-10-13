@@ -370,7 +370,7 @@ class Trainer:
         get_metrics: bool = False,
         use_ema_model: bool = False,
     ) -> dict[str, Any]:
-        _model = self.model 
+        _model = self.model
         if use_ema_model:
             _model = self._ema_model.ema_model
             flatten_rnn_params(_model)
@@ -470,7 +470,9 @@ class Trainer:
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
 
-                if self.ema_model.step.item() >= self.ema_model.update_after_step:
+                if self.ema_model is not None and (
+                    self.ema_model.step.item() >= self.ema_model.update_after_step
+                ):
                     self.validate(
                         get_metrics=self._metrics_on_train, use_ema_model=True
                     )
