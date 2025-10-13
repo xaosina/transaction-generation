@@ -179,7 +179,7 @@ class KarrasDenoiser:
                 
             return samples
         x_t = bridge_sample(x_start, xT, sigmas)
-        # breakpoint()
+        # ##
         model_output, denoised = self.denoise(model, x_t, sigmas,  **model_kwargs)
 
         weights = self.get_weightings(sigmas)
@@ -303,7 +303,7 @@ def get_d_vp(x, denoised, x_T, std_t,logsnr_t, logsnr_T, logs_t, logs_T, s_t_der
 
     f = s_t_deriv * (-logs_t).exp() * x
     gt2 = 2 * (logs_t).exp()**2 * sigma_t * sigma_t_deriv 
-    # breakpoint()
+    # ##
 
     d = f -  gt2 * ((0.5 if not stochastic else 1)* grad_logq - w * grad_logpxTlxt)
     # d = f - (0.5 if not stochastic else 1) * gt2 * (grad_logpxtlx0 - w * grad_logpxTlxt* (0 if stochastic else 1))

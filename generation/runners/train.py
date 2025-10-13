@@ -39,7 +39,6 @@ class GenerationTrainer(Runner):
                 model, 
                 **cfg.model.params['ema']
             )
-
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         loss = get_loss(internal_dataconf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)

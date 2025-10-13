@@ -68,7 +68,7 @@ def main():
 
     print("\n── First, quick build to obtain _array.so ──")
     run([sys.executable, "setup.py", "build", "install"], check=False)
-    breakpoint()
+    ##
     print("\n── Create linker mirror directory ──")
     strict_symlink()
 
