@@ -1,0 +1,86 @@
+trainer:
+  ckpt_track_metric: GenOTD
+  metrics_on_train: True
+  ema_metrics_on_train: True
+  total_iters: 10_000_000 # may be it is too much...
+  use_trainval: False
+  ema:
+    beta: 0.999
+    update_after_step: 4000
+    update_every: 10
+
+evaluator:
+  devices: ["cuda:0", "cuda:0", "cuda:0"]
+
+data_conf:
+  train_resamples: 25
+  batch_size: 512
+  train_random_end: time
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true #IMPORTANT: make sure it is consistent with VAE!
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+# MODEL
+model:
+  name: LatentDiffusionGenerator
+  autoencoder: 
+    name: VAE
+    params:
+      use_time: True
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+    pretrain: False
+    frozen: True
+    checkpoint: 
+
+  latent_encoder:
+    name: ConditionalBridgeEncoder
+    params:
+      generation_len: ${data_conf.generation_len}
+      history_len: ${data_conf.generation_len} # может быть это, или 0 
+      history_encoder_dim: &history_encoder_output_dim 256
+      base_factor: 256 # unetS: 64, unetM: 128, unetL: 256, unetXL: 512
+      dim_t : 1024
+      num_classes: 1
+      noise_schedule: ve #ve, vp, i2sb
+      gen_sampler: dbim # heun, dbim, dbim_high_order
+      sampling_nfe: 50
+  
+  params:
+    history_encoder:
+      name: GRU
+      output_dim: *history_encoder_output_dim
+      params:
+        hidden_size: *history_encoder_output_dim
+        num_layers: 1
+      pretrain: False
+      frozen: False
+      checkpoint:
+
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 2.e-4 # Note: I didn't adjust hyperparams&schedulers
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR: # Note: I didn't adjust hyperparams&schedulers
+      step_size: 30
+  # "beta":
+  #   BetaScheduler:
+  #     init_beta: 0.01
+  #     factor: 0.7
+  #     patience: 4
+  #     min_beta: 0.00001
+  #     verbose: True
+
+loss:
+  name: DummyLoss

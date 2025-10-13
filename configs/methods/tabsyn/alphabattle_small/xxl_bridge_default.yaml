@@ -1,0 +1,48 @@
+config_factory: [start, metrics/detection, datasets/alphabattle_small/alphabattle_small, methods/tabsyn/base_bridge, eval]
+
+# setting up the optimal autoencoder
+model:
+  autoencoder:
+    params:
+      d_token: 64
+      num_layers: 8
+      n_head: 4
+      factor: 10
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/alphabattle_small/ready/vae/seed_0/ckpt/epoch__0057_-_loss__-0.002813.ckpt
+  
+  latent_encoder:
+    params:
+      base_factor: 1024 # unetXXL
+
+data_conf:
+  train_resamples: 5
+  val_ratio: 0.12
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
+
+evaluator:
+  metrics:
+    - OTD
+    - OTD: {f1_average: micro}
+    - OTD: {focus_on: [amnt]}
+    - OTD: {focus_on: [hours_since_first_tx]}
+    - OTD: {focus_on: [mcc_category]}
+    - OTD: {focus_on: [mcc_category], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: [amnt]}
+    - OTD: {max_shift: 0, focus_on: [hours_since_first_tx]}
+    - OTD: {max_shift: 0, focus_on: [mcc_category]}
+    - OTD: {max_shift: 0, focus_on: [mcc_category], f1_average: micro}
+    - Cardinality
+    - OTD: {global_denom: False}
+    - OTD: {focus_on: [amnt], global_denom: False}
+    - OTD: {focus_on: [hours_since_first_tx], global_denom: False}
+    - Detection:
+        report_std: True
+        condition_len: ${data_conf.generation_len}
+        verbose: False
