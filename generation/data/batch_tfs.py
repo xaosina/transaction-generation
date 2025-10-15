@@ -402,6 +402,77 @@ class VariableRangeDecimal(NewFeatureTransform):
             batch.num_features_names.append(self.name)
 
 
+def time_to_diff_by_cat_2d(tm: torch.Tensor, ct: torch.Tensor) -> torch.Tensor:
+    """
+    tm: [L, B]  — абсолютное время
+    ct: [L, B]  — категории (int)
+    Возвращает delta: [L, B] — время от предыдущего появления той же категории.
+    """
+    L, B = tm.shape
+    delta = torch.zeros_like(tm)
+
+    for b in range(B):
+        # Для каждой категории внутри столбца считаем diff
+        cats_b = ct[:, b]
+        t_b = tm[:, b].clone()
+        for c in cats_b.unique():
+            mask = cats_b == c
+            vals = t_b[mask]
+            # torch.diff с prepend=0, чтобы длина совпала
+            t_b[mask] = torch.diff(vals, prepend=torch.zeros(1, dtype=vals.dtype, device=vals.device))
+        delta[:, b] = t_b
+    return delta
+
+def catdiff_to_time_2d(delta: torch.Tensor, ct: torch.Tensor) -> torch.Tensor:
+    """
+    Обратное преобразование.
+    delta: [L, B] — дельты внутри категорий (как из time_to_diff_by_cat_2d)
+    ct:    [L, B] — категории (int)
+    Возвращает tm: [L, B] — восстановленное абсолютное время.
+    Правило: для первой встречи категории абсолютное = delta; далее — кумуляция по категории.
+    """
+    L, B = delta.shape
+    tm = torch.empty_like(delta)
+
+    for b in range(B):
+        last = {}  # cat_id -> last absolute time
+        for l in range(L):
+            c = int(ct[l, b].item())
+            d = delta[l, b]
+            if c in last:
+                val = last[c] + d
+            else:
+                val = d
+            tm[l, b] = val
+            last[c] = val
+    return tm
+
+@dataclass
+class TimeToCatDiff(BatchTransform):
+    """Applies diff transform to time inside type of events."""
+
+    disable: bool = False
+    target: str = "event_type"
+
+    def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
+        assert isinstance(batch.time, torch.Tensor)
+        assert self.target in batch.cat_features_names, "<self.target> should be a feature from your data."
+
+        _, B = batch.time.shape
+        batch.time = time_to_diff_by_cat_2d(batch.time, batch[self.target])
+        batch.monotonic_time = False
+
+    def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
+        if (batch.time < 0).any():
+            logger.warning("Incorrect diffed time. Result will be non monotonic.")
+
+        batch.time = catdiff_to_time_2d(batch.time, batch[self.target])
+        batch.monotonic_time = True
+
 @dataclass
 class TimeToDiff(BatchTransform):
     """Applies diff transform to time."""

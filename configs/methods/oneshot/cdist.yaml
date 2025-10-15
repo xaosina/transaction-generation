@@ -1,0 +1,7 @@
+model:
+  name: OneShotCascadeDistGenerator
+
+loss:
+  name: DistLoss
+  params:
+    mse_weight: 0.5

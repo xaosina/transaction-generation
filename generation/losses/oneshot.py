@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch.nn import Module
+import math
 
 from generation.data.data_types import GenBatch, LatentDataConfig, PredBatch
 
@@ -96,7 +97,29 @@ class DistLoss(Module):
         self.data_conf = data_conf
         self.mse_weight = mse_weight
         self._ignore_index = ignore_index
+    
+    def _compute_time_loss(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+        EPS = 1e-6
+        res = 0.0
+        if self.data_conf.time_name in self.data_conf.focus_on:
+            true_time = y_true.target_time.T
+            true_cats = y_true.target_cat_features[..., 1].T
+            pred_time = y_pred.time
 
+            assert pred_time.dim() == 3 and pred_time.size(-1) == 2
+            B, K, _ = pred_time.shape
+            assert true_time.shape == true_cats.shape and true_time.shape[0] == B
+
+            mu_all    = pred_time[..., 0]                  # [B, K]
+            sigma_all = F.softplus(pred_time[..., 1]) + EPS  # [B, K] (>0)
+
+            mu    = torch.gather(mu_all,    dim=1, index=true_cats)
+            sigma = torch.gather(sigma_all, dim=1, index=true_cats)
+            
+            dist = torch.distributions.LogNormal(loc=mu, scale=sigma)
+            res += -dist.log_prob(true_time.clamp_min(EPS)).mean()
+        return res
+        
     def _compute_mse(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
         EPS = 1e-6
         mse_sum = 0.0
@@ -136,7 +159,7 @@ class DistLoss(Module):
 
         return (mse_sum / mse_count) if mse_count != 0 else torch.tensor(0.0)
 
-    def _compute_ce(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
+    def _compute_cat_loss(self, y_true: GenBatch, y_pred: PredBatch) -> torch.Tensor:
         if not y_pred.cat_features:
             return torch.tensor(0.0, device=y_true.time.device)
         data_conf = self.data_conf
@@ -160,12 +183,15 @@ class DistLoss(Module):
         return (total_ce / ce_count) if ce_count != 0 else torch.tensor(0.0)
 
     def __call__(self, y_true, y_pred) -> torch.Tensor:
-        mse_loss = self._compute_mse(y_true, y_pred)
-        ce_loss = self._compute_ce(y_true, y_pred)
-        return  {'loss': self.combine_losses(mse_loss, ce_loss)}
+        time_loss = self._compute_time_loss(y_true, y_pred)
+        cat_loss = self._compute_cat_loss(y_true, y_pred)
+        return  {'loss': self.combine_losses(time_loss, cat_loss)}
 
     def combine_losses(self, mse_loss, ce_loss):
         return 2 * (self.mse_weight * mse_loss + (1 - self.mse_weight) * ce_loss)
+    
+    # def combine_losses(self, mse_loss, ce_loss):
+    #     return mse_loss + ce_loss
 
 
 class GaussianDistLoss(Module):

@@ -249,7 +249,7 @@ class OneShotDistributionGenerator(BaseGenerator):
 
     def forward(self, x: GenBatch) -> PredBatch:
         """
-        Forward pass of the Auto-regressive Transformer
+        Forward pass of the DistLoss
         Args:
             x (GenBatch): Input sequence [L, B, D]
 
@@ -343,6 +343,192 @@ class OneShotDistributionGenerator(BaseGenerator):
         return GenBatch(
             lengths=tensor.lengths,
             time=tensor.time,
+            index=None,
+            num_features=num_features,
+            num_features_names=num_names,
+            cat_features=cat_features,
+            cat_features_names=cat_features_names,
+        )
+
+    def generate(
+        self, hist: GenBatch, gen_len: int, with_hist=False, **kwargs
+    ) -> GenBatch:
+        """
+        Auto-regressive generation using the transformer
+
+        Args:
+            x (Seq): Input sequence [L, B, D]
+
+        """
+        hist = deepcopy(hist)
+
+        with torch.no_grad():
+            pred = self.sample(self.forward(hist), gen_len)
+        if with_hist:
+            hist.append(pred)
+            return hist  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return pred  # Return GenBatch of size [gen_len, B, D]
+
+
+
+class OneShotCascadeDistGenerator(BaseGenerator):
+
+    def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
+        super().__init__()
+
+        self.autoencoder = getattr(autoencoders, model_config.autoencoder.name)(
+            data_conf, model_config
+        )
+
+        self.main_category = data_conf.focus_on[0]
+        if model_config.autoencoder.checkpoint:
+            ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
+            msg = self.autoencoder.load_state_dict(ckpt["model"], strict=False)
+
+        if model_config.autoencoder.frozen:
+            self.autoencoder = freeze_module(self.autoencoder)
+
+        encoder_params = model_config.latent_encoder.params or {}
+        encoder_params["input_size"] = self.autoencoder.encoder.output_dim
+
+        self.encoder = AutoregressiveEncoder(
+            model_config.latent_encoder.name, encoder_params
+        )
+        self.poller = (
+            TakeLastHidden() if model_config.pooler == "last" else ValidHiddenMean()
+        )
+
+        self.gen_len = data_conf.generation_len
+        if data_conf.num_names is not None:
+            self.num_projection = torch.nn.Linear(
+                len(data_conf.num_names), len(data_conf.num_names) * 2
+            )
+        self.time_projection = torch.nn.Linear(1, 128)
+        self.time_head = torch.nn.Linear(data_conf.cat_cardinalities[self.main_category] + 128, data_conf.cat_cardinalities[self.main_category] * 2)
+
+    def forward(self, x: GenBatch) -> PredBatch:
+        """
+        Forward pass of the DistLoss
+        Args:
+            x (GenBatch): Input sequence [L, B, D]
+
+        """
+        x = self.autoencoder.encoder(x)  # Sequence of [L, B, D]
+        x = self.encoder(x)  # [L, B, D]
+        x = self.poller(x)  # [B, D]
+        x = Seq(
+            tokens=x,
+            lengths=torch.ones_like(x, dtype=torch.long),
+            time=None,
+        )
+
+        x = self.autoencoder.decoder(x)
+        x_category = x['small_group']
+        x_time = self.time_projection(x.time.unsqueeze(-1))
+        time_emb = torch.cat((x_category, x_time), dim=1)
+        if x.time is not None:
+            B = x.shape[0]
+            x.time = self.time_head(time_emb).view(B, -1, 2)
+        if x.num_features is not None:
+            x.num_features = self.num_projection(x.num_features)
+        return x
+
+    def scale_to_gen_len(self, probs: torch.tensor, gen_len: int):
+        scaled = probs * gen_len
+        integer_parts = torch.floor(scaled).int()
+        fractional_parts = scaled - integer_parts
+        remaining = gen_len - torch.sum(integer_parts, dim=1, keepdim=True)
+
+        _, sorted_indices = fractional_parts.sort(dim=1, descending=True)
+
+        arange = torch.arange(probs.size(1), device=probs.device).unsqueeze(0)
+        mask_sorted = arange < remaining
+
+        mask_original = torch.zeros_like(mask_sorted)
+        mask_original.scatter_(1, sorted_indices, mask_sorted)
+
+        return integer_parts + mask_original.long()
+
+    def counts_to_indices(self, counts: torch.Tensor) -> torch.Tensor:
+        """
+        counts : (B, K)  — целые, сумма каждой строки одинаковая (gen_len)
+        return : (B, gen_len) — развёрнутый список категорий для каждой строки
+        """
+        device = counts.device
+        arange = torch.arange(counts.size(1), device=device)
+
+        idx_rows = [
+            torch.repeat_interleave(arange, row)[torch.randperm(self.gen_len)]
+            for row in counts
+        ]
+        return torch.stack(idx_rows)
+
+
+    def sample_times_of_cats(
+        self, 
+        sampled_cats: torch.Tensor,   # [L, B] long
+        pred_time: torch.Tensor    # [B, K, 2] (mu, rho)
+    ) -> torch.Tensor:
+        """
+        Сэмплит dt ~ LogNormal(mu_c, sigma_c) по выбранным категориям.
+        Возврат: deltas [L, B]
+        """
+        B, K, _ = pred_time.shape
+        mu_all    = pred_time[..., 0]                   # [B, K]
+        sigma_all = torch.nn.functional.softplus(pred_time[..., 1]) + 1e-8# [B, K]
+
+        cats_BL = sampled_cats.T.contiguous()            # [B, L]
+        mu    = torch.gather(mu_all,    dim=1, index=cats_BL)   # [B, L]
+        sigma = torch.gather(sigma_all, dim=1, index=cats_BL)   # [B, L]
+
+        dist = torch.distributions.LogNormal(loc=mu, scale=sigma)
+        return dist.sample().T.contiguous()                     # [L, B]
+
+
+    def sample(self, tensor: PredBatch, gen_len: int) -> GenBatch:
+        assert (tensor.lengths == 1).all()
+        num_features = None
+        cat_features = None
+
+        cat_features_names = list(tensor.cat_features.keys()) or []
+        if cat_features_names:
+            cat_features = []
+            for cat_name in cat_features_names:
+                params = tensor.cat_features[cat_name]
+                probs = torch.nn.functional.softmax(params, dim=-1)
+                scaled = self.scale_to_gen_len(probs, gen_len)
+
+                assert all(scaled.sum(dim=1) == gen_len)
+
+                cat_features.append(self.counts_to_indices(scaled).T)
+
+            cat_features = torch.stack(cat_features, dim=2)
+
+        num_names = tensor.num_features_names or []
+
+        if len(num_names) > 0:
+            num_features = []
+            for name in num_names:
+                idx = 2 * num_names.index(name)
+                idxs = [idx, idx + 1]
+                alpha_raw, beta_raw = tensor.num_features[:, idxs].unbind(dim=1)
+                # alpha = torch.nn.functional.softmax(alpha_raw)
+                beta = torch.nn.functional.softplus(beta_raw)
+
+                dist = torch.distributions.Normal(alpha_raw, beta)
+                num_features.append(dist.sample((gen_len,)))
+            num_features = torch.stack(num_features, dim=2)
+        if tensor.time is not None:
+            assert self.main_category in cat_features_names, f'{self.main_category} should be in categorical features of tensor.'
+            feat_idx = cat_features_names.index(self.main_category)
+
+            cats = cat_features[..., feat_idx]
+            sampled_time = self.sample_times_of_cats(cats, tensor.time)
+
+        return GenBatch(
+            lengths=tensor.lengths * gen_len,
+            time=sampled_time,
             index=None,
             num_features=num_features,
             num_features_names=num_names,
