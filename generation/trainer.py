@@ -296,7 +296,7 @@ class Trainer:
         """
 
         assert self._model is not None
-        ckpt = torch.load(ckpt_fname, map_location=self._device)
+        ckpt = torch.load(ckpt_fname, map_location="cpu")
 
         if "model" in ckpt:
             msg = self._model.load_state_dict(ckpt["model"], strict=strict)
@@ -400,7 +400,7 @@ class Trainer:
         use_ema_model: bool = False,
         loader_title: str | None = None
     ) -> dict[str, Any]:
-        _model = self.model 
+        _model = self.model
         if use_ema_model:
             _model = self._ema_model.ema_model
             flatten_rnn_params(_model)
@@ -517,7 +517,9 @@ class Trainer:
                     )
                 self.validate(get_metrics=self._metrics_on_train)
 
-                if self.ema_model.step.item() >= self.ema_model.update_after_step:
+                if self.ema_model is not None and (
+                    self.ema_model.step.item() >= self.ema_model.update_after_step
+                ):
                     self.validate(
                         get_metrics=self._ema_metrics_on_train, use_ema_model=True
                     )

@@ -1,6 +1,6 @@
 # Params taken from log/generation/age/optuna/gru/67
 
-config_factory: [start, datasets/age/age, methods/gru]
+config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/gru]
 
 optimizer:
   params:
@@ -9,9 +9,9 @@ optimizer:
 model:
   latent_encoder:
     params:
-      hidden_size: 480
+      hidden_size: 200
       num_layers: 1
-      dropout: 9.594490213419128e-06
+      dropout: 0.00010532607225017183
   autoencoder:
     params:
       num_norm: true

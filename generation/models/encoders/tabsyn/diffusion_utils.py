@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from scipy.stats import betaprime
 import pdb
+from torch_linear_assignment import batch_linear_assignment
 #----------------------------------------------------------------------------
 # Loss function corresponding to the variance preserving (VP) formulation
 # from the paper "Score-Based Generative Modeling through Stochastic
@@ -191,6 +192,7 @@ class EDMLoss:
             class_labels: torch.Tensor | None = None,
             hstate: torch.Tensor | None = None,
             rawhist: torch.Tensor | None = None,
+            match_emb_size: int = None
         ):
 
         rnd_normal = torch.randn(data.shape[0], device=data.device)
@@ -209,6 +211,14 @@ class EDMLoss:
         )
     
         target = y
+        if match_emb_size is not None:
+            D_yn = D_yn.reshape(D_yn.shape[0], match_emb_size, -1) # B, L, D
+            target = target.reshape(target.shape[0], match_emb_size, -1) # B, L, D
+            mse = (D_yn[:, :, None, :] - target[:, None, :, :]) ** 2 # B, L, L, D
+            mse = mse.mean(-1) # B, L, L
+            assignment = batch_linear_assignment(mse).unsqueeze(-1) # B, L, 1
+            mse = mse.take_along_dim(assignment, -1).squeeze(-1)  # B, L, 1
+            return weight.unsqueeze(1) * mse
         loss = weight.unsqueeze(1) * ((D_yn - target) ** 2)
 
         return loss
