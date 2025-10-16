@@ -58,14 +58,14 @@ class AsynDiffEncoder(BaseModel):
 
         self.params = params
         self.model = DiT(
-        num_rows=params['num_rows'],
-        latent_size=params['latent_size'],
-        hidden_size=params['hidden_size'],
-        depth=params['depth'],
-        num_heads=params['num_heads'],
-        mlp_ratio=params['mlp_ratio'],
-        learn_sigma=params['learn_sigma']
-    )   
+            num_rows=params['num_rows'],
+            latent_size=params['latent_size'],
+            hidden_size=params['hidden_size'],
+            depth=params['depth'],
+            num_heads=params['num_heads'],
+            mlp_ratio=params['mlp_ratio'],
+            learn_sigma=params['learn_sigma']
+        )   
         self.loss_func = get_loss_func(params['loss_type'])
         self.gen_reshaper = Reshaper(params['generation_len'])
         self.mask = params['mask']
@@ -103,7 +103,7 @@ class AsynDiffEncoder(BaseModel):
         mask = col_indices < (batch_len - gen_len).unsqueeze(1)
 
         # Initiate noise
-        noise_fixed = torch.rand_like(z_tokens)
+        noise_fixed = torch.randn_like(z_tokens)
 
         # Define the ODE function for solving the reverse flow
         def ode_func(t, x):

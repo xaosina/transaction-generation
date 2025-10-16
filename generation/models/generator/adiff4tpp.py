@@ -58,7 +58,7 @@ class AsynDiffGenerator(BaseGenerator):
         input_seq =  self.autoencoder.encoder(history_batch) ## T*B*(total_features*d_token)
 
         batch_len = history_batch.lengths ## valid seq lengths in each batch
-        max_len = self.history_len+ self.generation_len ## num of row for each input
+        max_len = self.history_len + self.generation_len ## num of row for each input
         A = obtain_noise_schedule(self.Aschedule)(batch_len,max_len)
         loss = self.encoder(input_seq,A)
         
