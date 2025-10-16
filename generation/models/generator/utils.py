@@ -49,3 +49,39 @@ def match_seqs(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfi
             field = field.take_along_dim(assign, 0)
         setattr(target, attr, field)
     return target
+
+def post_process_generation(pred: GenBatch, hist: GenBatch, linear_clip=False):
+    if not hist.monotonic_time:
+        pred.time = pred.time.clip(min=0)
+    else:
+        order = pred.time.argsort(dim=0)  # (L, B).
+        for attr in ["time", "num_features", "cat_features"]:
+            tensor = getattr(pred, attr)
+            if tensor is None:
+                continue
+            shaped_order = order.reshape(
+                *(list(order.shape) + [1] * (tensor.ndim - order.ndim))
+            )
+            tensor = tensor.take_along_dim(shaped_order, dim=0)
+            setattr(pred, attr, tensor)
+        # Clipping
+        last_time = hist.tail(1).time  # 1, B
+        if not linear_clip:  # Simple Clip
+            mask = pred.time < last_time
+            pred.time[mask] = last_time.expand(pred.time.shape)[mask]
+        else:
+            L, B = pred.time.shape
+            time = pred.time
+            lt = last_time.expand(L, B)
+            k = (time <= lt).sum(dim=0)  # Number of bad times
+            i = torch.arange(L, device=time.device).view(L, 1)
+            mask = i < k
+            t_end = time.gather(0, k.clamp(max=L - 1).view(1, B))  # First good time
+            t_end = torch.where(k == L, last_time, t_end)  # If all times bad
+            pred.time = torch.where(
+                mask,
+                last_time
+                + ((i + 1).float() / (k.clamp(min=1) + 1)) * (t_end - last_time),
+                time,
+            )  # Linear approximation from last time to first greater time.
+    return pred
