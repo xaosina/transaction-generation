@@ -1,3 +1,11 @@
+# hidden_size 128-> 512
+# num_layers 1-> 2
+# dropout 0 -> 0.1
+# wd 1e-7 -> 1e-6
+# num_norm True -> False
+# ValHiddenMean -> LastHiddenMean
+# patience 5 -> 20
+
 method_name: gru
 runner_name: SupervisedRunner
 
@@ -13,17 +21,17 @@ model:
       cat_emb_dim: 16
       num_emb_dim: 16
       time_process: "cat" # "diff" | "cat" | "none"
-      num_norm: true
+      num_norm: false
   encoder: 
     name: GRU
     params:
       input_size: output_dim_from_prev
-      hidden_size: 128
-      num_layers: 1
-      dropout: 0.
+      hidden_size: 512
+      num_layers: 2
+      dropout: 0.1
       initial_hidden: static
   aggregation:
-    name: ValidHiddenMean
+    name: TakeLastHidden
   head:
     name: nn.Linear
     params:
@@ -34,7 +42,7 @@ optimizer:
   name: Adam
   params:
     lr: 3.e-4
-    weight_decay: 1.e-7
+    weight_decay: 1.e-6
 
 optuna:
   params:

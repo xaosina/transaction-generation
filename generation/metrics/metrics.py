@@ -15,7 +15,7 @@ from Levenshtein import distance as lev_score
 from scipy.optimize import linear_sum_assignment
 from scipy.stats import entropy, gaussian_kde
 from sdmetrics.reports.single_table import QualityReport
-from sklearn.metrics import accuracy_score, r2_score as r2_sklearn, f1_score
+from sklearn.metrics import accuracy_score, r2_score as r2_sklearn
 
 from ..data.data_types import DataConfig
 from .pipelines.eval_detection import run_eval_detection
@@ -97,7 +97,7 @@ def get_perfect_score(score, max_shift, gen_len):
     return perfect_score.mean(0)
 
 
-def r2_score(true_num, pred_num):
+def r2_score(true_num, pred_num, global_denom=True):
     """R2 score for numerical
     Input:
         true_num: [L, B, D]
@@ -107,6 +107,9 @@ def r2_score(true_num, pred_num):
     denominator = ((true_num - true_num.mean(0)) ** 2).sum(
         axis=0, dtype=np.float64
     )  # B, D
+    if global_denom:
+        denominator = denominator.mean(0)[None].repeat(true_num.shape[1], axis=0)
+
     nominator = (pred_num[:, None] - true_num[None, :]) ** 2  # [L, L, B, D]
     denominator[nominator.sum(0).sum(0) == 0] = 1
     nominator[:, :, (denominator == 0)] = 1 / gen_len
@@ -115,16 +118,19 @@ def r2_score(true_num, pred_num):
     return 1 / gen_len - (nominator / denominator)  # [L, L, B, D]
 
 
-def r1_score(true_num, pred_num):
+def r1_score(true_num, pred_num, global_denom=True):
     """R1 score for numerical(MAE analog for R2)
     Input:
         true_num: [L, B, D]
         pred_num: [L, B, D]
     """
     gen_len = true_num.shape[0]
-    denominator = np.abs(true_num - np.median(true_num, 0)[0]).sum(
+    denominator = np.abs(true_num - np.median(true_num, 0)).sum(
         axis=0, dtype=np.float64
     )  # B, D
+    if global_denom:
+        denominator = denominator.mean(0)[None].repeat(true_num.shape[1], axis=0)
+
     nominator = np.abs(pred_num[:, None] - true_num[None, :])  # [L, L, B, D]
     denominator[nominator.sum(0).sum(0) == 0] = 1
     nominator[:, :, (denominator == 0)] = 1 / gen_len
@@ -206,6 +212,7 @@ class OTD(BaseMetric):
     f1_average: str = "macro"
     focus_on: list[str] = None
     detailed: bool = False
+    global_denom: bool = True
 
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
@@ -225,7 +232,8 @@ class OTD(BaseMetric):
             seq_cols = [n for n in seq_cols if n in self.focus_on]
             focus_num = [n for n in focus_num if n in self.focus_on]
             focus_cat = [n for n in focus_cat if n in self.focus_on]
-
+            if seq_cols == []:
+                return 0
         orig[seq_cols] = orig[seq_cols].map(lambda x: x[-gen_len:])
         gen[seq_cols] = gen[seq_cols].map(lambda x: x[-gen_len:])
 
@@ -248,7 +256,7 @@ class OTD(BaseMetric):
             if self.num_metric == "r2":
                 num_metric = r2_score(true_num, pred_num)
             elif self.num_metric == "r1":
-                num_metric = r1_score(true_num, pred_num)
+                num_metric = r1_score(true_num, pred_num, self.global_denom)
             elif self.num_metric == "smape":
                 num_metric = smape_score(true_num, pred_num)
             else:
@@ -296,15 +304,17 @@ class OTD(BaseMetric):
         elif self.max_shift > 0:
             res += f" {self.max_shift}"
         if len(self.focus_on or []) == 1:
-            if self.focus_on[0] in self.data_conf.focus_num:
-                res += f" R1 {self.focus_on[0]}"
-            elif self.focus_on[0] in self.data_conf.focus_cat:
-                res += f" F1 {self.focus_on[0]}"
-            
+            if self.focus_on[0] in (self.data_conf.num_names or []):
+                res += " R1"
+            elif self.focus_on[0] in (self.data_conf.cat_cardinalities or []):
+                res += " F1"
+            res += f" {self.focus_on[0]}"
         if self.num_metric != "r1":
             res += f" {self.num_metric}"
         if self.f1_average != "macro":
             res += f" {self.f1_average}"
+        if not self.global_denom:
+            res = "---" + res + " userwise_denom"
         return res
 
 
@@ -458,27 +468,18 @@ class Levenshtein(BinaryMetric):
 
 @dataclass
 class Accuracy(BinaryMetric):
+    first_k: int = 0
 
     def get_scores(self, row):
         gt, pred = row["gt"], row["pred"]
-        acc_m = accuracy_score(gt, pred)
+        if self.first_k < 1:
+            acc_m = accuracy_score(gt, pred)
+        else:
+            acc_m = accuracy_score(gt[: self.first_k], pred[: self.first_k])
         return acc_m
 
     def __repr__(self):
-        return f"Accuracy on {self.data_conf.target_token}"
-
-
-@dataclass
-class F1Score(BinaryMetric):
-    average: str = "macro"
-
-    def get_scores(self, row):
-        gt, pred = row["gt"], row["pred"]
-        f1 = f1_score(gt, pred, average=self.average)
-        return f1
-
-    def __repr__(self):
-        return f"F1 score {self.average} on {self.data_conf.target_token}"
+        return f"Accuracy {f'first@{self.first_k}' if self.first_k > 0 else ''} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -566,7 +567,7 @@ class Recall(PR):
 
 
 @dataclass
-class MultisetF1Metric(BinaryMetric):
+class F1Metric(BinaryMetric):
     average: str = "macro"
 
     @staticmethod
@@ -641,7 +642,7 @@ class MultisetF1Metric(BinaryMetric):
         return f1
 
     def __repr__(self):
-        return f"MultisetF1_{self.average} on {self.data_conf.target_token}"
+        return f"F1_{self.average} on {self.data_conf.target_token}"
 
 
 @dataclass
@@ -680,9 +681,9 @@ class DistributionMetric(BaseMetric):
 class StatisticMetric(DistributionMetric):
     def get_scores(self, row) -> pd.Series:
         orig_score, gen_score = row.map(self.get_statistic)
-        relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
-        score = 1 - (1 + abs(gen_score - orig_score))
-        return pd.Series({"score": score, "relative": relative, "orig": orig_score})
+        # relative = (gen_score - orig_score) / (abs(orig_score) + 1e-8)
+        # score = 1 - (1 + abs(gen_score - orig_score))
+        return pd.Series({"gen": gen_score, "orig": orig_score})
 
     @abstractmethod
     def get_statistic(self, p) -> float: ...
@@ -725,6 +726,7 @@ class ShannonEntropy(StatisticMetric):
 @dataclass
 class GenVsHistoryMetric(BaseMetric):
     overall: bool = False
+    calculate_orig: bool = False
 
     @abstractmethod
     def get_scores(row): ...
@@ -740,9 +742,11 @@ class GenVsHistoryMetric(BaseMetric):
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
         gen_score = self.score_for_df(gen)
-        orig_score = self.score_for_df(orig)
+        res = {"gen": gen_score}
+        if self.calculate_orig:
+            res["orig"] = self.score_for_df(orig)
         # score = 1 - (1 + abs(gen_score - orig_score))
-        return {"gen": gen_score, "orig": orig_score}  # "score": score,
+        return res  # "score": score,
 
 
 @dataclass
@@ -913,6 +917,7 @@ class Detection(BaseMetric):
     """
 
     condition_len: int = 0
+    report_std: bool = False
     verbose: bool = False
 
     def __call__(self, orig: pd.DataFrame, gen: pd.DataFrame):
@@ -928,8 +933,11 @@ class Detection(BaseMetric):
             devices=self.devices,
             verbose=self.verbose,
         )
-        acc = discr_res.loc["MulticlassAccuracy"].loc["mean"]
+        acc = discr_res.loc["MulticlassAUROC"].loc["mean"]
         err = (1 - acc) * 2
+        std = discr_res.loc["MulticlassAUROC"].loc["std"]
+        if self.report_std:
+            return {"mean": float(err), "std": 2 * float(std)}
         return float(err)
 
     def __repr__(self):

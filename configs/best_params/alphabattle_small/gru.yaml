@@ -1,22 +1,24 @@
-config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/gru, 1to1, metrics/default]
+# Params taken from log/generation/age/optuna/gru/67
+
+config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/gru]
 
 optimizer:
   params:
-    weight_decay: 2.3941517728696164e-05
-    lr: 0.0009789375864001468
+    weight_decay: 1.4354480582332636e-15
+    lr: 0.004779672721437556
 model:
   latent_encoder:
     params:
-      hidden_size: 190
-      num_layers: 2
-      dropout: 1.2735936349073125e-07
+      hidden_size: 200
+      num_layers: 1
+      dropout: 0.00010532607225017183
   autoencoder:
     params:
-      num_norm: false
-      cat_emb_dim: 125
-      num_emb_dim: 9
+      num_norm: true
+      cat_emb_dim: 51
+      num_emb_dim: 18
 data_conf:
   train_transforms:
     '1':
       TimeToDiff:
-        disable: false
+        disable: true

@@ -1,5 +1,9 @@
 import torch
 import torch.nn as nn
+import logging
+from typing import Tuple, List, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from .tabsyn.model import Unet1DDiffusion
 
@@ -7,15 +11,23 @@ from .tabsyn.model import Unet1DDiffusion
 from .tabsyn.model import EDM
 from .tabsyn.diffusion_utils import sample
 
+# # bridge
+# from .tabsyn.ddbm.karras_diffusion import (
+#     KarrasDenoiser,
+#     karras_sample
+# )
+# from .tabsyn.ddbm.resample import (
+#     create_named_schedule_sampler,
+#     LossAwareSampler
+# )
+
 # bridge
-from .tabsyn.ddbm.karras_diffusion import (
-    KarrasDenoiser,
-    karras_sample
+from .tabsyn.dbim.train_util import (
+    get_diffusion,
+    get_sampling_params
 )
-from .tabsyn.ddbm.resample import (
-    create_named_schedule_sampler,
-    LossAwareSampler
-)
+from .tabsyn.dbim.karras_diffusion import karras_sample
+from .tabsyn.dbim.resample import create_named_schedule_sampler
 
 from ebes.model.seq2seq import BaseSeq2Seq
 # from ...generator import Reshaper
@@ -80,6 +92,10 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         self.history_len = params['history_len']
         self.latent_dim = params['input_size']
         self.history_encoder_dim = params['history_encoder_dim']
+        if params.get("matching", False):
+            self.match_emb_size = self.generation_len
+        else:
+            self.match_emb_size = None
     
     @property
     def input_history_len(self):
@@ -115,6 +131,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             class_labels,
             history_embedding,
             history_seq,
+            match_emb_size=self.match_emb_size,
         ) # returns loss
     
     def generate(
@@ -175,12 +192,13 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             rawhist_length=params['history_len'],
         )
 
-        self.diffusion = KarrasDenoiser(
-            pred_mode=params['pred_mode'], 
-            weight_schedule=params["weight_schedule"],
-        ) #TODO: adapt parametersm, understand what they mean!
+        assert not set(['noise_schedule', 'gen_sampler', 'sampling_nfe']) - set(params.keys())
+
+        self.sampling_params = get_sampling_params(params)
+        logger.info(f'Bridge diffusion: used sampling params: {self.sampling_params}')
+        self.diffusion = get_diffusion(params)
         self.schedule_sampler = create_named_schedule_sampler(
-            params['schedule_sampler'], self.diffusion)
+            "real-uniform", self.diffusion)
 
         self.gen_reshaper = Reshaper(params['generation_len'])
 
@@ -234,11 +252,6 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                 xT=history_seq,
             )
         )
-
-        if isinstance(self.schedule_sampler, LossAwareSampler):
-            self.schedule_sampler.update_with_local_losses(
-                t, losses["loss"].detach()
-            )
         
         loss = (losses["loss"] * weights).mean()
 
@@ -249,8 +262,10 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
             n_seqs: int, 
             class_labels: torch.Tensor | None = None, 
             history_embedding: torch.Tensor | None = None, 
-            history_seq: Seq | None = None
-        ) -> Seq :
+            history_seq: Seq | None = None,
+            return_path : bool = False,
+            return_x0_pred : bool = False,
+        ) -> Seq | Tuple[Seq, Dict[str, Any]]:
 
         assert history_seq is not None
 
@@ -261,12 +276,13 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
         
-        _samp, path, nfe = karras_sample(
+        _samp, _path, _, _pred_x0, _, _ = karras_sample(
             self.diffusion,
             self.denoise_fn,
             history_seq,
             None,
-            steps=40, #TODO: to config!
+            steps=self.sampling_params['steps'],
+            mask=None,
             model_kwargs=dict(
                 hstate=history_embedding,
                 rawhist=history_seq if self.history_condition_len > 0 else None,
@@ -274,18 +290,43 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                 xT=history_seq,
             ),
             device=history_seq.device,
-            sampler="heun",
-            sigma_min=self.diffusion.sigma_min,
-            sigma_max=self.diffusion.sigma_max,
-            churn_step_ratio=0., #TODO: to config
-            rho=7.0, #TODO: to config
-            guidance=1., #TODO: what is it? to config!
+            rho = self.sampling_params['rho'],
+            sampler=self.sampling_params['sampler'],
+            churn_step_ratio=self.sampling_params['churn_step_ratio'],
+            eta=self.sampling_params['eta'],
+            order=self.sampling_params['order'],
         )
 
-        return self.gen_reshaper(
-            Seq(
-                tokens=_samp, 
-                lengths=torch.ones((n_seqs,)).to(_samp.device) * self.generation_len, 
-                time=None
-            )
-        ) # [L, B, D]
+        samp = self.gen_reshaper(
+                Seq(
+                    tokens=_samp, 
+                    lengths=torch.ones((n_seqs,)).to(_samp.device) * self.generation_len, 
+                    time=None
+                )
+            ) # [L, B, D]
+
+        if (not return_path) and (not return_x0_pred):
+            return samp
+        else:
+            bridge_traj = dict()
+            if return_path:
+                bridge_traj['path'] = [
+                            self.gen_reshaper(
+                                Seq(
+                                    tokens=path_inst, 
+                                    lengths=torch.ones((n_seqs,)).to(path_inst.device) * self.generation_len, 
+                                    time=None
+                                )
+                        ) for path_inst in _path
+                    ]
+            if return_x0_pred:
+                bridge_traj['x0_pred'] = [
+                            self.gen_reshaper(
+                                Seq(
+                                    tokens=pred_x0_inst, 
+                                    lengths=torch.ones((n_seqs,)).to(pred_x0_inst.device) * self.generation_len, 
+                                    time=None
+                                )
+                        ) for pred_x0_inst in _pred_x0
+                    ]
+            return samp, bridge_traj

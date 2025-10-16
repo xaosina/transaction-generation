@@ -16,6 +16,7 @@ zhores/configs/
 
 *.ckpt
 
+notebooks/analysis_param.ipynb
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -32,9 +33,17 @@ temp/
 *gpickle
 .hypothesis*
 *.out
+res
+
+notebooks/my_anal/
 
 bpe_post_process.py
 temp*
 */exps/configs/*
 notebooks/
 *pkl
+*.png
+*.csv
+*.sh
+embeddings/
+*.code-workspace

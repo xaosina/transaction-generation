@@ -1,7 +1,8 @@
-from copy import deepcopy
 import logging
 import os
+import subprocess
 from collections.abc import Iterable, Sized
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -9,13 +10,16 @@ from typing import Any, Optional
 
 import numpy as np
 import torch
+from ema_pytorch import EMA
 from torch import nn
 from torcheval.metrics import Mean, Metric
 from tqdm.autonotebook import tqdm
+
 from generation.schedulers.schedulers import CompositeScheduler
+
 from .data.data_types import GenBatch
 from .metrics.evaluator import SampleEvaluator
-from .utils import LoadTime, get_profiler, record_function, MeanDict
+from .utils import LoadTime, MeanDict, flatten_rnn_params, get_profiler, record_function
 
 from fp16_utils import DynamicLossScaler
 
@@ -34,6 +38,7 @@ class TrainConfig:
     profiling: bool = False
     verbose: bool = True
     metrics_on_train: bool = False
+    ema: Optional[dict] = None
 
 
 class Trainer:
@@ -58,6 +63,7 @@ class Trainer:
         ckpt_replace: bool = True,
         ckpt_track_metric: str = "epoch",
         ckpt_resume: str | os.PathLike | None = None,
+        ema: Optional[dict] = None,
         device: str = "cpu",
         profiling: bool = False,
         verbose: bool = True,
@@ -121,6 +127,11 @@ class Trainer:
         if model is not None:
             self._model = model.to(device)
 
+        if ema is None:
+            self._ema_model = None
+        else:
+            self._ema_model = EMA(model, **ema)
+
         self._loss = None
         if loss is not None:
             self._loss = loss.to(device)
@@ -138,6 +149,10 @@ class Trainer:
         self._metric_values: dict[str, Any] | None = None
         self._last_iter = 0
         self._last_epoch = 0
+
+    @property
+    def ema_model(self) -> nn.Module | None:
+        return self._ema_model
 
     @property
     def model(self) -> nn.Module | None:
@@ -186,7 +201,7 @@ class Trainer:
 
         Args:
             ckpt_path: path to checkpoints. If `ckpt_path` is a directory, the
-                checkpoint will be saved there with epoch, loss an metrics in the
+                checkpoint will be saved there with epoch, loss and metrics in the
                 filename. All scalar metrics returned from `compute_metrics` are used to
                 construct a filename. If full path is specified, the checkpoint will be
                 saved exectly there. If `None` `ckpt_dir` from construct is used with
@@ -213,6 +228,8 @@ class Trainer:
         }
         if self._model:
             ckpt["model"] = self._model.state_dict()
+        if self._ema_model:
+            ckpt["ema"] = self._ema_model.state_dict()
         if self._opt:
             ckpt["opt"] = self._opt.state_dict()
         if self._sched:
@@ -253,11 +270,14 @@ class Trainer:
         """
 
         assert self._model is not None
-        ckpt = torch.load(ckpt_fname, map_location=self._device)
+        ckpt = torch.load(ckpt_fname, map_location="cpu")
 
         if "model" in ckpt:
             msg = self._model.load_state_dict(ckpt["model"], strict=strict)
             logger.info(msg)
+        if "ema" in ckpt:
+            msg = self._ema_model.load_state_dict(ckpt["ema"], strict=strict)
+            logger.info("EMA: " + str(msg))
         if "opt" in ckpt:
             if self._opt is None:
                 logger.warning(
@@ -336,10 +356,14 @@ class Trainer:
                     self._opt.zero_grad()
                 else:
                     self._opt.zero_grad()
+                
+                self._last_iter += 1
+                if self.ema_model:
+                    self.ema_model.update()
 
                 prof.step()
                 self._last_iter += 1 ## debug: control number of iterations
-            #breakpoint()
+
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
                 self._last_epoch + 1,
@@ -356,16 +380,26 @@ class Trainer:
         remove=True,
         get_loss: bool = True,
         get_metrics: bool = False,
+        use_ema_model: bool = False,
     ) -> dict[str, Any]:
-        assert self._model is not None
+        _model = self.model
+        if use_ema_model:
+            _model = self._ema_model.ema_model
+            flatten_rnn_params(_model)
+        assert _model is not None
         assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
             if self._val_loader is None:
                 raise ValueError("Either set val loader or provide loader explicitly")
             loader = self._val_loader
-        logger.info("Epoch %04d: validation started", self._last_epoch + 1)
-        self._model.eval()
-        self._metric_values = {}
+        logger.info(
+            "Epoch %04d: %s validation started",
+            self._last_epoch + 1,
+            "EMA" if use_ema_model else "",
+        )
+
+        _model.eval()
+        _metric_values = {}
 
         if get_loss:
             orig_collate, orig_random_end = loader.collate_fn, loader.dataset.random_end
@@ -375,23 +409,26 @@ class Trainer:
             with torch.no_grad():
                 for batch in tqdm(loader, disable=not self._verbose):
                     batch.to(self._device)
-                    pred = self._model(batch)
+                    pred = _model(batch)
                     loss_dict = self._loss(batch, pred)
                     log_losses.update(loss_dict)
             loader.collate_fn, loader.dataset.random_end = orig_collate, orig_random_end
-            self._metric_values |= {k: -v for k, v in log_losses.mean().items()}
+            _metric_values |= {k: -v for k, v in log_losses.mean().items()}
 
         if get_metrics:
-            self._metric_values |= self._sample_evaluator.evaluate(
-                self._model, loader, remove=remove
+            _metric_values |= self._sample_evaluator.evaluate(
+                _model, loader, remove=remove
             )
         logger.info(
-            "Epoch %04d: metrics: %s",
+            "Epoch %04d: %s metrics: %s",
             self._last_epoch + 1,
-            str(self._metric_values),
+            "EMA" if use_ema_model else "",
+            str(_metric_values),
         )
+        if not use_ema_model:
+            self._metric_values = _metric_values
 
-        return self._metric_values
+        return _metric_values
 
     def run(self) -> None:
         """Train and validate model."""
@@ -400,7 +437,7 @@ class Trainer:
         assert self._train_loader is not None, "Set a train loader to run full cycle"
         assert self._val_loader is not None, "Set a val loader to run full cycle"
         assert self._model is not None
-
+        logger.info("commit: %s", subprocess.getoutput("git rev-parse HEAD"))
         logger.info("run %s started", self._run_name)
 
         if self._ckpt_resume is not None:
@@ -446,7 +483,13 @@ class Trainer:
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
 
-            #breakpoint()
+                if self.ema_model is not None and (
+                    self.ema_model.step.item() >= self.ema_model.update_after_step
+                ):
+                    self.validate(
+                        get_metrics=self._metrics_on_train, use_ema_model=True
+                    )
+
             self._last_epoch += 1
             self.save_ckpt()
 

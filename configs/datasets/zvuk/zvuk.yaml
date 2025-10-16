@@ -8,6 +8,15 @@ trainer:
   verbose: True
   ckpt_resume: null
 
+
+evaluator:
+  metrics:
+    - OTD: {focus_on: [artist_id], f1_average: micro}
+    - Levenshtein
+    - F1Score: {focus_on: [artist_id], f1_average: micro}
+    - F1Score: {focus_on: [artist_id], f1_average: macro}
+    - Cardinality
+
 # DATA
 data_conf:
   dataset_name: zvuk

@@ -24,7 +24,7 @@ def vp_logs(t, beta_d, beta_min):
 class KarrasDenoiser:
     def __init__(
         self,
-        sigma_data: float = 0.5,
+        sigma_data: float = 0.65, # chosen for age dataset
         sigma_max=80.0,
         sigma_min=0.002,
         beta_d=2,
@@ -203,7 +203,8 @@ class KarrasDenoiser:
             append_dims(x, x_t.ndim) for x in self.get_bridge_scalings(sigmas)
         ]
                
-        rescaled_t = 1000 * 0.25 * th.log(sigmas + 1e-44)
+        # rescaled_t = 1000 * 0.25 * th.log(sigmas + 1e-44)
+        rescaled_t = 0.25 * sigmas.log() # by Karras EDM (similar to tabsyn)
         model_output = model(c_in * x_t, rescaled_t, **model_kwargs)
         denoised = c_out * model_output + c_skip * x_t
         return model_output, denoised

@@ -1,9 +1,11 @@
 #!/bin/bash
 
 EXPERIMENT_ROOT="$1"
-RUN_NAME_BASE="${2:-evaluation_run}"
+RUN_NAME_BASE="${2:-evaluation_run/-}"
 DEVICE="${3:-cuda:2}"
 
+DATASET="${EXPERIMENT_ROOT#log/generation/}"
+DATASET="${DATASET%%/*}"
 CONFIG_FILE="${EXPERIMENT_ROOT}/seed_0/config.yaml"
 CHECKPOINT_DIR="${EXPERIMENT_ROOT}/seed_0/ckpt/"
 
@@ -31,8 +33,9 @@ for temp in "${TEMPERATURES[@]}"; do
       --runner.params.n_runs 1 \
       --trainer.verbose True \
       --evaluator.topk ${topk} \
-      --evaluator.temperature ${temp}
-
+      --evaluator.temperature ${temp} \
+      --overwrite_factory "[metrics/with_detection/${DATASET}]" \
+      --device "cuda:0"
     # Optional: prevent resource spikes
     sleep 2
   done

@@ -1,0 +1,24 @@
+config_factory: [start, datasets/age/age, methods/gpt, 1to1, metrics/default]
+
+optimizer:
+  params:
+    weight_decay: 5.655067176944371e-06
+    lr: 0.0001471466715055618
+model:
+  latent_encoder:
+    params:
+      n_layer: 9
+      n_head: 2
+      n_embd: 432
+      dropout: 0.03923983424980977
+      bias: true
+  autoencoder:
+    params:
+      num_norm: false
+      cat_emb_dim: 98
+      num_emb_dim: 121
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true

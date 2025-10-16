@@ -22,6 +22,9 @@ evaluator:
     - OTD: {max_shift: 0, focus_on: [small_group], f1_average: micro}
     - Cardinality
 
+    - OTD: {global_denom: False}
+    - OTD: {focus_on: [amount_rur], global_denom: False}
+    - OTD: {focus_on: [trans_date], global_denom: False}
 data_conf:
   dataset_name: age
   cat_cardinalities:
