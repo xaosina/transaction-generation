@@ -2,40 +2,27 @@ config_factory: [start, datasets/age/age, methods/tabsyn/base]
 
 # setting up the optimal autoencoder
 model:
-  latent_encoder:
-    name: ConditionalBridgeEncoder
-    params:
-      generation_len: 32
-      history_len: 32
-      history_encoder_dim: 256
-      base_factor: 512
-      dim_t: 1024
-      num_classes: 1
-      noise_schedule: ve
-      gen_sampler: dbim # dbim for training!
-      sampling_nfe: 65 # 50 for training!
-      eta: 1.0
   autoencoder:
     params:
-      d_token: 8
-      num_layers: 10
-      n_head: 4
-      factor: 28
-    checkpoint: /home/transaction-generation/log/generation/ready/old_vae_age.ckpt
-  params:
-    repeat_matching: True
+      d_token: 40
+      num_layers: 4
+      n_head: 1
+      factor: 5
+    checkpoint: /home/transaction-generation/log/generation/ready/age_diff_vae.ckpt
+  
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
 
 data_conf:
-  batch_size: 512
-  train_resamples: 25
   train_transforms:
     '1':
       TimeToDiff:
-        disable: true
+        disable: false
   val_transforms:
     '1':
       TimeToDiff:
-        disable: true
+        disable: false
 
 evaluator:
   devices: ["cuda:0", "cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)

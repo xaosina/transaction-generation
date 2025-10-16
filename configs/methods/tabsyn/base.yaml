@@ -50,19 +50,12 @@ model:
   params:
     history_encoder:
       name: GRU
-      output_dim: *history_encoder_output_dim
       params:
         hidden_size: *history_encoder_output_dim
         num_layers: 1
       pretrain: False
       frozen: False
       checkpoint:
-
-  #   num_layers: 2
-  #   d_token: 6
-  #   n_head: 2
-  #   factor: 64
-
 
 optimizer:
   name: Adam
