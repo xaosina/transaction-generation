@@ -26,19 +26,27 @@ class VAE(BaseAE):
             "n_head": model_config.params.get("n_head", 2),
             "factor": model_config.params.get("factor", 64),
         }
+        batch_transforms = create_instances_from_module(
+            batch_tfs, model_config.batch_transforms
+        )
+        if batch_transforms is not None:
+            assert model_config.frozen, "Transformes are designed for pretrained models!"
+
         self.encoder = Encoder(
             **vae_params,
             use_time=model_config.params["use_time"],
             pretrain=model_config.pretrain,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_features=data_conf.num_names,
-            batch_transforms=model_config.batch_transforms,
+            batch_transforms=batch_transforms,
         )
+        self.model_config = model_config
 
         self.decoder = Decoder(
             **vae_params,
             cat_cardinalities=data_conf.cat_cardinalities,
             num_names=data_conf.num_names,
+            batch_transforms=batch_transforms,
         )
 
     def forward(self, x: GenBatch) -> PredBatch:
@@ -86,7 +94,7 @@ class Encoder(nn.Module):
         pretrain: bool = False,
         cat_cardinalities: Mapping[str, int] | None = None,
         num_features: Sequence[str] | None = None,
-        batch_transforms: Mapping[str, Mapping[str, Any] | str] | None = None,
+        batch_transforms: list | None = None,
         bias=True,
     ):
         super(Encoder, self).__init__()
@@ -101,9 +109,7 @@ class Encoder(nn.Module):
         self.use_time = use_time
         if use_time:
             num_count += 1
-        self.batch_transforms = create_instances_from_module(
-            batch_tfs, batch_transforms
-        )
+        self.batch_transforms = batch_transforms
         if self.batch_transforms:
             for tfs in self.batch_transforms:
                 assert isinstance(tfs, NewFeatureTransform)
@@ -197,8 +203,10 @@ class Decoder(nn.Module):
         factor: int = 64,
         num_names: Sequence[str] | None = None,
         cat_cardinalities: Mapping[str, int] = None,
+        batch_transforms: list | None = None,
     ):
         super(Decoder, self).__init__()
+        self.batch_transforms = batch_transforms
         self.d_token = d_token
         self.num_names = num_names
         self.cat_cardinalities = cat_cardinalities
@@ -253,7 +261,11 @@ class Decoder(nn.Module):
         )
 
     def generate(self, seq: Seq, topk=1, temperature=1.0) -> GenBatch:
-        return self.forward(seq).to_batch(topk, temperature)
+        batch = self.forward(seq).to_batch(topk, temperature)
+        if self.batch_transforms is not None:
+            for tf in reversed(self.batch_transforms):
+                tf.reverse(batch)
+        return batch
 
 
 class Tokenizer(nn.Module):
