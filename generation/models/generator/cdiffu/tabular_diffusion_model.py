@@ -109,6 +109,7 @@ class DiffusionTabularModel(torch.nn.Module):
 
     def sample(self, hist_x, hist_e, tgt_len, cat_list):
         self.num_classes_list = [self.num_cat_dict[i] for i in cat_list]
+        # breakpoint()
         e, x = self.sample_chain(hist_x, hist_e, tgt_len, cat_list)
 
         return log_onehot_to_index_multi_task(e[-1], self.num_classes_list), x[-1]
@@ -117,7 +118,7 @@ class DiffusionTabularModel(torch.nn.Module):
         hist = self.get_hist(hist_x, hist_e)
 
         # shape = [hist.size(0), tgt_len]
-        shape = [hist.size(0), tgt_len, 2]
+        shape = [hist.size(0), tgt_len, hist_x.size(-1)]
         init_x = torch.randn(shape).to(self.device)
         # x_t_list = [init_x.unsqueeze(0)]
         x_t_list = [init_x]
@@ -143,6 +144,7 @@ class DiffusionTabularModel(torch.nn.Module):
         e_t_list = [e_t]
         for i in reversed(range(0, self.n_steps)):
             # e_t_index = log_onehot_to_index(e_t)
+            # breakpoint()
             e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list)
             x_seq = self.time_diff_._one_diffusion_rev_step(
                 self.time_diff_.denoise_func_, x_t, e_t_index, i, hist, cat_list

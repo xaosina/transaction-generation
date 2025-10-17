@@ -78,14 +78,16 @@ class TimeDenoisingModule(nn.Module):
         order_emb = self.order_enc(order.float())
 
         t_emb_seq = t_emb.view(x.size(0), 1, -1).repeat(1, x.size(1), 1)
-
+        # breakpoint()
         x_emb = self.x_input_layer(x.float()) 
     
         e_emb = []
 
         idx = 0 
         #for key,value in self.num_classes_dict.items():
+        # breakpoint()
         for cat_name in cat_order:
+            # e_temp = e[:,:,idx] if e.dim() == 3 else e
             e_temp = e[:,:,idx]
             e_emb.append(self.cat_emb[cat_name](e_temp))
             idx += 1

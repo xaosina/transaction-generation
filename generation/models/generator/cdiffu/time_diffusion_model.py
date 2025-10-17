@@ -125,7 +125,7 @@ class DiffusionTimeModel(nn.Module):
         noise_level = torch.FloatTensor([i]).repeat(cur_x.size(0), 1).to(self.device)
         pred_eps = self.denoise_func_(cur_x.type(torch.cuda.FloatTensor), e, noise_level.type(torch.cuda.FloatTensor), hist,cat_list)
 
-        mu_theta_xt = torch.sqrt(1/self.alphas[i])*(cur_x-self.betas[i]/(torch.sqrt(1-self.alpha_bars[i]))*pred_eps.squeeze(-1))
+        mu_theta_xt = torch.sqrt(1/self.alphas[i])*(cur_x-self.betas[i]/(torch.sqrt(1-self.alpha_bars[i]))*pred_eps)
         x = mu_theta_xt + sqrt_tilde_beta*noise
         return x
 

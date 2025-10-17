@@ -140,7 +140,7 @@ def log_onehot_to_index_multi_task(log_e, num_classes_list):
         
     # 5. 拼接：沿着最后一个维度 (dim=2) 拼接所有任务的索引
     # 最终形状: (B, L, D)
-    return torch.cat(index_parts, dim=2).squeeze(-1) if D == 1 else torch.cat(index_parts, dim=2)
+    return torch.cat(index_parts, dim=2)
 
 
 def index_to_log_onehot_multi_task(x, num_classes_list):
