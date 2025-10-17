@@ -74,7 +74,7 @@ optuna:
 
     - ["model.params.emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
     - ["model.params.dim_exp", ["suggest_int", {low: 3, high: 10}]]
-    - ["model.params.heads_exp", ["suggest_categorical", {low: 1, high: 3}]]
+    - ["model.params.heads_exp", ["suggest_int", {low: 1, high: 3}]]
 
     - ["model.params.hidden_scale_exp", ["suggest_int", {low: 1, high: 10, step: 1}]]
     - ["model.params.encoder_layer", ["suggest_int", {low: 2, high: 16, step: 2}]]
