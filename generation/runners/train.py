@@ -34,11 +34,8 @@ class GenerationTrainer(Runner):
 
         # ema
         ema_model = None
-        if ('ema' in cfg.model.params) and (cfg.model.params['ema'] is not None):
-            ema_model = EMA(
-                model, 
-                **cfg.model.params['ema']
-            )
+        if ("ema" in cfg.model.params) and (cfg.model.params["ema"] is not None):
+            ema_model = EMA(model, **cfg.model.params["ema"])
         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         loss = get_loss(internal_dataconf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
@@ -71,14 +68,18 @@ class GenerationTrainer(Runner):
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
         val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
-        train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        # train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
         test_metrics = trainer.validate(test_loader, get_loss=True, get_metrics=True)
 
         val_metrics = {k: v for k, v in val_metrics.items()}
-        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
-        return dict(**train_metrics, **val_metrics, **test_metrics)
+        return dict(
+            # **train_metrics,
+            **val_metrics,
+            **test_metrics,
+        )
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)

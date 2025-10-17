@@ -365,6 +365,7 @@ class DiffusionTypeModel(torch.nn.Module):
     def _train_loss(self, x, dt, hist,t, pt):
         b, device = x.size(0), x.device
         #
+        # breakpoint()
         if self.loss_type == 'vb_stochastic':
             ## x: (B,L,D)
             

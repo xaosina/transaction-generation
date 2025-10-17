@@ -83,6 +83,7 @@ class HistoryEncoder(nn.Module):
         :param hist_e: 统一的类别型特征张量 [B, L', F]
         :return: memory: history_representation, B x L' x dim
         """
+        # breakpoint()
         dynamic_features_list = []
         
         # --- 1. 统一动态类别特征处理 ---

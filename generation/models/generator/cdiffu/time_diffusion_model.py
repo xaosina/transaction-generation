@@ -159,6 +159,7 @@ class DiffusionTimeModel(nn.Module):
         return x_seq
 
     def compute_loss(self, x_0, e, hist,cat_order, t):
+        # breakpoint()
         # Sample continuous noise level
         batch_size = x_0.shape[0]
         # t = np.random.choice(range(1, self.n_steps), size=batch_size)

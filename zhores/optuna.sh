@@ -36,12 +36,12 @@ sbatch <<EOT
 
 #SBATCH --gpus=${n_gpus}
 
-srun singularity exec --bind /gpfs/gpfs0/${login}:/home -f --nv image_trans.sif bash -c '
+srun singularity exec --bind /trinity/home/${login}/dev:/home -f --nv image_trans.sif bash -c '
     cd /home/transaction-generation;
     nvidia-smi;
     python main.py \
         --run_name optuna/${method} \
-        --config_factory [start,datasets/${dataset}/${dataset},methods/${method},optuna]
+        --config_factory [start,datasets/${dataset}/${dataset},methods/${method}/base,optuna]
 '
 EOT
 
