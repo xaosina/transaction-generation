@@ -348,9 +348,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                # torch.nn.utils.clip_grad_norm_(
-                #     self._model.parameters(), max_norm=self._grad_clip
-                # )
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
                 if not has_overflow:
                     self._opt.step()
                     self._opt.zero_grad()
@@ -467,7 +467,7 @@ class Trainer:
 
         best_metric = float("-inf")
         patience = self._patience
-        self._opt.ema_start()
+#         self._opt.ema_start()
         while self._last_iter < self._total_iters:
             print(self._last_iter,self._total_iters)
             train_iters = min(

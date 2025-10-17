@@ -1,13 +1,18 @@
 trainer:
+  ckpt_track_metric: loss
   metrics_on_train: True
   total_iters: 10_000_000 # may be it is too much...
+  ema:
+    beta: 0.9999
+    update_after_step: 15000
+    update_every: 10
 
 evaluator:
-  devices: ["cuda:0", "cuda:1"]
+  devices: ["cuda:0", "cuda:0", "cuda:0"]
   
 data_conf:
   train_resamples: 50
-  batch_size: 1024
+  batch_size: 256
   train_random_end: time
   train_transforms:
     '1':
@@ -31,7 +36,7 @@ model:
       use_time: True
     pretrain: False
     frozen: True
-    checkpoint: /trinity/home/j.chen/2.SeqDiff/transaction-generation/diffgen_vaes/vae_age.ckpt
+    checkpoint: 
 
 
   latent_encoder:
@@ -44,24 +49,34 @@ model:
       num_heads: 16
       mlp_ratio: 4
       learn_sigma: False
-      loss_type: l2 # l2,l2-squared and huber
-      mask: True
-      schedule: Async
+      loss_type: l2-squared # l2,l2-squared and huber
+      mask: False
+      schedule: Sync
       int_ode: rk4
       generation_len: 32
       history_len: 32
 
 
 optimizer:
-  name: Adam
+  name: AdamW
   params:
-    lr: 1.5e-3
-    weight_decay: 1.e-9
+    lr: 2.e-4
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2
+    wd_exclude_bias_ln: True
 
 schedulers:
+#   "cos":
+#     CosineWithWarmUp:
+#       warmup: 5
+#       total_steps: 100
   "step":
     StepLR:
-      step_size: 30
+      step_size: 10 # no scheduler
+      gamma: 0.2
 
 loss:
   name: DummyLoss

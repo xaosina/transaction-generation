@@ -13,6 +13,7 @@ tests/log**
 scripts/sync.sh
 zhores/configs/
 **.parquet
+*.ipynb_checkpoints*
 
 *.ckpt
 
