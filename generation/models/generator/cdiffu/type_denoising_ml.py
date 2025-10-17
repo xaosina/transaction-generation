@@ -55,6 +55,7 @@ class TypeDenoisingModule(nn.Module):
         self.num_all_numerical_features = len_numerical_features
         num_extra_numerical_features = len_numerical_features - 1 
 
+        self.num_proj = None
         if num_extra_numerical_features > 0:
             self.num_proj = nn.Linear(num_extra_numerical_features, feature_dim)
             dynamic_feature_dim_sum += feature_dim 
@@ -119,15 +120,19 @@ class TypeDenoisingModule(nn.Module):
 
         idx = 0 
         #for key,value in self.num_classes_dict.items():
+        # breakpoint()
         for cat_name in cat_order:
-            e_temp = e[:,:,idx]
+            e_temp = e[:,:,idx] if e.dim() == 3 else e
             combined_cat.append(self.cat_emb[cat_name](e_temp))
             idx += 1
-            
-        combined_cat = torch.cat(combined_cat,dim=-1)
-        x_time = self.temporal_enc(x[:,:,0])
-        x_num = self.num_proj(x[:,:,1:])
-        tgt = torch.cat([x_time,x_num,combined_cat,t], dim=-1) + order
+        
+        all_features = [self.temporal_enc(x[:,:,0])]
+        if self.num_proj is not None:
+            all_features.append(self.num_proj(x[:,:,1:]))
+
+        all_features.append(torch.cat(combined_cat,dim=-1))
+        all_features.append(t)
+        tgt = torch.cat(all_features, dim=-1) + order
 
 
         tgt = self.reduction_dim_layer(tgt)

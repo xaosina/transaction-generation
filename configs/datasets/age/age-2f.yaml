@@ -1,0 +1,87 @@
+trainer:
+  total_iters: 1_000_000
+  total_epochs: null
+  ckpt_track_metric: 'loss'
+  iters_per_epoch: null
+  patience: 10
+  profiling: false
+  verbose: True
+  ckpt_resume: null
+
+evaluator:
+  metrics:
+    - OTD
+    - OTD: {f1_average: micro}
+    - OTD: {focus_on: [trans_date]}
+    - OTD: {focus_on: [small_group]}
+    - OTD: {focus_on: [small_group], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: [trans_date]}
+    - OTD: {max_shift: 0, focus_on: [small_group]}
+    - OTD: {max_shift: 0, focus_on: [small_group], f1_average: micro}
+    - Cardinality
+
+    - OTD: {global_denom: False}
+    - OTD: {focus_on: [trans_date], global_denom: False}
+data_conf:
+  dataset_name: age
+  cat_cardinalities:
+    - ["small_group", 203]
+  index_name: client_id
+  time_name: trans_date
+  focus_on:
+  target_token: "small_group"
+
+  test_path: 'data/age/preprocessed/test'
+  train_path: 'data/age/preprocessed/train'
+  val_ratio: 0.15
+  num_workers: 4
+  train_resamples: 1
+  batch_size: 128
+
+  min_history_len: &min_history_len 32
+  generation_len: &generation_len 32
+  max_seq_len: &max_seq_len 1024
+
+  padding_value: 0
+
+  train_random_end: none
+  val_random_end: time
+  
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0
+        scale: 730
+    "1":
+      TimeToDiff:
+        disable: false
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "local_shuffle":
+      LocalShuffle:
+        max_shift: 0
+    "3":
+      CutTargetSequence:
+        target_len: 0
+
+  val_transforms:
+    "0": ${data_conf.train_transforms.0}
+    "1": ${data_conf.train_transforms.1}
+    "3":
+      CutTargetSequence:
+        target_len: *generation_len
+    "ngrams":
+      NGramTransform:
+        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
+        feature_name: small_group
+        feature_counts: 203
+        max_l: *max_seq_len
+        disable: true
+    "shuffle_users":
+      ShuffleUsers:
+        shuffle: false

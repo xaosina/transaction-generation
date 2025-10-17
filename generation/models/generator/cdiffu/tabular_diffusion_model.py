@@ -32,8 +32,12 @@ class DiffusionTabularModel(torch.nn.Module):
 
         self.num_cat_dict = data_conf.cat_cardinalities
         self.num_classes_list = []
+
+        assert data_conf.time_name is not None, 'It seems you forget provide a time feature.'
         ## because of time interv must in the num features, so we add 1
-        len_num_features = len(data_conf.num_names) + 1
+        len_num_features = 1
+        if data_conf.num_names is not None:
+            len_num_features += len(data_conf.num_names)
 
         self.hist_enc_func_ = HistoryEncoder(
             transformer_dim=transformer_dim,
