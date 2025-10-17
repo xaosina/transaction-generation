@@ -19,13 +19,12 @@ class DiffusionTabularModel(torch.nn.Module):
         device = "cuda"
         self.device = device
 
-        num_classes = data_conf.cat_cardinalities["small_group"]
-        emb_feature_dim = model_config.params["emb_dim_features"]
-        transformer_dim = model_config.params["dim"]
-        transformer_heads = model_config.params["heads"]
+        emb_feature_dim = 1 << model_config.params["emb_dim_features_exp"]
+        transformer_dim = 1 << model_config.params["dim_exp"]
+        transformer_heads = 1 << model_config.params["heads_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
-        dim_feedforward = model_config.params["feed_forward"]
+        dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
         self.n_steps = model_config.params["diffusion_steps"]
         num_timesteps = model_config.params["diffusion_steps"]
         self.d_conf = data_conf
