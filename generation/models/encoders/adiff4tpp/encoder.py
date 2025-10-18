@@ -7,6 +7,7 @@ from ebes.types import Seq
 from ebes.model.basemodel import BaseModel
 from torchdiffeq import odeint
 from ....data.data_types import GenBatch, LatentDataConfig
+from copy import deepcopy
 
 class Reshaper(nn.Module):
     def __init__(self, gen_len: int):
@@ -65,18 +66,32 @@ class AsynDiffEncoder(BaseModel):
             num_heads=params['num_heads'],
             mlp_ratio=params['mlp_ratio'],
             learn_sigma=params['learn_sigma']
-        )   
+        )
+        self.data_init = params['data_init']   
+        # self.use_history_mask = params['history_mask']
+
         self.loss_func = get_loss_func(params['loss_type'])
         self.gen_reshaper = Reshaper(params['generation_len'])
         self.mask = params['mask']
         self.generation_len = params['generation_len']
         
-    def forward(self,target_seq: GenBatch,A):
+    def forward(self,target_seq: GenBatch,gen_len,A,batch_len):
         z = target_seq.tokens ## shape of tokens: T*B*(total_features*d_token)
         z = z.permute(1, 0, 2) ## B*T*(total_features*d_token)
         attn_mask = A.attn_mask.to("cuda")
 
-        noise_fixed = torch.randn_like(z,device="cuda")
+        col_indices = torch.arange(z.shape[1]).unsqueeze(0).to("cuda")
+        history_mask = col_indices < (batch_len - gen_len).unsqueeze(1)
+
+        # noise_fixed = torch.randn_like(z,device="cuda")
+        noise_fixed = deepcopy(z)
+        if not self.data_init:
+            noise_fixed[~history_mask] = torch.randn_like(noise_fixed[~history_mask])
+        else:
+            assert torch.all(batch_len == batch_len[0])
+            assert batch_len[0] == 2 * gen_len
+            noise_fixed[~history_mask] = noise_fixed[history_mask]
+
         # Sample t, zt
         t = sample_t(z.shape[0]).view(-1,1) # (batchsize,)
         A_t = A(t).to("cuda")
@@ -91,6 +106,13 @@ class AsynDiffEncoder(BaseModel):
             pred = self.model(zt, A_t)
 
         # Compute loss
+        # if self.use_history_mask:
+        # pred = pred[~history_mask]
+        pred[history_mask] = 0.
+        target[history_mask] = 0.
+        # breakpoint()
+        assert pred.shape == target.shape
+
         loss = self.loss_func(pred, target, A_t_dot)
         loss = loss.mean()
         return loss 
@@ -100,10 +122,18 @@ class AsynDiffEncoder(BaseModel):
         # Create a mask
         z_tokens = z.tokens.permute(1, 0, 2)  ## B*T*(total_features*d_token)
         col_indices = torch.arange(z_tokens.shape[1]).unsqueeze(0).to("cuda")
-        mask = col_indices < (batch_len - gen_len).unsqueeze(1)
+        history_mask = col_indices < (batch_len - gen_len).unsqueeze(1)
 
         # Initiate noise
-        noise_fixed = torch.randn_like(z_tokens)
+        # noise_fixed = torch.randn_like(z_tokens)
+        noise_fixed = deepcopy(z_tokens)
+        if not self.data_init:
+            noise_fixed[~history_mask] = torch.randn_like(noise_fixed[~history_mask])
+        else:
+            assert torch.all(batch_len == batch_len[0])
+            assert batch_len[0] == 2 * gen_len
+            noise_fixed[~history_mask] = noise_fixed[history_mask]
+
 
         # Define the ODE function for solving the reverse flow
         def ode_func(t, x):
@@ -111,9 +141,10 @@ class AsynDiffEncoder(BaseModel):
             A_t = A(t)
             A_t_dot = A.derivative(t).unsqueeze(-1)
             # Compute vector field: x_0 - epsilon
+            x[history_mask] = z_tokens[history_mask]
             v = self.model(x,A_t)
             # Fix vector fields for preceding events
-            v[mask] = (z_tokens-noise_fixed)[mask]
+            v[history_mask] = 0.
             return A_t_dot*v
 
         # Sample t, zt
