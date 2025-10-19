@@ -1,6 +1,5 @@
-config_factory: [start, datasets/age/age, methods/tabsyn/base]
+config_factory: [start, datasets/age/age, methods/tabsyn/base, metrics/with_detection/age]
 
-# setting up the optimal autoencoder
 model:
   autoencoder:
     params:
@@ -8,40 +7,12 @@ model:
       num_layers: 4
       n_head: 1
       factor: 5
-    checkpoint: /home/transaction-generation/log/generation/ready/age_diff_vae.ckpt
-  
+    checkpoint: /home/transaction-generation/log/generation/ready/age/diff_vae.ckpt
+    pretrain: True
+    batch_transforms:
+      - TimeToDiff:
+          disable: False
+
   latent_encoder:
     params:
       base_factor: 512 # unetXL
-
-data_conf:
-  train_transforms:
-    '1':
-      TimeToDiff:
-        disable: false
-  val_transforms:
-    '1':
-      TimeToDiff:
-        disable: false
-
-evaluator:
-  devices: ["cuda:0", "cuda:0", "cuda:0"] # adjust for your hardware, ALWAYS SET MORE THAN 1 DEVICE (possible repeated)
-  metrics:
-    - OTD
-    - OTD: {f1_average: micro}
-    - OTD: {focus_on: [amount_rur]}
-    - OTD: {focus_on: [trans_date]}
-    - OTD: {focus_on: [small_group]}
-    - OTD: {focus_on: [small_group], f1_average: micro}
-    - OTD: {max_shift: 0, focus_on: [amount_rur]}
-    - OTD: {max_shift: 0, focus_on: [trans_date]}
-    - OTD: {max_shift: 0, focus_on: [small_group]}
-    - OTD: {max_shift: 0, focus_on: [small_group], f1_average: micro}
-    - Cardinality
-    - Detection:
-        report_std: True
-        condition_len: ${data_conf.generation_len}
-        verbose: False
-    - OTD: {global_denom: False}
-    - OTD: {focus_on: [amount_rur], global_denom: False}
-    - OTD: {focus_on: [trans_date], global_denom: False}
