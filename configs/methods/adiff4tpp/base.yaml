@@ -55,12 +55,13 @@ model:
       int_ode: rk4
       generation_len: 32
       history_len: 32
+      data_init: False
 
 
 optimizer:
   name: AdamW
   params:
-    lr: 2.e-4
+    lr: 1.e-4
     betas:
      - 0.9
      - 0.999
