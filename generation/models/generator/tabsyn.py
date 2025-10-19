@@ -17,6 +17,7 @@ from ...data.data_types import (
     get_seq_tail,
     seq_append,
     seq_to_device,
+    split_seq_tail,
 )
 from . import BaseGenerator, ModelConfig
 from .utils import match_seqs, post_process_generation
@@ -55,9 +56,15 @@ class LatentDiffusionGenerator(BaseGenerator):
         )
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
-            msg = autoencoder.load_state_dict(ckpt["model"], strict=True)
+            msg = autoencoder.load_state_dict(ckpt["model"], strict=False)
 
-        assert model_config.autoencoder.frozen, "Not implemented unfrozen auto"
+            def short(keys):
+                return str(({".".join(k.split(".")[:2]) for k in keys}))
+
+            logger.info("Missing KEYS: " + short(msg.missing_keys))
+            logger.info("Unexpected KEYS: " + short(msg.unexpected_keys))
+
+        assert model_config.autoencoder.frozen, "Not implemented unfrozen AE"
         if model_config.autoencoder.frozen:
             autoencoder = freeze_module(autoencoder)
         logger.info(f"Tabsyn latent dimension is {autoencoder.encoder.output_dim}")
@@ -71,7 +78,7 @@ class LatentDiffusionGenerator(BaseGenerator):
             print("no history encoder!")
             return
 
-        checkpoint = params.pop("checkpoint")
+        checkpoint = params.pop("checkpoint", None)
         # Support old encoders
         if params["name"] == "GRU":
             params = {
@@ -81,7 +88,7 @@ class LatentDiffusionGenerator(BaseGenerator):
             }
             hist_enc_dim = 256
             history_encoder = nn.Sequential(
-                [BaseModel.get_model("GRU", **params), TakeLastHidden()]
+                BaseModel.get_model("GRU", **params), TakeLastHidden()
             )
         else:
             cfg = from_dict(ModelConfig, params, Config(strict=True))
@@ -95,41 +102,50 @@ class LatentDiffusionGenerator(BaseGenerator):
             history_encoder = freeze_module(history_encoder)
         return history_encoder, hist_enc_dim
 
-    def get_history_emb(self, hist):
+    def get_latent_batch(self, hist: GenBatch):
+        target_len = hist.target_time.shape[0]
+        hist = deepcopy(hist)
+        hist.append(
+            hist.get_target_batch()
+        )  # Make it full batch(So TimeDiff applies correctly.)
+        encoded_batch = self.autoencoder.encoder(hist)
+        latent_hist, latent_target = split_seq_tail(encoded_batch, target_len)
+        return latent_hist, latent_target
+
+
+    def get_history_emb(self, hist, latent_hist):
         if self.history_encoder is None:
             return None
         hist = deepcopy(hist)
         if isinstance(self.history_encoder, BaseGenerator):
             return self.history_encoder.get_embeddings(hist)  # B, D
         else:
-            encoded_hist = self.autoencoder.encoder(hist)
+            encoded_hist = latent_hist
             return self.history_encoder(encoded_hist)  # B, D
 
-    def get_history_seq(self, hist):
+    def get_history_seq(self, hist, latent_hist):
         if self.history_len > 0:
-            return self.autoencoder.encoder(
-                hist.tail(self.history_len)
-            )  # TODO: use Seq.tail directly
+            return get_seq_tail(latent_hist, self.history_len)
         else:
             return None
 
-    def forward(self, x: GenBatch) -> torch.Tensor:
+    def forward(self, hist: GenBatch) -> torch.Tensor:
         """
         Forward pass of Latent diffusion model with inherent loss compute
         Args:
             x (GenBatch): Input sequence [L, B, D]
 
         """
-        target_seq = x.get_target_batch()
+        target_seq = hist.get_target_batch()
         if self.repeat_matching:
-            repeat = x.tail(self.history_len)
+            repeat = hist.tail(self.history_len)
             target_seq = match_seqs(repeat, target_seq, self.data_conf)
 
-        target_seq = self.autoencoder.encoder(target_seq)
-        history_embedding = self.get_history_emb(x)
-        history_seq = self.get_history_seq(x)
+        latent_hist, latent_target = self.get_latent_batch(hist)
+        history_embedding = self.get_history_emb(hist, latent_hist)
+        history_seq = self.get_history_seq(hist, latent_hist)
         # TODO: static condition
-        return self.encoder(target_seq, None, history_embedding, history_seq)
+        return self.encoder(latent_target, None, history_embedding, history_seq)
 
     @torch.no_grad()
     def generate(
@@ -143,20 +159,23 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         """
         assert gen_len % self.generation_len == 0
+        assert gen_len == self.generation_len, "Vpadly realizovivat VAE prikoli"
         B = len(hist)
         hist = deepcopy(hist)
-        for _ in range(0, gen_len, self.generation_len):
-            history_embedding = self.get_history_emb(hist)
-            history_seq = self.get_history_seq(hist)
-            sampled_seq = self.encoder.generate(
-                B, None, history_embedding, history_seq
-            )  # Seq [L, B, D]
-            sampled_batch = self.autoencoder.decoder.generate(sampled_seq)
-            if self.repeat_matching or self.model_config.latent_encoder.params.get(
-                "matching", False
-            ):
-                sampled_batch = post_process_generation(sampled_batch, hist)
-            hist.append(sampled_batch)
+        latent_hist = self.autoencoder.encoder(hist)
+        # return self.autoencoder.decoder.generate(latent_target, orig_hist=hist)
+        # for _ in range(0, gen_len, self.generation_len):
+        history_embedding = self.get_history_emb(hist, latent_hist)
+        history_seq = self.get_history_seq(hist, latent_hist)
+        sampled_seq = self.encoder.generate(
+            B, None, history_embedding, history_seq
+        )  # Seq [L, B, D]
+        sampled_batch = self.autoencoder.decoder.generate(sampled_seq, orig_hist=hist)
+        if self.repeat_matching or self.model_config.latent_encoder.params.get(
+            "matching", False
+        ):
+            sampled_batch = post_process_generation(sampled_batch, hist)
+        hist.append(sampled_batch)
 
         if with_hist:
             return hist

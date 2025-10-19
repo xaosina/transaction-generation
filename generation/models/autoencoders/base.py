@@ -11,8 +11,9 @@ from ebes.types import Seq
 
 from ...data import batch_tfs
 from ...data.batch_tfs import NewFeatureTransform
-from ...data.data_types import GenBatch, LatentDataConfig, PredBatch
+from ...data.data_types import GenBatch, PredBatch
 from ...utils import create_instances_from_module
+from .utils import get_features_after_transform
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,9 @@ class AEConfig:
     pretrain: bool = False
     frozen: bool = False
     checkpoint: Optional[str] = None
-    batch_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
+    batch_transforms: Optional[
+        list[Mapping[str, Any] | str] | Mapping[str, Mapping[str, Any] | str]
+    ] = None
 
 
 class BaseAE(BaseModel):
@@ -41,11 +44,15 @@ class BaselineAE(BaseAE):
         batch_transforms = create_instances_from_module(
             batch_tfs, ae_config.batch_transforms
         )
+        num_names, cat_cardinalities = get_features_after_transform(
+            data_conf, batch_transforms, ae_config
+        )
+
         if batch_transforms is not None:
             assert ae_config.frozen, "Transformes are designed for pretrained models!"
         self.encoder = Batch2TransformedSeq(
-            cat_cardinalities=data_conf.cat_cardinalities,
-            num_features=data_conf.num_names,
+            cat_cardinalities=cat_cardinalities,
+            num_features=num_names,
             cat_emb_dim=ae_config.params["cat_emb_dim"],
             num_emb_dim=ae_config.params["num_emb_dim"],
             num_norm=ae_config.params["num_norm"],
@@ -55,7 +62,10 @@ class BaselineAE(BaseAE):
         self.model_config = ae_config
 
         self.decoder = ReconstructorBase(
-            data_conf, self.encoder.output_dim, batch_transforms
+            self.encoder.output_dim,
+            cat_cardinalities=cat_cardinalities,
+            num_features=num_names,
+            batch_transforms=batch_transforms,
         )
 
     def forward(self, x: GenBatch) -> PredBatch:
@@ -197,16 +207,17 @@ class Batch2TransformedSeq(nn.Module):
 class ReconstructorBase(BaseModel):
     def __init__(
         self,
-        data_conf: LatentDataConfig,
         in_features: int,
+        cat_cardinalities: Mapping[str, int],
+        num_features: Sequence[str] | None = None,
         batch_transforms: list | None = None,
     ):
         super().__init__()
 
         self.projector = Projection(in_features, 2 * in_features)
         self.batch_transforms = batch_transforms
-        self.num_names = data_conf.num_names
-        self.cat_cardinalities = data_conf.cat_cardinalities
+        self.num_names = num_features
+        self.cat_cardinalities = cat_cardinalities
         out_dim = 1  # Time
         if self.num_names:
             out_dim += len(self.num_names)
@@ -242,6 +253,7 @@ class ReconstructorBase(BaseModel):
         )
 
     def generate(self, x: Seq, topk=1, temperature=1.0) -> GenBatch:
+        # TODO add orig_hist just like in VAE
         batch = self.forward(x).to_batch(topk, temperature)
         if self.batch_transforms is not None:
             for tf in reversed(self.batch_transforms):
