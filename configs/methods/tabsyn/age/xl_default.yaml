@@ -1,6 +1,5 @@
 config_factory: [start, datasets/age/age, methods/tabsyn/base, metrics/with_detection/age]
 
-# setting up the optimal autoencoder
 model:
   autoencoder:
     params:
@@ -8,7 +7,7 @@ model:
       num_layers: 10
       n_head: 4
       factor: 28
-    checkpoint: /home/transaction-generation/log/generation/ready/old_vae_age.ckpt
+    checkpoint: /home/transaction-generation/log/generation/ready/age/old_vae.ckpt
   
   latent_encoder:
     params:
