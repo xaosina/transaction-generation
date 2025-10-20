@@ -7,16 +7,15 @@ evaluator:
 
 
 data_conf:
-  train_resamples: 50
-  batch_size: 1024
+  train_resamples: 10
+  val_ratio: 0.12
   train_random_end: time
   train_transforms:
     '1':
       TimeToDiff:
-        disable: False #IMPORTANT: make sure it is consistent with VAE!
+        disable: False 
     "3":
       CutTargetSequence:
-        #target_len: ${data_conf.generation_len}
         target_len: 32
   val_transforms:
     '1':
@@ -58,14 +57,6 @@ model:
       'length':   ${data_conf.generation_len}
       'rawhist_length': 32
       'with_transformer': True
-    # unimodmlp_params:
-    #   'num_layers': 2
-    #   'd_token': 4
-    #   'n_head': 1 
-    #   'factor': 32 
-    #   'bias': True 
-    #   'dim_t': 1024 
-    #   'use_mlp': True
 
 
 optimizer:

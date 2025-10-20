@@ -29,7 +29,7 @@ data_conf:
   dataset_name: age
   cat_cardinalities:
     - ["age", 5]
-    - ["small_group", 203]
+    - ["small_group", 204]
   num_names:
     - amount_rur
   index_name: client_id
@@ -65,7 +65,7 @@ data_conf:
       NGramTransform:
         model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
         feature_name: small_group
-        feature_counts: 203
+        feature_counts: 204
         max_l: *max_seq_len
         disable: true
     "log_tfs":
@@ -89,7 +89,7 @@ data_conf:
       NGramTransform:
         model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
         feature_name: small_group
-        feature_counts: 203
+        feature_counts: 204
         max_l: *max_seq_len
         disable: true
     "shuffle_users":

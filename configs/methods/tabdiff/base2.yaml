@@ -57,7 +57,7 @@ model:
       'd_token': 4
       'length':   ${data_conf.generation_len}
       'rawhist_length': 32
-      'with_transformer': True
+      'with_transformer': False
     # unimodmlp_params:
     #   'num_layers': 2
     #   'd_token': 4

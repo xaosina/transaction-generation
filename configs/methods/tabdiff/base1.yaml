@@ -11,17 +11,23 @@ data_conf:
   batch_size: 1024
   train_random_end: time
   train_transforms:
+    # "0":
+    #   RescaleTime:
+    #     loc: 0
+    #     scale: 730
     '1':
       TimeToDiff:
-        disable: False #IMPORTANT: make sure it is consistent with VAE!
+        disable: True
     "3":
       CutTargetSequence:
         #target_len: ${data_conf.generation_len}
         target_len: 32
+
   val_transforms:
+    #"0": ${data_conf.train_transforms.0}
     '1':
       TimeToDiff:
-        disable: False
+        disable: True
 
 
 # MODEL

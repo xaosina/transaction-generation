@@ -11,9 +11,7 @@ data_conf:
   batch_size: 1024
   train_random_end: time
   train_transforms:
-    '1':
-      TimeToDiff:
-        disable: true #IMPORTANT: make sure it is consistent with VAE!
+
     "3":
       CutTargetSequence:
         #target_len: ${data_conf.generation_len}
