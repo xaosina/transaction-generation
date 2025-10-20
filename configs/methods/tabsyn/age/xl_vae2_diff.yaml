@@ -17,14 +17,14 @@ model:
     params:
       base_factor: 512 # unetXL
 
-optimizer:
-  name: AdamW
-  params:
-    lr: 5.e-4
-    weight_decay: 1.e-9
+# optimizer:
+#   name: AdamW
+#   params:
+#     lr: 5.e-4
+#     weight_decay: 1.e-9
 
-schedulers:
-  "step":
-    StepLR:
-      step_size: 10
-      gamma: 0.2
+# schedulers:
+#   "step":
+#     StepLR:
+#       step_size: 10
+#       gamma: 0.2

@@ -92,13 +92,14 @@ class LatentDiffusionGenerator(BaseGenerator):
             )
         else:
             cfg = from_dict(ModelConfig, params, Config(strict=True))
-            history_encoder = BaseGenerator.get_model(params["name"])(
-                self.data_conf, cfg
+            history_encoder = BaseGenerator.get_model(
+                params["name"], self.data_conf, cfg
             )
             hist_enc_dim = history_encoder.encoder.output_dim
         if checkpoint:
             ckpt = torch.load(checkpoint, map_location="cpu")
             msg = history_encoder.load_state_dict(ckpt["model"], strict=True)
+            logger.info("History encoder: " + str(msg))
             history_encoder = freeze_module(history_encoder)
         return history_encoder, hist_enc_dim
 
@@ -111,7 +112,6 @@ class LatentDiffusionGenerator(BaseGenerator):
         encoded_batch = self.autoencoder.encoder(hist)
         latent_hist, latent_target = split_seq_tail(encoded_batch, target_len)
         return latent_hist, latent_target
-
 
     def get_history_emb(self, hist, latent_hist):
         if self.history_encoder is None:
