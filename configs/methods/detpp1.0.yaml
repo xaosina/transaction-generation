@@ -1,5 +1,4 @@
 # MODEL
-# Removed time scaling
 # Hardcoded 1 layer
 # Always "_presence": 4
 # Increase max wd

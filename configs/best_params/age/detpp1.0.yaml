@@ -1,0 +1,19 @@
+# Params taken from log/generation/age/optuna/detpp1.0/103
+
+config_factory: [start, metrics/default, datasets/age/age, methods/detpp1.0]
+
+optimizer:
+  params:
+    weight_decay: 6.959570367051137e-14
+    lr: 0.0006386524447213453
+model:
+  latent_encoder:
+    params:
+      hidden_size: 386
+  params:
+    k_factor: 1.0037504654857723
+  autoencoder:
+    params:
+      num_norm: true
+      cat_emb_dim: 88
+      num_emb_dim: 109
