@@ -12,3 +12,4 @@ model:
   latent_encoder:
     params:
       base_factor: 512 # unetXL
+      matching: True

@@ -645,7 +645,8 @@ class EDM(nn.Module):
             class_labels: torch.Tensor | None = None, 
             hstate: torch.Tensor | None = None,
             rawhist: torch.Tensor | None = None,
+            match_emb_size: int = None
         ):
 
-        loss = self.loss_fn(self.denoise_fn_D, x, class_labels, hstate, rawhist)
+        loss = self.loss_fn(self.denoise_fn_D, x, class_labels, hstate, rawhist, match_emb_size)
         return loss.mean(-1).mean()
