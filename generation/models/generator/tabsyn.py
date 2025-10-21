@@ -163,6 +163,9 @@ class LatentDiffusionGenerator(BaseGenerator):
         B = len(hist)
         hist = deepcopy(hist)
         latent_hist = self.autoencoder.encoder(hist)
+        # t = self.autoencoder.encoder(self.history_encoder.generate(hist, gen_len))
+        # return self.autoencoder.decoder.generate(t, orig_hist=hist)
+        # _, latent_target = self.get_latent_batch(hist)
         # return self.autoencoder.decoder.generate(latent_target, orig_hist=hist)
         # for _ in range(0, gen_len, self.generation_len):
         history_embedding = self.get_history_emb(hist, latent_hist)

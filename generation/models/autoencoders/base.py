@@ -95,20 +95,6 @@ class Batch2TransformedSeq(nn.Module):
             num_count = 0
         # Init batch_transforms. Update initial features.
         self.batch_transforms = batch_transforms
-        if self.batch_transforms:
-            for tfs in self.batch_transforms:
-                assert isinstance(tfs, NewFeatureTransform)
-                for _ in tfs.num_names:
-                    num_count += 1
-                for cat_name, card in tfs.cat_cardinalities.items():
-                    cat_cardinalities[cat_name] = card
-                for _ in tfs.num_names_removed:
-                    num_count -= 1
-                cat_cardinalities = {
-                    k: v
-                    for k, v in cat_cardinalities.items()
-                    if k not in tfs.cat_names_removed
-                }
         self.use_time = use_time
         if use_time:
             num_count += 1
