@@ -123,11 +123,19 @@ class LatentDiffusionGenerator(BaseGenerator):
             encoded_hist = latent_hist
             return self.history_encoder(encoded_hist)  # B, D
 
-    def get_history_seq(self, hist, latent_hist):
-        if self.history_len > 0:
+    def get_reference_seq(self, hist: GenBatch, latent_hist):
+        hist = deepcopy(hist)
+        method = self.model_config.params.get("reference_seq", "repeat")
+        if (method == "repeat") and (self.history_len > 0):
             return get_seq_tail(latent_hist, self.history_len)
+        elif method == "history_encoder":
+            assert self.history_len == self.generation_len
+            pred = self.history_encoder.generate(hist, self.generation_len)
+            hist.append(pred)
+            encoded_batch = self.autoencoder.encoder(hist)
+            return get_seq_tail(encoded_batch, self.generation_len)
         else:
-            return None
+            raise NotImplementedError(f"What is {method}?")
 
     def forward(self, hist: GenBatch) -> torch.Tensor:
         """
@@ -143,7 +151,7 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         latent_hist, latent_target = self.get_latent_batch(hist)
         history_embedding = self.get_history_emb(hist, latent_hist)
-        history_seq = self.get_history_seq(hist, latent_hist)
+        history_seq = self.get_reference_seq(hist, latent_hist)
         # TODO: static condition
         return self.encoder(latent_target, None, history_embedding, history_seq)
 
@@ -169,7 +177,7 @@ class LatentDiffusionGenerator(BaseGenerator):
         # return self.autoencoder.decoder.generate(latent_target, orig_hist=hist)
         # for _ in range(0, gen_len, self.generation_len):
         history_embedding = self.get_history_emb(hist, latent_hist)
-        history_seq = self.get_history_seq(hist, latent_hist)
+        history_seq = self.get_reference_seq(hist, latent_hist)
         sampled_seq = self.encoder.generate(
             B, None, history_embedding, history_seq
         )  # Seq [L, B, D]
