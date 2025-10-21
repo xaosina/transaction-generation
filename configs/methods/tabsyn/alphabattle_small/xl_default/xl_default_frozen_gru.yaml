@@ -38,3 +38,16 @@ model:
 data_conf:
   train_resamples: 10
   val_ratio: 0.15
+
+
+
+# sh transaction-generation/zhores/simple.sh age/xl_default_frozen_gru 6-00
+# sh transaction-generation/zhores/simple.sh age/xl_vae2_abs 6-00
+
+# sh transaction-generation/zhores/simple.sh alphabattle_small/xl_default_frozen_gru 6-00
+# sh transaction-generation/zhores/simple.sh alphabattle_small/xl_vae2_abs 6-00
+
+# sh transaction-generation/zhores/simple.sh alphabattle_small/xl_default 6-00
+
+# sh transaction-generation/zhores/simple.sh age/xl_vae2_diff 6-00
+# sh transaction-generation/zhores/simple.sh alphabattle_small/xl_vae2_diff 6-00
