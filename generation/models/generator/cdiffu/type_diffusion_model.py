@@ -402,7 +402,7 @@ class DiffusionTypeModel(torch.nn.Module):
         num_elem = x.size(0)
         loss = self._train_loss(x, dt, hist, t, pt)
         loss = -loss / (math.log(2))
-        return loss
+        return loss.mean(dim=-1)
 
     def sample(self, num_samples, dt, hist):
         b = num_samples

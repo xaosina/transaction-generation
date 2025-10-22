@@ -174,4 +174,5 @@ class DiffusionTimeModel(nn.Module):
         eps_recon = self.denoise_func_(y_noisy, e, t, hist,cat_order)
         loss = torch.abs(eps_recon-eps)
         # loss = torch.nn.L1Loss()(eps_recon.squeeze(-1), eps)
-        return loss.sum(dim=[1,2]).mean()
+        assert loss.ndim == 3, 'Something wrong with dims. Easy to fix.'
+        return loss.mean(dim=[1]).sum(-1)
