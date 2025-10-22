@@ -29,6 +29,8 @@ from .utils import (
 )
 from .generation_setup import get_gensetup_batch_processor
 
+from fp16_utils import DynamicLossScaler
+
 logger = logging.getLogger(__name__)
 
 
@@ -349,7 +351,7 @@ class Trainer:
         )
 
         pbar.set_description_str(f"Epoch {self._last_epoch + 1: 3}")
-
+        loss_scaler = DynamicLossScaler(init_scale=1., scale_window = 10000)
         with self._profiler as prof:
             for batch, i in LoadTime(pbar, disable=pbar.disable):
                 batch = self._gensetup_batch_processor.on_input(batch) 
@@ -362,25 +364,34 @@ class Trainer:
                 loss = loss_dict["loss"]
                 log_losses.update(loss_dict)
 
+
+
                 if torch.isnan(loss).any():
                     raise ValueError("None detected in loss. Terminating training.")
 
                 with record_function("backward"):
                     loss.backward()
+                has_overflow = loss_scaler.has_overflow(self._model.parameters())
+                loss_scaler.update_scale(has_overflow)
+
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                # torch.nn.utils.clip_grad_norm_(
-                #     self._model.parameters(), max_norm=self._grad_clip
-                # )
-                self._opt.step()
-
-                self._opt.zero_grad()
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
+                if not has_overflow:
+                    self._opt.step()
+                    self._opt.zero_grad()
+                else:
+                    self._opt.zero_grad()
+                
                 self._last_iter += 1
                 if self.ema_model:
                     self.ema_model.update()
 
                 prof.step()
+                self._last_iter += 1 ## debug: control number of iterations
 
             logger.info(
                 "Epoch %04d: avg train loss = %.4g",
@@ -388,6 +399,7 @@ class Trainer:
                 log_losses.mean()["loss"],
             )
             logger.info("Epoch %04d: train finished", self._last_epoch + 1)
+            
         return {"loss_ema": loss_ema} | log_losses.mean()
 
     @torch.inference_mode()
@@ -496,7 +508,6 @@ class Trainer:
 
         best_metric = float("-inf")
         patience = self._patience
-
         while self._last_iter < self._total_iters:
             train_iters = min(
                 self._total_iters - self._last_iter,

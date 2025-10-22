@@ -13,6 +13,9 @@ tests/log**
 scripts/sync.sh
 zhores/configs/
 **.parquet
+*.ipynb_checkpoints*
+
+*.ckpt
 
 notebooks/analysis_param.ipynb
 # Byte-compiled / optimized / DLL files
