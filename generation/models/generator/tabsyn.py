@@ -76,7 +76,7 @@ class LatentDiffusionGenerator(BaseGenerator):
         history_encoder = None  # default history encoder
         if params is None:
             print("no history encoder!")
-            return
+            return None, 0
 
         checkpoint = params.pop("checkpoint", None)
         # Support old encoders

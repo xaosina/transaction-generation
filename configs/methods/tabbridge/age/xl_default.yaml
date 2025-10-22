@@ -1,0 +1,17 @@
+config_factory: [start, datasets/age/age, methods/tabbridge/base, metrics/with_detection/age]
+
+model:
+  autoencoder:
+    params:
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/ready/vae/seed_0/ckpt/epoch__0351_-_loss__-0.002042.ckpt
+  
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+  
+  params:
+    repeat_matching: False
