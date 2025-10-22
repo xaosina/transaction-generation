@@ -78,15 +78,6 @@ optuna:
     n_trials: 100
     n_startup_trials: 3
     request_list: 
-    - "optimizer.params.weight_decay": 2.7220420746044506e-11
-      "optimizer.params.lr": 0.0006723176382598283
-      "data_conf.train_transforms.1.TimeToDiff.disable": False
-      "model.params.emb_dim_features_exp": 5
-      "model.params.dim_exp": 5
-      "model.params.heads_exp": 1
-      "model.params.hidden_scale_exp": 7
-      "model.params.encoder_layer": 6 
-      "model.params.decoder_layer": 8
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-2, log: True}]]
@@ -96,7 +87,7 @@ optuna:
       - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
 
-    - ["model.params.emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
+    - ["model.params.emb_dim_features_exp", ["suggest_int", {low: 1, high: 10}]]
     - ["model.params.dim_exp", ["suggest_int", {low: 3, high: 10}]]
     - ["model.params.heads_exp", ["suggest_int", {low: 1, high: 3}]]
 
