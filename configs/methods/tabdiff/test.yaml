@@ -7,15 +7,16 @@ evaluator:
 
 
 data_conf:
-  train_resamples: 10
-  val_ratio: 0.12
+  train_resamples: 50
+  batch_size: 1024
   train_random_end: time
   train_transforms:
     '1':
       TimeToDiff:
-        disable: False 
+        disable: False #IMPORTANT: make sure it is consistent with VAE!
     "3":
       CutTargetSequence:
+        #target_len: ${data_conf.generation_len}
         target_len: 32
   val_transforms:
     '1':
@@ -25,7 +26,7 @@ data_conf:
 
 # MODEL
 model:
-  name: ContinuousDiscreteDiffusionGenerator
+  name: ContinuousDiscreteDiffusionGenerator1
   params:
     history_len: 32
     generation_len:  ${data_conf.generation_len}
@@ -57,15 +58,25 @@ model:
       'length':   ${data_conf.generation_len}
       'rawhist_length': 32
       'with_transformer': True
-    ema:
-      beta: 0.999
-      update_after_step: 1000
-      update_every: 10
+    cond_col:
+      cat:
+        - small_group
+      num:
+        - trans_date
+    # unimodmlp_params:
+    #   'num_layers': 2
+    #   'd_token': 4
+    #   'n_head': 1 
+    #   'factor': 32 
+    #   'bias': True 
+    #   'dim_t': 1024 
+    #   'use_mlp': True
+
 
 optimizer:
   name: Adam
   params:
-    lr: 1.e-5 # Note: I didn't adjust hyperparams&schedulers
+    lr: 1.e-3 # Note: I didn't adjust hyperparams&schedulers
     weight_decay: 1.e-9
 
 schedulers:

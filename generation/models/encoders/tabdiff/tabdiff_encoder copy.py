@@ -19,7 +19,7 @@ S_noise=1
 
 class ConditionalContinuousDiscreteEncoder(nn.Module):
 
-    def __init__(self,data_conf,model_config,name_dict):
+    def __init__(self,data_conf,model_config):
         super().__init__()
         self.d_weight,self.c_weight = 1.0,1.0
         device = "cuda:0"
@@ -107,16 +107,13 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
 
         self.iter = 1
 
-    #def forward(self,hist,tgt,cond_seq=None):
-    def forward(self,hist_cond,hist_corrupt,cond_data,corrupt_data):
+    def forward(self,hist,tgt_data,cond_dict,corrupt_dict):
+        
         
         breakpoint()
         device = "cuda:0"
-        hist = {}
         ## All input tensor has shape: (L,B,F_i), we have to permute them into (B,L,F_i)
         corrupt_data,cond_data = permute_dict_tensor(corrupt_data),permute_dict_tensor(cond_data)
-        hist["cat"] = torch.cat([hist_cond["cat"],hist_corrupt["cat"]],dim=-1)
-        hist["num"] = torch.cat([hist_cond["num"],hist_corrupt["num"]],dim=-1)
         hist = permute_dict_tensor(hist)
 
         bs,ls = corrupt_data["num"].size(0),corrupt_data["num"].size(1)
@@ -134,7 +131,7 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
 
         ## we need to change the shape such that hist can match cond_seq and corrupt_seq.
         ## now just leave a bug here.
-        hist["cat"] = tensor_to_one_hot(hist["cat"],self.total_num_classes+1)
+        hist["cat"] = tensor_to_one_hot(hist["cat"],torch.tensor([6,205]))
         
         # Sample noise level for each batch, and the repeat L times to match the length of data:bs*ls
         #    
@@ -174,7 +171,7 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         )
         cond_numerical_col = d_num_cond
         num_start_idx = cond_numerical_col
-        cat_star_idx  = (self.num_classes_cond+1).sum()
+        cat_star_idx  = torch.tensor(self.num_classes_cond+1).sum()
         model_out_num = model_out_num[:,num_start_idx:]
         model_out_cat = model_out_cat[:,cat_star_idx:]
 
@@ -292,7 +289,7 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         out = torch.stack(padded_, dim=-2)
         return out
 
-    def sample(self,hist,gen_len,cond_data=None):
+    def sample(self,hist,gen_len):
         
 
         b,ls = hist["cat"].shape[1],hist["cat"].shape[0]
@@ -351,7 +348,6 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
                 hist,
                 sigma_num_cur[i], sigma_num_next[i], sigma_num_hat[i], 
                 sigma_cat_cur[i], sigma_cat_next[i], sigma_cat_hat[i],
-                cond_data
             )
         assert torch.all(z_cat < self.mask_index)
         return z_norm,z_cat
@@ -366,7 +362,7 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
             hist,
             sigma_num_cur, sigma_num_next, sigma_num_hat, 
             sigma_cat_cur, sigma_cat_next, sigma_cat_hat, 
-            cond_data=None
+            cond_seq=None
         ):
         """
         i = T-1,...,0
@@ -375,9 +371,6 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         b = x_num_cur.shape[0]
         has_cat = len(self.num_classes) > 0
         
-        start_num_idx = cond_data['num'].shape[2]
-        start_cat_idx = (self.num_classes_cond+1).sum()
-
         # Get x_num_hat by move towards the noise by a small step
         x_num_hat = x_num_cur + (sigma_num_hat ** 2 - sigma_num_cur ** 2).sqrt() * S_noise * torch.randn_like(x_num_cur)
         # Get x_cat_hat
@@ -387,34 +380,26 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         ### replace small group from gru to here
         ### we just need to replace input for NN,
         ### other elements, we will replace later
-
+        if cond_seq:
+            x_cat_hat = None
         # Get predictions
-        ## need to convert 3D TO 2D
-        
         x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_hat.dtype) if has_cat else x_cat_hat      
-        if cond_data['cat']:
-            cond_oh = tensor_to_one_hot(cond_data['cat'],self.num_classes_cond+1)
-            flat_cond_oh = cond_oh.reshape(-1,cond_oh.shape[2])
-            x_cat_hat_oh_full = torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
 
-        if cond_data['num']:
-            flat_cond_num = cond_data["num"].permute(1,0,2).reshape(-1,cond_data["num"].shape[2])
-            x_num_hat_full = torch.cat([flat_cond_num,x_num_hat],dim=-1)
-
+            
         denoised, raw_logits = self._denoise_fn(
-            x_num_hat_full.float(), x_cat_hat_oh_full,
+            x_num_hat.float(), x_cat_hat_oh,
             t_hat.squeeze().repeat(b),hist, sigma=sigma_num_hat.unsqueeze(0).repeat(b,1)  # sigma accepts (bs, K_num)
         )
         
         # Euler step
-        d_cur = (x_num_hat - denoised[:,start_num_idx:]) / sigma_num_hat
+        d_cur = (x_num_hat - denoised) / sigma_num_hat
         x_num_next = x_num_hat + (sigma_num_next - sigma_num_hat) * d_cur
         
         # Unmasking
         x_cat_next = x_cat_cur
         q_xs = torch.zeros_like(x_cat_cur).float()
         if has_cat:
-            logits = self._subs_parameterization(raw_logits[:,start_cat_idx:], x_cat_hat)
+            logits = self._subs_parameterization(raw_logits, x_cat_hat)
             alpha_t = torch.exp(-sigma_cat_hat).unsqueeze(0).repeat(b,1)
             alpha_s = torch.exp(-sigma_cat_next).unsqueeze(0).repeat(b,1)
             x_cat_next, q_xs = self._mdlm_update(logits, x_cat_hat, alpha_t, alpha_s)
@@ -422,23 +407,17 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         # Apply 2nd order correction.
         if self.sampler_params['second_order_correction']:
             if i > 0:
-
                 x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_next.dtype) if has_cat else x_cat_hat
-
-                if cond_data['cat']:
-                    x_cat_hat_oh_full =torch.cat([cond_oh,x_cat_hat_oh],dim=-1)
-                if cond_data['num']:
-                    x_num_next_full = torch.cat([flat_cond_num,x_num_next],dim=-1)
-
                 denoised, raw_logits = self._denoise_fn(
-                    x_num_next_full.float(), x_cat_hat_oh_full,
+                    x_num_next.float(), x_cat_hat_oh,
                     t_next.squeeze().repeat(b),hist, sigma=sigma_num_next.unsqueeze(0).repeat(b,1)
                 )
                 
-                d_prime = (x_num_next - denoised[:,start_num_idx:]) / sigma_num_next
+                d_prime = (x_num_next - denoised) / sigma_num_next
                 x_num_next = x_num_hat + (sigma_num_next - sigma_num_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
-
+        if cond_seq:
+            x_cat_next = None
 
         return x_num_next, x_cat_next, q_xs
     

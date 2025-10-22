@@ -42,7 +42,7 @@ class DataConfig:
     focus_on: Optional[list[str]] = None
     drop_nonfocus: bool = False
     target_token: str = "none"
-
+    
     @property
     def seq_cols(self):
         seq_cols = [self.time_name]
