@@ -8,7 +8,7 @@ except ImportError:
     from .utils import batch_linear_assignment
 
 
-def match_seqs(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig):
+def match_batches(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig):
     assert reference.shape == target.shape
     assert (reference.lengths == target.lengths).all()
     L, B = reference.shape

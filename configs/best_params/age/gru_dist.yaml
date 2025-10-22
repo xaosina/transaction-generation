@@ -1,3 +1,5 @@
+# Params taken from log/generation/age/optuna/gru_dist/86
+
 config_factory: [start, datasets/age/age, methods/oneshot/gru, methods/oneshot/dist, allto1]
 
 optimizer:
