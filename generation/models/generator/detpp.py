@@ -142,6 +142,13 @@ class DeTPP(BaseGenerator):
 
         return (x, presence_scores)
 
+    def get_embeddings(self, hist: GenBatch):
+        hist = deepcopy(hist)
+        x = self.autoencoder.encoder(hist)
+        x = self.encoder.generate(x)
+        assert x.tokens.shape[0] == 1
+        return x.tokens[0]
+
     def generate(
         self,
         hist: GenBatch,

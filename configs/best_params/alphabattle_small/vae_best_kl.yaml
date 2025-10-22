@@ -33,7 +33,7 @@ schedulers:
       patience: 9
 
 # trainer:
-#   ckpt_resume: log/generation/ready/alpha_kl_vae.ckpt
+#   ckpt_resume: log/generation/ready/alphabattle_small/kl_vae.ckpt
 #   verbose: True
 # run_name: evaluation_run
 # runner:

@@ -29,3 +29,11 @@ schedulers:
       init_beta: 0.8736339827501433
       factor: 0.5
       patience: 3
+
+# trainer:
+#   ckpt_resume: /home/transaction-generation/log/generation/ready/age/kl_vae.ckpt
+#   verbose: True
+# run_name: evaluation_run
+# runner:
+#   name: GenerationEvaluator
+#   run_type: simple

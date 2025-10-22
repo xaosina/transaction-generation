@@ -19,7 +19,7 @@ data_conf:
   train_transforms:
     '1':
       TimeToDiff:
-        disable: true #IMPORTANT: make sure it is consistent with VAE!
+        disable: true # Base processing must be minimal
     "3":
       CutTargetSequence:
         target_len: ${data_conf.generation_len}
@@ -31,20 +31,14 @@ model:
     name: VAE
     params:
       use_time: True
-      d_token: 64
-      num_layers: 8
-      n_head: 4
-      factor: 10
     pretrain: False
     frozen: True
-    checkpoint: 
 
   latent_encoder:
     name: ConditionalDiffusionEncoder
     params:
       generation_len: ${data_conf.generation_len}
       history_len: 32 # может быть другое число, 
-      history_encoder_dim: &history_encoder_output_dim 256
       base_factor: 256 # unetS: 64, unetM: 128, unetL: 256, unetXL: 512
       dim_t : 1024
       num_classes: 1
@@ -52,19 +46,6 @@ model:
   params:
     history_encoder:
       name: GRU
-      output_dim: *history_encoder_output_dim
-      params:
-        hidden_size: *history_encoder_output_dim
-        num_layers: 1
-      pretrain: False
-      frozen: False
-      checkpoint:
-
-  #   num_layers: 2
-  #   d_token: 6
-  #   n_head: 2
-  #   factor: 64
-
 
 optimizer:
   name: Adam
@@ -76,13 +57,6 @@ schedulers:
   "step":
     StepLR: # Note: I didn't adjust hyperparams&schedulers
       step_size: 30
-  # "beta":
-  #   BetaScheduler:
-  #     init_beta: 0.01
-  #     factor: 0.7
-  #     patience: 4
-  #     min_beta: 0.00001
-  #     verbose: True
 
 loss:
   name: DummyLoss
