@@ -1,12 +1,19 @@
 import torch
+from torch import nn
 from . import BaseGenerator,ModelConfig
 from ...data.data_types import GenBatch, LatentDataConfig
-from ebes.model import BaseModel
+from ebes.model import BaseModel,TakeLastHidden
 from generation.utils import freeze_module
 #from generation.models import encoders
 from generation.models.encoders.tabdiff.tabdiff_encoder1 import ConditionalContinuousDiscreteEncoder1
 
 from ...models import generator as gen_models
+from dacite import Config, from_dict
+
+from generation.models.autoencoders.base import AEConfig
+from ..encoders import LatentEncConfig
+from collections import defaultdict
+
 
 class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
 
@@ -27,55 +34,53 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         self.features_name_dict = {"cat":list(data_conf.cat_cardinalities.keys()),
                                    "num": num_names_list}
 
-        self.cond_corrupt_idx = self.split_cond_corrupt_idx()
+        #self.cond_corrupt_idx = self.split_cond_corrupt_idx()
+        cond_idx,cond_name,corrupt_idx,corrupt_name = self.split_cond_corrupt_idx()
 
-        self.encoder = ConditionalContinuousDiscreteEncoder1(data_conf,model_config)
+        col_name_dict = (cond_name,corrupt_name)
+        self.cond_corrupt_idx = (cond_idx,corrupt_idx)
+        self.encoder = ConditionalContinuousDiscreteEncoder1(data_conf,model_config,col_name_dict)
+        self.target_condition_encoder, _ = self._init_history_encoder()
 
-        #initializing target condition encoder
-        target_encoder_data = model_config.params.get('target_condition_encoder')
-        target_encoder_params = ModelConfig(**target_encoder_data)
-        self.target_condition_encoder = None # default 
-        if target_encoder_data is not None:
 
-            self.target_condition_encoder = getattr(gen_models, target_encoder_data['name'])(data_conf, target_encoder_params)
+    def _init_history_encoder(self):
+        # initializing history encoder
+        params = self.model_config.params.get("target_condition_encoder")
+        history_encoder = None  # default history encoder
+        if params is None:
+            print("no history encoder!")
+            return
 
-            if target_encoder_data['checkpoint']:
-                ckpt = torch.load(target_encoder_data['checkpoint'], map_location="cpu")
-                msg = self.target_condition_encoder.load_state_dict(
-                    ckpt["state_dict"], strict=False 
-                )
-            
-            if target_encoder_data['frozen']:
-                self.target_condition_encoder = freeze_module(self.target_condition_encoder)
-            
+        checkpoint = params.pop("checkpoint", None)
+        # Support old encoders
+        if params["name"] == "GRU":
+            params = {
+                "input_size": self.autoencoder.encoder.output_dim,
+                "num_layers": 1,
+                "hidden_size": 256,
+            }
+            hist_enc_dim = 256
+            history_encoder = nn.Sequential(
+                BaseModel.get_model("GRU", **params), TakeLastHidden()
+            )
         else:
-            print('no target condition encoder!')
-
-
-        
+            cfg = from_dict(ModelConfig, params, Config(strict=True))
+            history_encoder = BaseGenerator.get_model(
+                params["name"], self.data_conf, cfg
+            )
+            hist_enc_dim = history_encoder.encoder.output_dim
+        if checkpoint:
+            ckpt = torch.load(checkpoint, map_location="cpu")
+            msg = history_encoder.load_state_dict(ckpt["model"], strict=True)
+            history_encoder = freeze_module(history_encoder)
+        return history_encoder, hist_enc_dim
 
     def forward(self, x: GenBatch) -> torch.Tensor:
         gen_len = 32
         history_batch = x.tail(self.history_len)
         target_batch = x.get_target_batch()
-
-        out_precondition = self.target_condition_encoder.sample(x,gen_len)
-
-        # if history_batch.num_features_names:
-        #     tgt_num = torch.cat([target_batch.time.unsqueeze(-1),target_batch.num_features],dim = -1)
-        #     hist_num = torch.cat([history_batch.time.unsqueeze(-1),history_batch.num_features],dim = -1)
-        # else:
-        #     hist_num = history_batch.time.unsqueeze(-1)
-        #     tgt_num = target_batch.time.unsqueeze(-1)
-
-        # # hist_cat,hist_num = history_batch.cat_features,history_batch.num_features
-        # # tgt_cat,tgt_num = target_batch.cat_features,target_batch.num_features
-        # ### all input have shape of (L,B,C_i)
-        # hist_cat = history_batch.cat_features
-        # tgt_cat = target_batch.cat_features
-    
-
-
+        breakpoint()
+        out_precondition = self.target_condition_encoder.generate(x,gen_len)
 
         pred_cond_data = self.Seq2DictTensor(out_precondition)
         hist_data = self.Seq2DictTensor(history_batch)
@@ -103,22 +108,6 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         history_batch = hist.tail(self.history_len)
         target_batch = hist.get_target_batch()
 
-        # if history_batch.num_features_names:
-        #     tgt_num = torch.cat([target_batch.time.unsqueeze(-1),target_batch.num_features],dim = -1)
-        #     hist_num = torch.cat([history_batch.time.unsqueeze(-1),history_batch.num_features],dim = -1)
-        # else:
-        #     hist_num = history_batch.time.unsqueeze(-1)
-        #     tgt_num = target_batch.time.unsqueeze(-1)
-
-        # # hist_cat,hist_num = history_batch.cat_features,history_batch.num_features
-        # # tgt_cat,tgt_num = target_batch.cat_features,target_batch.num_features
-        # ### all input have shape of (L,B,C_i)
-        # hist_cat = history_batch.cat_features
-        # tgt_cat = target_batch.cat_features
-
-        # #hist_cat,hist_num = history_batch.cat_features,history_batch.num_features
-        # hist_data = {"cat":hist_cat,"num":hist_num}
-        # tgt_data = {"cat":tgt_cat,"num":tgt_num}
 
         hist_data = self.Seq2DictTensor(history_batch)
         tgt_data = self.Seq2DictTensor(target_batch)
@@ -132,27 +121,29 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         print(pred_num[:10],target_batch.time.permute(1,0)[:10])
         pred_cat = pred_cat.view(-1,gen_len,pred_cat.shape[1])
         pred_num = pred_num.view(-1,gen_len,pred_num.shape[1])
-        #features_name = [history_batch.cat_features_names,history_batch.num_features_names]
-        #sampled_batch = self.wrap_to_PredBatch(pred_cat,pred_num,features_name)
-        sampled_batch = self.replace_data(corrupt_dict,tgt_data,pred_num,pred_cat)
+        features_name = [history_batch.cat_features_names,history_batch.num_features_names]
+        
+        aggregate_batch = self.replace_data(corrupt_dict,tgt_data,pred_num,pred_cat)
+        sampled_batch = self.wrap_to_PredBatch(aggregate_batch['cat'],aggregate_batch['num'],features_name)
         return sampled_batch
-    
-    def replace_data(self,corrupt_idx_dict,tgt_data,pred_num,pred_cat):
 
+
+    def replace_data(self,corrupt_idx_dict,tgt_data,pred_num,pred_cat):
+        pred_num = pred_num.permute(1,0,2)
+        pred_cat = pred_cat.permute(1,0,2)
         for keys,values in corrupt_idx_dict.items():
             if keys == "cat":
-                for idx in values:
-                    tgt_data["cat"][:,:,idx] = pred_cat[:,:,idx]
+                for t_idx,idx in enumerate(values):
+                    tgt_data["cat"][:,:,idx] = pred_cat[:,:,t_idx]
             elif keys == "num":
-                for idx in values:
-                    tgt_data["num"][:,:,idx] = pred_cat[:,:,idx]
-            return tgt_data
+                for t_idx,idx in enumerate(values):
+                    tgt_data["num"][:,:,idx] = pred_num[:,:,t_idx]
+        return tgt_data
 
     def wrap_to_PredBatch(self,pred_cat,pred_num,features_name,topk=1, temperature=1.0):
 
-        s_length = torch.ones(pred_cat.size(0))*pred_cat.size(1)
-        pred_cat = pred_cat.permute(1,0,2)
-        pred_num = pred_num.permute(1,0,2)
+        s_length = torch.ones(pred_cat.size(1))*pred_cat.size(0)
+
         return GenBatch(
             lengths=s_length,
             time=pred_num[:,:,0],
@@ -164,22 +155,30 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         )
     
     def split_cond_corrupt_idx(self):
-        cond_col_idx = {"cat":[],"num":[]}
-        corrupt_col_idx = {"cat":[],"num":[]}
+        cond_col_idx = defaultdict(list)
+        corrupt_col_idx = defaultdict(list)
+        cond_col_name = defaultdict(list)
+        corrupt_col_name = defaultdict(list)
 
         for col_type in ["cat","num"]:
             for idx,col in enumerate(self.features_name_dict[col_type]):
-                if col in self.cond_col[col_type]:
-                    cond_col_idx[col_type].append(idx)
+                if col_type in self.cond_col:
+                    if col in self.cond_col[col_type]:
+                        cond_col_idx[col_type].append(idx)
+                        cond_col_name[col_type].append(col)
+                    else:
+                        corrupt_col_idx[col_type].append(idx)
+                        corrupt_col_name[col_type].append(col)
                 else:
                     corrupt_col_idx[col_type].append(idx)
+                    corrupt_col_name[col_type].append(col)
 
-        return cond_col_idx, corrupt_col_idx
+        return cond_col_idx,cond_col_name, corrupt_col_idx,corrupt_col_name
             
 
     def get_data(self,idx_dict,seq):
         
-        tensor_dict = {}
+        tensor_dict = defaultdict(lambda: None)
         for col_type,idx_list in idx_dict.items():
 
             tensor_dict[col_type] = seq[col_type][:,:,idx_list]
@@ -193,7 +192,7 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         else:
             seq_num = seq.time.unsqueeze(-1)
 
-        seq_cat = seq.cat_features
+        seq_cat = seq.cat_features.detach().clone()
 
         seq_dict = {"cat":seq_cat,"num":seq_num}
 

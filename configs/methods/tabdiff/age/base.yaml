@@ -59,37 +59,41 @@ model:
       'rawhist_length': 32
       'with_transformer': True
     target_condition_encoder:
+      checkpoint: /trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/age/detpp/age_detpp.ckpt
       name: DeTPP
-      autoencoder:
-        name: BaselineAE
-        params:
-          cat_emb_dim: 256
-          num_emb_dim: 1
-          num_norm: True
-          use_time: True
-        pretrain: True
-        frozen: True
-        checkpoint:
-        batch_transforms:
       latent_encoder:
         name: GRU
         params:
-          hidden_size: 512
+          hidden_size: 386
           num_layers: 1
+      autoencoder:
+        name: BaselineAE
+        params:
+          cat_emb_dim: 88
+          num_emb_dim: 109
+          num_norm: true
+          use_time: true
+        pretrain: false
+        frozen: True
+        checkpoint: null
+        batch_transforms:
+          - RescaleTime:
+              loc: 0
+              scale: 0.0013698630136986301
+      pooler: last
       params:
-        k_factor: 1
-        k_gen: 8 # Hard coded len
+        k_factor: 1.0037504654857723
     cond_col:
       cat:
         - small_group
       num:
-        - trans_date
+        - amount_rur
 
 
 optimizer:
   name: Adam
   params:
-    lr: 1.e-3 # Note: I didn't adjust hyperparams&schedulers
+    lr: 1.e-5 # Note: I didn't adjust hyperparams&schedulers
     weight_decay: 1.e-9
 
 schedulers:

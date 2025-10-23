@@ -29,7 +29,7 @@ data_conf:
   dataset_name: age
   cat_cardinalities:
     - ["age", 5]
-    - ["small_group", 204]
+    - ["small_group", 203]
   num_names:
     - amount_rur
   index_name: client_id
@@ -54,10 +54,10 @@ data_conf:
   val_random_end: time
   
   train_transforms:
-    "0":
-      RescaleTime:
-        loc: 0
-        scale: 730
+    # "0":
+    #   RescaleTime:
+    #     loc: 0
+    #     scale: 730
     "1":
       TimeToDiff:
         disable: false
@@ -65,7 +65,7 @@ data_conf:
       NGramTransform:
         model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
         feature_name: small_group
-        feature_counts: 204
+        feature_counts: 203
         max_l: *max_seq_len
         disable: true
     "log_tfs":
@@ -79,7 +79,7 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "0": ${data_conf.train_transforms.0}
+    # "0": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "3":
@@ -89,7 +89,7 @@ data_conf:
       NGramTransform:
         model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
         feature_name: small_group
-        feature_counts: 204
+        feature_counts: 203
         max_l: *max_seq_len
         disable: true
     "shuffle_users":

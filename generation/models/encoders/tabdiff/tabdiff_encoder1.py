@@ -19,13 +19,14 @@ S_noise=1
 
 class ConditionalContinuousDiscreteEncoder1(nn.Module):
 
-    def __init__(self,data_conf,model_config):
+    def __init__(self,data_conf,model_config,name_dict):
         super().__init__()
         self.d_weight,self.c_weight = 1.0,1.0
         device = "cuda:0"
         model_params = model_config.params
-        self.cond_col = {"cat":["small_group"],"num":["trans_date"]}
-        self.corrupt_col = {"cat":["age"],"num":["amount_rur"]}
+        self.cond_col,self.corrupt_col = name_dict
+        # self.cond_col = {"cat":["small_group"],"num":["trans_date"]}
+        # self.corrupt_col = {"cat":["age"],"num":["amount_rur"]}
         #num_numerical_features = len(data_conf.num_names)+1
         num_numerical_features = len(self.corrupt_col["num"])
         total_num_numerical_features = len(self.cond_col["num"]) + num_numerical_features
@@ -108,9 +109,9 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         self.iter = 1
 
     def forward(self,hist_cond,hist_corrupt,cond_data,corrupt_data):
-        breakpoint()
         device = "cuda:0"
         hist = {}
+        breakpoint()
         ## All input tensor has shape: (L,B,F_i), we have to permute them into (B,L,F_i)
         corrupt_data,cond_data = permute_dict_tensor(corrupt_data),permute_dict_tensor(cond_data)
         hist["cat"] = torch.cat([hist_cond["cat"],hist_corrupt["cat"]],dim=-1)
@@ -373,8 +374,7 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         """
         b = x_num_cur.shape[0]
         has_cat = len(self.num_classes) > 0
-        
-        start_num_idx = cond_data['num'].shape[2]
+        start_num_idx = len(self.cond_col['num'])
         start_cat_idx = (self.num_classes_cond+1).sum()
 
         # Get x_num_hat by move towards the noise by a small step
@@ -390,15 +390,20 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         # Get predictions
         ## need to convert 3D TO 2D
         
-        x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_hat.dtype) if has_cat else x_cat_hat      
-        if self.cond_col['cat']:
-            cond_oh = tensor_to_one_hot(cond_data['cat'].permute(1,0,2),self.num_classes_cond+1)
-            flat_cond_oh = cond_oh.reshape(-1,cond_oh.shape[2])
-            x_cat_hat_oh_full = torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
+        x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_hat.dtype) if has_cat else x_cat_hat     
+        x_cat_hat_oh_full = x_cat_hat_oh
+        x_num_hat_full = x_num_hat
+        if cond_data is not None: 
+            if self.cond_col['cat']:
+                if 'cat' in cond_data:
+                    cond_oh = tensor_to_one_hot(cond_data['cat'].permute(1,0,2),self.num_classes_cond+1)
+                    flat_cond_oh = cond_oh.reshape(-1,cond_oh.shape[2])
+                    x_cat_hat_oh_full = torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
 
-        if self.cond_col['num']:
-            flat_cond_num = cond_data["num"].permute(1,0,2).reshape(-1,cond_data["num"].shape[2])
-            x_num_hat_full = torch.cat([flat_cond_num,x_num_hat],dim=-1)
+            if self.cond_col['num']:
+                if 'num' in cond_data:
+                    flat_cond_num = cond_data["num"].permute(1,0,2).reshape(-1,cond_data["num"].shape[2])
+                    x_num_hat_full = torch.cat([flat_cond_num,x_num_hat],dim=-1)
 
         denoised, raw_logits = self._denoise_fn(
             x_num_hat_full.float(), x_cat_hat_oh_full,
@@ -423,11 +428,15 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
             if i > 0:
 
                 x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_next.dtype) if has_cat else x_cat_hat
-
-                if self.cond_col['cat']:
-                    x_cat_hat_oh_full =torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
-                if self.cond_col['num']:
-                    x_num_next_full = torch.cat([flat_cond_num,x_num_next],dim=-1)
+                x_cat_hat_oh_full = x_cat_hat_oh
+                x_num_next_full = x_num_next
+                if cond_data is not None:
+                    if self.cond_col['cat']:
+                        if 'cat' in cond_data:
+                            x_cat_hat_oh_full =torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
+                    if self.cond_col['num']:
+                        if 'num' in cond_data:
+                            x_num_next_full = torch.cat([flat_cond_num,x_num_next],dim=-1)
 
                 denoised, raw_logits = self._denoise_fn(
                     x_num_next_full.float(), x_cat_hat_oh_full,
