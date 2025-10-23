@@ -57,10 +57,10 @@ data_conf:
   val_random_end: time
 
   train_transforms:
-    "0":
-      RescaleTime:
-        loc: 0.0
-        scale: 11754.0
+    # "0":
+    #   RescaleTime:
+    #     loc: 0.0
+    #     scale: 11754.0
     "1":
       TimeToDiff:
         disable: False
@@ -72,7 +72,7 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "0": ${data_conf.train_transforms.0}
+    # "0": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
     "3":
       CutTargetSequence:

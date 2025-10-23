@@ -7,6 +7,7 @@ from .unet_utils import Model,Unet1DDiffusion
 from torch import nn
 from itertools import chain
 import numpy as np
+from .utils import permute_dict_tensor
 
 from .transformer_decoder import Transformer_denoise
 
@@ -16,20 +17,28 @@ S_max=float('inf')
 S_noise=1
 
 
-class ConditionalContinuousDiscreteEncoder(nn.Module):
+class ConditionalContinuousDiscreteEncoder1(nn.Module):
 
     def __init__(self,data_conf,model_config):
         super().__init__()
         self.d_weight,self.c_weight = 1.0,1.0
         device = "cuda:0"
         model_params = model_config.params
-        num_numerical_features = len(data_conf.num_names)+1
+        self.cond_col = {"cat":["small_group"],"num":["trans_date"]}
+        self.corrupt_col = {"cat":["age"],"num":["amount_rur"]}
+        #num_numerical_features = len(data_conf.num_names)+1
+        num_numerical_features = len(self.corrupt_col["num"])
+        total_num_numerical_features = len(self.cond_col["num"]) + num_numerical_features
         #num_classes = list(data_conf.cat_cardinalities.values())
         ## add 1,because of mask index
-        #num_classes = torch.tensor([5,204])
-        num_classes = torch.tensor(list(data_conf.cat_cardinalities.values()))
+        #num_classes = torch.tensor(list(data_conf.cat_cardinalities.values()))
+        num_classes = torch.tensor([ data_conf.cat_cardinalities[i] for i in self.corrupt_col["cat"]])
+        num_classes_cond = torch.tensor([ data_conf.cat_cardinalities[i] for i in self.cond_col["cat"]])
+        self.num_classes_cond = num_classes_cond
+        self.total_num_classes = torch.cat([num_classes_cond,num_classes])
+
         self.num_numerical_features = num_numerical_features
-        self.num_classes = num_classes # it as a vector [K1, K2, ..., Km]
+        self.num_classes = num_classes # it as a vector [K1, K2, ...num_classes, Km]
         self.num_classes_expanded = torch.from_numpy(
             np.concatenate([num_classes[i].repeat(num_classes[i]) for i in range(len(num_classes))])
         ).to(device) if len(num_classes)>0 else torch.tensor([]).to(device).int()
@@ -54,8 +63,8 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         #                            categories=self.num_classes_w_mask,
         #                            **model_params['unet_params'])
 
-        backbone = Unet1DDiffusion(d_numerical=num_numerical_features,
-                                   categories=self.num_classes_w_mask,
+        backbone = Unet1DDiffusion(d_numerical=total_num_numerical_features,
+                                   categories=self.total_num_classes + 1,
                                    **model_params['unet_params'])
         
         model = Model(backbone, **model_params['edm_params'])
@@ -98,24 +107,34 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
 
         self.iter = 1
 
-    def forward(self,hist,tgt):
-        
+    def forward(self,hist_cond,hist_corrupt,cond_data,corrupt_data):
+        breakpoint()
         device = "cuda:0"
-        #
+        hist = {}
         ## All input tensor has shape: (L,B,F_i), we have to permute them into (B,L,F_i)
+        corrupt_data,cond_data = permute_dict_tensor(corrupt_data),permute_dict_tensor(cond_data)
+        hist["cat"] = torch.cat([hist_cond["cat"],hist_corrupt["cat"]],dim=-1)
+        hist["num"] = torch.cat([hist_cond["num"],hist_corrupt["num"]],dim=-1)
+        hist = permute_dict_tensor(hist)
 
-        tgt["num"],tgt["cat"] = tgt["num"].permute(1,0,2),tgt["cat"].permute(1,0,2)
-        hist["num"],hist["cat"] = hist["num"].permute(1,0,2),hist["cat"].permute(1,0,2)
+        bs,ls = corrupt_data["num"].size(0),corrupt_data["num"].size(1)
 
-        bs,ls = tgt["num"].size(0),tgt["num"].size(1)
-        d_num,c_num = tgt["num"].size(2),tgt["cat"].size(2)
+        d_num,c_num = corrupt_data["num"].size(2),corrupt_data["cat"].size(2)
+        ## flat tgt to 2d to (B*L,F_i), row is the BL, columns is the numerical and category features
+        x_num,x_cat = corrupt_data["num"].reshape(-1,d_num),corrupt_data["cat"].reshape(-1,c_num)
+
+        d_num_cond,c_num_cond = cond_data["num"].size(2),cond_data["cat"].size(2)
         ## flat tgt to 2d to (B*L,F_i)
-        x_num,x_cat = tgt["num"].reshape(-1,d_num),tgt["cat"].reshape(-1,c_num)
+        x_num_cond = cond_data["num"].reshape(-1,d_num_cond)
+        ## maybe bug in the order of col names,only one cat is OK.
+        x_cat_cond_temp = tensor_to_one_hot(cond_data["cat"],self.num_classes_cond+1)
+        x_cat_cond_soft = x_cat_cond_temp.reshape(-1,x_cat_cond_temp.shape[2])
 
-        hist["cat"] = tensor_to_one_hot(hist["cat"],self.num_classes+1)
+        ## we need to change the shape such that hist can match cond_seq and corrupt_seq.
+        ## now just leave a bug here.
+        hist["cat"] = tensor_to_one_hot(hist["cat"],self.total_num_classes+1)
         
         # Sample noise level for each batch, and the repeat L times to match the length of data:bs*ls
-        #if self.iter >= 800:
         #    
         t = torch.rand(bs, device=device, dtype=x_num.dtype)
         t = torch.repeat_interleave(t,ls)
@@ -135,14 +154,15 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
             #x_num_t = x_num + noise * sigma_num.unsqueeze(2)
             x_num_t = x_num + noise * sigma_num
         
+        x_num_t = torch.cat([x_num_cond,x_num_t],dim=-1)
         # Discrete forward diff
         x_cat_t = x_cat
         x_cat_t_soft = x_cat # in the case where x_cat is empty, x_cat_t_soft will have the same shape as x_cat
-
         x_cat_t, x_cat_t_soft = self.q_xt(x_cat, move_chance,strategy="soft")
+                                                       
+        x_cat_t_soft = torch.cat([x_cat_cond_soft,x_cat_t_soft],dim=-1)
 
         # Predict orignal data (distribution)
-        
         model_out_num, model_out_cat = self._denoise_fn(   
             x_num_t, 
             x_cat_t_soft,
@@ -150,6 +170,11 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
             hist,
             sigma=sigma_num,
         )
+        cond_numerical_col = d_num_cond
+        num_start_idx = cond_numerical_col
+        cat_star_idx  = (self.num_classes_cond+1).sum()
+        model_out_num = model_out_num[:,num_start_idx:]
+        model_out_cat = model_out_cat[:,cat_star_idx:]
 
         d_loss = torch.zeros((1,)).float()
         c_loss = torch.zeros((1,)).float()
@@ -265,13 +290,15 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         out = torch.stack(padded_, dim=-2)
         return out
 
-    def sample(self,hist,gen_len):
-        
+    def sample(self,hist_cond,hist_corrupt,gen_len,cond_data=None):
+        hist = {}
+        hist["cat"] = torch.cat([hist_cond["cat"],hist_corrupt["cat"]],dim=-1)
+        hist["num"] = torch.cat([hist_cond["num"],hist_corrupt["num"]],dim=-1)
+        hist = permute_dict_tensor(hist)
 
-        b,ls = hist["cat"].shape[1],hist["cat"].shape[0]
+        b,ls = hist["cat"].shape[0],hist["cat"].shape[1]
         
-        hist["num"],hist["cat"] = hist["num"].permute(1,0,2),hist["cat"].permute(1,0,2)
-        hist["cat"] = tensor_to_one_hot(hist["cat"],self.num_classes+1)
+        hist["cat"] = tensor_to_one_hot(hist["cat"],self.total_num_classes+1)
         
         device = self.device
         dtype = torch.float32
@@ -324,10 +351,9 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
                 hist,
                 sigma_num_cur[i], sigma_num_next[i], sigma_num_hat[i], 
                 sigma_cat_cur[i], sigma_cat_next[i], sigma_cat_hat[i],
+                cond_data
             )
-        #breakpoint()
         assert torch.all(z_cat < self.mask_index)
-        #sample = torch.cat([z_norm, z_cat], dim=1)
         return z_norm,z_cat
     
     def _sample_masked_prior(self, *batch_dims):
@@ -340,36 +366,54 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
             hist,
             sigma_num_cur, sigma_num_next, sigma_num_hat, 
             sigma_cat_cur, sigma_cat_next, sigma_cat_hat, 
+            cond_data=None
         ):
         """
         i = T-1,...,0
         """
-        #cfg = self.y_only_model is not None
         b = x_num_cur.shape[0]
         has_cat = len(self.num_classes) > 0
         
+        start_num_idx = cond_data['num'].shape[2]
+        start_cat_idx = (self.num_classes_cond+1).sum()
+
         # Get x_num_hat by move towards the noise by a small step
         x_num_hat = x_num_cur + (sigma_num_hat ** 2 - sigma_num_cur ** 2).sqrt() * S_noise * torch.randn_like(x_num_cur)
         # Get x_cat_hat
         move_chance = -torch.expm1(sigma_cat_cur - sigma_cat_hat)    # the incremental move change is 1 - alpha_t/alpha_s = 1 - exp(sigma_s - sigma_t)
         x_cat_hat, _ = self.q_xt(x_cat_cur, move_chance) if has_cat else (x_cat_cur, x_cat_cur)
+        ### replace cond_seq here!!
+        ### replace small group from gru to here
+        ### we just need to replace input for NN,
+        ### other elements, we will replace later
 
         # Get predictions
-        x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_hat.dtype) if has_cat else x_cat_hat
+        ## need to convert 3D TO 2D
+        
+        x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_hat.dtype) if has_cat else x_cat_hat      
+        if self.cond_col['cat']:
+            cond_oh = tensor_to_one_hot(cond_data['cat'].permute(1,0,2),self.num_classes_cond+1)
+            flat_cond_oh = cond_oh.reshape(-1,cond_oh.shape[2])
+            x_cat_hat_oh_full = torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
+
+        if self.cond_col['num']:
+            flat_cond_num = cond_data["num"].permute(1,0,2).reshape(-1,cond_data["num"].shape[2])
+            x_num_hat_full = torch.cat([flat_cond_num,x_num_hat],dim=-1)
+
         denoised, raw_logits = self._denoise_fn(
-            x_num_hat.float(), x_cat_hat_oh,
+            x_num_hat_full.float(), x_cat_hat_oh_full,
             t_hat.squeeze().repeat(b),hist, sigma=sigma_num_hat.unsqueeze(0).repeat(b,1)  # sigma accepts (bs, K_num)
         )
         
         # Euler step
-        d_cur = (x_num_hat - denoised) / sigma_num_hat
+        d_cur = (x_num_hat - denoised[:,start_num_idx:]) / sigma_num_hat
         x_num_next = x_num_hat + (sigma_num_next - sigma_num_hat) * d_cur
         
         # Unmasking
         x_cat_next = x_cat_cur
         q_xs = torch.zeros_like(x_cat_cur).float()
         if has_cat:
-            logits = self._subs_parameterization(raw_logits, x_cat_hat)
+            logits = self._subs_parameterization(raw_logits[:,start_cat_idx:], x_cat_hat)
             alpha_t = torch.exp(-sigma_cat_hat).unsqueeze(0).repeat(b,1)
             alpha_s = torch.exp(-sigma_cat_next).unsqueeze(0).repeat(b,1)
             x_cat_next, q_xs = self._mdlm_update(logits, x_cat_hat, alpha_t, alpha_s)
@@ -377,15 +421,24 @@ class ConditionalContinuousDiscreteEncoder(nn.Module):
         # Apply 2nd order correction.
         if self.sampler_params['second_order_correction']:
             if i > 0:
+
                 x_cat_hat_oh = self.to_one_hot(x_cat_hat).to(x_num_next.dtype) if has_cat else x_cat_hat
+
+                if self.cond_col['cat']:
+                    x_cat_hat_oh_full =torch.cat([flat_cond_oh,x_cat_hat_oh],dim=-1)
+                if self.cond_col['num']:
+                    x_num_next_full = torch.cat([flat_cond_num,x_num_next],dim=-1)
+
                 denoised, raw_logits = self._denoise_fn(
-                    x_num_next.float(), x_cat_hat_oh,
+                    x_num_next_full.float(), x_cat_hat_oh_full,
                     t_next.squeeze().repeat(b),hist, sigma=sigma_num_next.unsqueeze(0).repeat(b,1)
                 )
                 
-                d_prime = (x_num_next - denoised) / sigma_num_next
+                d_prime = (x_num_next - denoised[:,start_num_idx:]) / sigma_num_next
                 x_num_next = x_num_hat + (sigma_num_next - sigma_num_hat) * (0.5 * d_cur + 0.5 * d_prime)
-        
+
+
+
         return x_num_next, x_cat_next, q_xs
     
     def _mdlm_update(self, log_p_x0, x, alpha_t, alpha_s):

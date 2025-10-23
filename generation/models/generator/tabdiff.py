@@ -21,7 +21,6 @@ class ContinuousDiscreteDiffusionGenerator(BaseGenerator):
 
     def forward(self, x: GenBatch) -> torch.Tensor:
         
-        breakpoint()
         history_batch = x.tail(self.history_len)
         target_batch = x.get_target_batch()
 
