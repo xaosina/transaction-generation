@@ -134,8 +134,19 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         pred_num = pred_num.view(-1,gen_len,pred_num.shape[1])
         #features_name = [history_batch.cat_features_names,history_batch.num_features_names]
         #sampled_batch = self.wrap_to_PredBatch(pred_cat,pred_num,features_name)
-        sampled_batch = None
+        sampled_batch = self.replace_data(corrupt_dict,tgt_data,pred_num,pred_cat)
         return sampled_batch
+    
+    def replace_data(self,corrupt_idx_dict,tgt_data,pred_num,pred_cat):
+
+        for keys,values in corrupt_idx_dict.items():
+            if keys == "cat":
+                for idx in values:
+                    tgt_data["cat"][:,:,idx] = pred_cat[:,:,idx]
+            elif keys == "num":
+                for idx in values:
+                    tgt_data["num"][:,:,idx] = pred_cat[:,:,idx]
+            return tgt_data
 
     def wrap_to_PredBatch(self,pred_cat,pred_num,features_name,topk=1, temperature=1.0):
 
