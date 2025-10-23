@@ -55,7 +55,7 @@ class DataConfig:
     @property
     def focus_num(self):
         all_num = [self.time_name]
-        all_num += (self.num_names or [])
+        all_num += self.num_names or []
         return [col for col in all_num if col in self.focus_on]
 
     @property
@@ -245,31 +245,29 @@ class GenBatch(Batch):
             cat_mask=gather(self.cat_mask, target_ids),
             num_mask=gather(self.num_mask, target_ids),
         )
-    
+
     def head(self, head_len: int):
         """Return a new batch containing only the first head_len elements of each sequence."""
         if self.lengths.max() <= head_len:
             return deepcopy(self)
-        
+
         def _cutoff_tail(tensor):
             if tensor is None:
                 return None
             return tensor[:head_len]
-        
+
         return replace(
             self,
-            lengths = torch.where(self.lengths <= head_len, self.lengths, head_len),
-            time = _cutoff_tail(self.time),
-            index = copy(self.index),
-            num_features = _cutoff_tail(self.num_features),
-            cat_features = _cutoff_tail(self.cat_features),
-            cat_features_names = copy(self.cat_features_names),
-            num_features_names = copy(self.num_features_names),
-            cat_mask = _cutoff_tail(self.cat_mask),
-            num_mask = _cutoff_tail(self.num_mask),
+            lengths=torch.where(self.lengths <= head_len, self.lengths, head_len),
+            time=_cutoff_tail(self.time),
+            index=copy(self.index),
+            num_features=_cutoff_tail(self.num_features),
+            cat_features=_cutoff_tail(self.cat_features),
+            cat_features_names=copy(self.cat_features_names),
+            num_features_names=copy(self.num_features_names),
+            cat_mask=_cutoff_tail(self.cat_mask),
+            num_mask=_cutoff_tail(self.num_mask),
         )
-        
-
 
 
 @dataclass(kw_only=True)
@@ -355,7 +353,7 @@ class PredBatch:
                         logits[logits < v[..., [-1]]] = -float("Inf")
                     probs = F.softmax(logits, dim=-1)
                     samples = torch.multinomial(probs, num_samples=1).squeeze(1)
-                    samples = samples.view(shape[:-1])                    
+                    samples = samples.view(shape[:-1])
                 cat_features.append(samples)
 
             cat_features = torch.stack(cat_features, dim=-1)
@@ -395,12 +393,32 @@ def get_seq_tail(seq: Seq, tail_len: int):
     )
 
 
+def split_seq_tail(seq: Seq, tail_len: int):
+    assert seq.lengths.min() > tail_len
+    tail = get_seq_tail(seq, tail_len)
+    hist_len = seq.lengths - tail_len
+    L = hist_len.max()
+    idx = torch.arange(L, device=seq.lengths.device)[:, None] < hist_len  # shape [L, B]
+
+    def apply_mask(tensor):
+        if tensor is None:
+            return None
+        ndim_diff = tensor.ndim - idx.ndim
+        new_idx = idx.view(*idx.shape, *(1,) * ndim_diff)
+        return tensor[:L] * new_idx
+
+    hist = Seq(
+        tokens=apply_mask(seq.tokens),
+        lengths=hist_len,
+        time=apply_mask(seq.time),
+        masks=apply_mask(seq.masks),
+    )
+    return hist, tail
+
+
 def append_padded(
-        a : torch.Tensor | None, 
-        la : torch.Tensor, 
-        b : torch.Tensor | None, 
-        lb : torch.Tensor
-    ) -> Tuple[torch.Tensor | None, torch.Tensor]:
+    a: torch.Tensor | None, la: torch.Tensor, b: torch.Tensor | None, lb: torch.Tensor
+) -> Tuple[torch.Tensor | None, torch.Tensor]:
     """
     a: [L1, B, *X]  (padded sequences)
     la: [B]         (lengths of each seq in a)
@@ -413,8 +431,7 @@ def append_padded(
     """
     if (a is None) or (b is None):
         return None, la + lb
-    
-    
+
     L1, B = a.shape[0], a.shape[1]
     L2 = b.shape[0]
 
@@ -425,13 +442,13 @@ def append_padded(
     out = a.new_zeros((Lout, B) + a.shape[2:])
 
     # --- copy a ---
-    mask_a = torch.arange(L1, device=a.device)[:, None] < la[None]   # [L1, B]
+    mask_a = torch.arange(L1, device=a.device)[:, None] < la[None]  # [L1, B]
     out[:L1] = torch.where(mask_a[(...,) + (None,) * (a.ndim - 2)], a, out[:L1])
 
     # --- copy b ---
     start = la[None]  # [1, B]
     idx = torch.arange(L2, device=b.device)[:, None] + start  # [L2, B]
-    batch_idx = torch.arange(B, device=b.device).expand(L2, B) # [L2, B]
+    batch_idx = torch.arange(B, device=b.device).expand(L2, B)  # [L2, B]
     mask_b = torch.arange(L2, device=b.device)[:, None] < lb[None]  # [L2, B]
 
     out[idx[mask_b], batch_idx[mask_b]] = b[mask_b]
@@ -446,10 +463,14 @@ def seq_append(seq: Seq, other_seq: Seq) -> Seq:
     assert len(seq) == len(other_seq), "seq lenghts should be equal!"
 
     return Seq(
-        tokens=append_padded(seq.tokens, seq.lengths, other_seq.tokens, other_seq.lengths)[0],
+        tokens=append_padded(
+            seq.tokens, seq.lengths, other_seq.tokens, other_seq.lengths
+        )[0],
         lengths=seq.lengths + other_seq.lengths,
         time=append_padded(seq.time, seq.lengths, other_seq.time, other_seq.lengths)[0],
-        masks=append_padded(seq.masks, seq.lengths, other_seq.masks, other_seq.lengths)[0],
+        masks=append_padded(seq.masks, seq.lengths, other_seq.masks, other_seq.lengths)[
+            0
+        ],
     )
 
 
@@ -462,13 +483,13 @@ def valid_mask(x: Seq | GenBatch):
 # Note: original Seq.to does not work if some of the fields
 # (tokens, lengths, time) are None
 def seq_to_device(seq: Seq, device) -> Seq:
-    
+
     def _set_device_or_none(data: torch.Tensor):
         return data.to(device) if (data is not None) else None
-    
+
     seq.tokens = _set_device_or_none(seq.tokens)
     seq.lengths = _set_device_or_none(seq.lengths)
     seq.time = _set_device_or_none(seq.time)
     seq.masks = _set_device_or_none(seq.masks)
-    
+
     return seq

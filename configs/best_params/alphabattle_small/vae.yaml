@@ -25,3 +25,11 @@ schedulers:
       init_beta: 0.003161808097708105
       factor: 0.7000000000000001
       patience: 5
+
+# trainer:
+#   ckpt_resume: /home/transaction-generation/log/generation/ready/alphabattle_small/old_vae.ckpt
+#   verbose: True
+# run_name: evaluation_run
+# runner:
+#   name: GenerationEvaluator
+#   run_type: simple

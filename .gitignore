@@ -33,6 +33,8 @@ temp/
 *.out
 res
 
+notebooks/my_anal/
+
 bpe_post_process.py
 temp*
 */exps/configs/*

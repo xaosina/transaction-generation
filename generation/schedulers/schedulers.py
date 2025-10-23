@@ -31,8 +31,6 @@ class CompositeScheduler(BaseScheduler):
         for config in configs:
             kwargs = {}
             if isinstance(config, str):
-                if config == 'None':
-                    continue
                 klass = getattr(schedulers, config)
             else:
                 for class_name, params in config.items():
