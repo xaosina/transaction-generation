@@ -4,16 +4,14 @@ trainer:
   ema_metrics_on_train: True
   total_iters: 10_000_000 # may be it is too much...
   use_trainval: False
+  patience: -1
   ema:
     beta: 0.9999
-    update_after_step: 40000
+    update_after_step: 25000
     update_every: 10
 
-evaluator:
-  devices: ["cuda:0", "cuda:0", "cuda:0"]
-
 data_conf:
-  train_resamples: 50
+  train_resamples: 25
   batch_size: 256
   train_random_end: time
   train_transforms:
@@ -61,7 +59,7 @@ optimizer:
 schedulers:
   "step":
     StepLR:
-      step_size:
+      step_size: 20
       gamma: 0.2
 
 loss:

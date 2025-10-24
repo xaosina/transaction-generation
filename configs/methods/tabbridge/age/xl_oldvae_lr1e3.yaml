@@ -1,5 +1,11 @@
 config_factory: [start, datasets/age/age, methods/tabbridge/base, metrics/with_detection/age]
 
+trainer:
+  ema:
+    beta: 0.9999
+    update_after_step: 40000
+    update_every: 10
+
 model:
   autoencoder:
     params:
@@ -15,3 +21,18 @@ model:
   
   params:
     repeat_matching: False
+    
+    history_encoder:
+      name: GRU
+
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-3
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2
+    wd_exclude_bias_ln: True
