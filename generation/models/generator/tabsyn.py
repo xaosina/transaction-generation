@@ -34,6 +34,7 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         self.autoencoder = self._init_autoencoder()
         self.history_encoder, hist_enc_dim = self._init_history_encoder()
+        self.reference_generator = self._init_reference_generator()
 
         # initializing encoder
         encoder_params = model_config.latent_encoder.params or {}
@@ -69,6 +70,27 @@ class LatentDiffusionGenerator(BaseGenerator):
             autoencoder = freeze_module(autoencoder)
         logger.info(f"Tabsyn latent dimension is {autoencoder.encoder.output_dim}")
         return autoencoder
+
+    def _init_reference_generator(self):
+        params = self.model_config.params.get("reference_seq")
+        if params is None:
+            logger.info("Use repeat for reference")
+            return
+
+        if isinstance(params, str) and (params == "history_encoder"):
+            return self.history_encoder
+        else:
+            checkpoint = params.pop("checkpoint", None)
+            cfg = from_dict(ModelConfig, params, Config(strict=True))
+            reference_generator = BaseGenerator.get_model(
+                params["name"], self.data_conf, cfg
+            )
+        if checkpoint:
+            ckpt = torch.load(checkpoint, map_location="cpu")
+            msg = reference_generator.load_state_dict(ckpt["model"], strict=True)
+            logger.info("Reference generator: " + str(msg))
+            reference_generator = freeze_module(reference_generator)
+        return reference_generator
 
     def _init_history_encoder(self):
         # initializing history encoder
@@ -125,20 +147,17 @@ class LatentDiffusionGenerator(BaseGenerator):
 
     def get_reference_seq(self, hist: GenBatch, latent_hist):
         hist = deepcopy(hist)
-        method = self.model_config.params.get("reference_seq", "repeat")
-        if (method == "repeat") and (self.history_len > 0):
+        if (self.reference_generator is None) and (self.history_len > 0):
             latent_ref = get_seq_tail(latent_hist, self.history_len)
             orig_ref = hist.tail(self.history_len)
             return latent_ref, orig_ref
-        elif method == "history_encoder":
+        else:
             assert self.history_len == self.generation_len
-            pred = self.history_encoder.generate(hist, self.generation_len)
+            pred = self.reference_generator.generate(hist, self.generation_len)
             hist.append(pred)
             encoded_batch = self.autoencoder.encoder(hist)
             return get_seq_tail(encoded_batch, self.generation_len), pred
-        else:
-            raise NotImplementedError(f"What is {method}?")
-
+        
     def forward(self, hist: GenBatch) -> torch.Tensor:
         """
         Forward pass of Latent diffusion model with inherent loss compute
