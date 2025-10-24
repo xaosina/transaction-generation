@@ -1,0 +1,80 @@
+trainer:
+  metrics_on_train: True
+  total_iters: 10_000_000 # may be it is too much...
+
+evaluator:
+  devices: ["cuda:0", "cuda:1"]
+
+
+data_conf:
+  train_resamples: 50
+  batch_size: 1024
+  train_random_end: time
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: False 
+    "3":
+      CutTargetSequence:
+        #target_len: ${data_conf.generation_len}
+        target_len: 32
+  val_transforms:
+    '1':
+      TimeToDiff:
+        disable: False
+
+
+# MODEL
+model:
+  name: ContinuousDiscreteDiffusionGenerator1
+  params:
+    history_len: 32
+    generation_len:  ${data_conf.generation_len}
+    scheduler: power_mean_per_column
+    cat_scheduler: log_linear_per_column
+    noise_dist: uniform_t
+    edm_params:
+      'precond': True
+      'sigma_data': 1.0
+      'net_conditioning': sigma
+    noise_dist_params:
+      'P_mean': 1.2
+      'P_std': -1.2
+    sampler_params:
+      'stochastic_sampler': True 
+      'second_order_correction': True 
+    noise_schedule_params:
+      'sigma_min': 0.002
+      'sigma_max': 80
+      'rho': 7
+      'eps_max': 0.001
+      'eps_min': 1e-05 
+      'rho_init': 7.0 
+      'rho_offset': 5.0 
+      'k_init': -6.0
+      'k_offset': 1.0
+    unet_params:
+      'd_token': 4
+      'length':   ${data_conf.generation_len}
+      'rawhist_length': 32
+      'with_transformer': True
+    cond_col:
+      cat:
+        - small_group
+        - age
+
+
+optimizer:
+  name: Adam
+  params:
+    lr: 1.e-5 # Note: I didn't adjust hyperparams&schedulers
+    weight_decay: 1.e-9
+
+schedulers:
+  "step":
+    StepLR: # Note: I didn't adjust hyperparams&schedulers
+      step_size: 30
+
+
+loss:
+  name: DummyLoss

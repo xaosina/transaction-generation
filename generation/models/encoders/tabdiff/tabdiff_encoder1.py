@@ -36,7 +36,8 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         num_classes = torch.tensor([ data_conf.cat_cardinalities[i] for i in self.corrupt_col["cat"]])
         num_classes_cond = torch.tensor([ data_conf.cat_cardinalities[i] for i in self.cond_col["cat"]])
         self.num_classes_cond = num_classes_cond
-        self.total_num_classes = torch.cat([num_classes_cond,num_classes])
+        self.total_num_classes = torch.cat([num_classes_cond,num_classes]).to(torch.int)
+
 
         self.num_numerical_features = num_numerical_features
         self.num_classes = num_classes # it as a vector [K1, K2, ...num_classes, Km]
@@ -111,25 +112,30 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
     def forward(self,hist_cond,hist_corrupt,cond_data,corrupt_data):
         device = "cuda:0"
         hist = {}
-        breakpoint()
         ## All input tensor has shape: (L,B,F_i), we have to permute them into (B,L,F_i)
         corrupt_data,cond_data = permute_dict_tensor(corrupt_data),permute_dict_tensor(cond_data)
         hist["cat"] = torch.cat([hist_cond["cat"],hist_corrupt["cat"]],dim=-1)
         hist["num"] = torch.cat([hist_cond["num"],hist_corrupt["num"]],dim=-1)
         hist = permute_dict_tensor(hist)
+        
+        total_corrupt_col = len(self.corrupt_col['cat']) + len(self.corrupt_col['num'])
+        assert total_corrupt_col > 0, "We need at least one col to be add noise!"
 
         bs,ls = corrupt_data["num"].size(0),corrupt_data["num"].size(1)
 
         d_num,c_num = corrupt_data["num"].size(2),corrupt_data["cat"].size(2)
         ## flat tgt to 2d to (B*L,F_i), row is the BL, columns is the numerical and category features
-        x_num,x_cat = corrupt_data["num"].reshape(-1,d_num),corrupt_data["cat"].reshape(-1,c_num)
+        x_num,x_cat = corrupt_data["num"].reshape(bs*ls,d_num),corrupt_data["cat"].reshape(bs*ls,c_num)
 
         d_num_cond,c_num_cond = cond_data["num"].size(2),cond_data["cat"].size(2)
+
         ## flat tgt to 2d to (B*L,F_i)
-        x_num_cond = cond_data["num"].reshape(-1,d_num_cond)
+        if d_num_cond > 0:
+            x_num_cond = cond_data["num"].reshape(-1,d_num_cond)
         ## maybe bug in the order of col names,only one cat is OK.
-        x_cat_cond_temp = tensor_to_one_hot(cond_data["cat"],self.num_classes_cond+1)
-        x_cat_cond_soft = x_cat_cond_temp.reshape(-1,x_cat_cond_temp.shape[2])
+        if c_num_cond > 0:
+            x_cat_cond_temp = tensor_to_one_hot(cond_data["cat"],self.num_classes_cond+1)
+            x_cat_cond_soft = x_cat_cond_temp.reshape(-1,x_cat_cond_temp.shape[2])
 
         ## we need to change the shape such that hist can match cond_seq and corrupt_seq.
         ## now just leave a bug here.
@@ -154,14 +160,18 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
             noise = torch.randn_like(x_num)
             #x_num_t = x_num + noise * sigma_num.unsqueeze(2)
             x_num_t = x_num + noise * sigma_num
-        
-        x_num_t = torch.cat([x_num_cond,x_num_t],dim=-1)
+
+        if d_num_cond > 0:
+            x_num_t = torch.cat([x_num_cond,x_num_t],dim=-1)
+
         # Discrete forward diff
         x_cat_t = x_cat
         x_cat_t_soft = x_cat # in the case where x_cat is empty, x_cat_t_soft will have the same shape as x_cat
-        x_cat_t, x_cat_t_soft = self.q_xt(x_cat, move_chance,strategy="soft")
-                                                       
-        x_cat_t_soft = torch.cat([x_cat_cond_soft,x_cat_t_soft],dim=-1)
+        if x_cat.shape[1] > 0:
+            x_cat_t, x_cat_t_soft = self.q_xt(x_cat, move_chance,strategy="soft")
+
+        if c_num_cond > 0:                                                       
+            x_cat_t_soft = torch.cat([x_cat_cond_soft,x_cat_t_soft],dim=-1)
 
         # Predict orignal data (distribution)
         model_out_num, model_out_cat = self._denoise_fn(   
@@ -173,9 +183,9 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         )
         cond_numerical_col = d_num_cond
         num_start_idx = cond_numerical_col
-        cat_star_idx  = (self.num_classes_cond+1).sum()
+        cat_start_idx  = (self.num_classes_cond+1).sum().to(torch.int)
         model_out_num = model_out_num[:,num_start_idx:]
-        model_out_cat = model_out_cat[:,cat_star_idx:]
+        model_out_cat = model_out_cat[:,cat_start_idx:]
 
         d_loss = torch.zeros((1,)).float()
         c_loss = torch.zeros((1,)).float()
@@ -375,17 +385,13 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         b = x_num_cur.shape[0]
         has_cat = len(self.num_classes) > 0
         start_num_idx = len(self.cond_col['num'])
-        start_cat_idx = (self.num_classes_cond+1).sum()
+        start_cat_idx = (self.num_classes_cond+1).sum().to(torch.int)
 
         # Get x_num_hat by move towards the noise by a small step
         x_num_hat = x_num_cur + (sigma_num_hat ** 2 - sigma_num_cur ** 2).sqrt() * S_noise * torch.randn_like(x_num_cur)
         # Get x_cat_hat
         move_chance = -torch.expm1(sigma_cat_cur - sigma_cat_hat)    # the incremental move change is 1 - alpha_t/alpha_s = 1 - exp(sigma_s - sigma_t)
         x_cat_hat, _ = self.q_xt(x_cat_cur, move_chance) if has_cat else (x_cat_cur, x_cat_cur)
-        ### replace cond_seq here!!
-        ### replace small group from gru to here
-        ### we just need to replace input for NN,
-        ### other elements, we will replace later
 
         # Get predictions
         ## need to convert 3D TO 2D

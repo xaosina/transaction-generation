@@ -53,7 +53,7 @@ class CrossDiffusionModel(BaseGenerator):
 
         features_name = [hist_batch.cat_features_names,hist_batch.num_features_names]
         cat_list = hist_batch.cat_features_names
-        #breakpoint(
+        #(
 
         hist_num,hist_cat = hist_num.permute(1,0,2),hist_batch.cat_features.permute(1,0,2)
 

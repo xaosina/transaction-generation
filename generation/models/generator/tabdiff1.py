@@ -40,7 +40,8 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         col_name_dict = (cond_name,corrupt_name)
         self.cond_corrupt_idx = (cond_idx,corrupt_idx)
         self.encoder = ConditionalContinuousDiscreteEncoder1(data_conf,model_config,col_name_dict)
-        self.target_condition_encoder, _ = self._init_history_encoder()
+        if "target_condition_encoder" in model_config.params:
+            self.target_condition_encoder, _ = self._init_history_encoder()
 
 
     def _init_history_encoder(self):
@@ -79,10 +80,10 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         gen_len = 32
         history_batch = x.tail(self.history_len)
         target_batch = x.get_target_batch()
-        breakpoint()
-        out_precondition = self.target_condition_encoder.generate(x,gen_len)
+        
 
-        pred_cond_data = self.Seq2DictTensor(out_precondition)
+        
+        
         hist_data = self.Seq2DictTensor(history_batch)
         tgt_data = self.Seq2DictTensor(target_batch)
         # tgt_data = {"cat":tgt_cat,"num":tgt_num}
@@ -90,10 +91,16 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
 
         cond_dict,corrupt_dict = self.cond_corrupt_idx
 
+        if "target_condition_encoder" in self.model_config.params:
+            out_precondition = self.target_condition_encoder.generate(x,gen_len)
+            pred_cond_data = self.Seq2DictTensor(out_precondition)
+            cond_data = self.get_data(cond_dict,pred_cond_data)
+        else:
+            cond_data = self.get_data(cond_dict,tgt_data)
         ## later we will need the output from DeTPP as the tgt_data in cond_data,
         ## because we need it as a condition, and in corrupt_data, we still use the data from gt.
         #cond_data = self.get_data(cond_dict,tgt_data)
-        cond_data = self.get_data(cond_dict,pred_cond_data)
+        
         corrupt_data = self.get_data(corrupt_dict,tgt_data)
 
         h_cond_data = self.get_data(cond_dict,hist_data)
@@ -105,9 +112,10 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
 
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False,**kwargs) -> GenBatch:
+        
         history_batch = hist.tail(self.history_len)
         target_batch = hist.get_target_batch()
-
+        bs = len(history_batch.lengths)
 
         hist_data = self.Seq2DictTensor(history_batch)
         tgt_data = self.Seq2DictTensor(target_batch)
@@ -119,8 +127,8 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         cond_data = self.get_data(cond_dict,tgt_data)
         pred_num,pred_cat = self.encoder.sample(h_cond_data,h_corrupt_data,gen_len,cond_data)
         print(pred_num[:10],target_batch.time.permute(1,0)[:10])
-        pred_cat = pred_cat.view(-1,gen_len,pred_cat.shape[1])
-        pred_num = pred_num.view(-1,gen_len,pred_num.shape[1])
+        pred_cat = pred_cat.reshape(bs,gen_len,pred_cat.shape[1])
+        pred_num = pred_num.reshape(bs,gen_len,pred_num.shape[1])
         features_name = [history_batch.cat_features_names,history_batch.num_features_names]
         
         aggregate_batch = self.replace_data(corrupt_dict,tgt_data,pred_num,pred_cat)
@@ -155,23 +163,32 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         )
     
     def split_cond_corrupt_idx(self):
-        cond_col_idx = defaultdict(list)
-        corrupt_col_idx = defaultdict(list)
-        cond_col_name = defaultdict(list)
-        corrupt_col_name = defaultdict(list)
 
-        for col_type in ["cat","num"]:
-            for idx,col in enumerate(self.features_name_dict[col_type]):
-                if col_type in self.cond_col:
-                    if col in self.cond_col[col_type]:
+        cond_cols = self.cond_col if self.cond_col is not None else {}
+        
+        # Initialize standard dictionaries
+        cond_col_idx = {"cat": [], "num": []}
+        corrupt_col_idx = {"cat": [], "num": []}
+        cond_col_name = {"cat": [], "num": []}
+        corrupt_col_name = {"cat": [], "num": []}
+
+        for col_type in ["cat", "num"]:
+            # Ensure the column type exists in the features_name_dict before iterating
+            if col_type in self.features_name_dict:
+                
+                # Get the list of conditional columns for this type, defaulting to an empty list
+                # if the column type isn't defined in cond_cols (e.g., only 'cat' is conditional)
+                cond_names_for_type = cond_cols.get(col_type, [])
+                
+                for idx, col in enumerate(self.features_name_dict[col_type]):
+                    
+                    # Check if the column name is in the list of conditional names
+                    if col in cond_names_for_type:
                         cond_col_idx[col_type].append(idx)
                         cond_col_name[col_type].append(col)
                     else:
                         corrupt_col_idx[col_type].append(idx)
                         corrupt_col_name[col_type].append(col)
-                else:
-                    corrupt_col_idx[col_type].append(idx)
-                    corrupt_col_name[col_type].append(col)
 
         return cond_col_idx,cond_col_name, corrupt_col_idx,corrupt_col_name
             

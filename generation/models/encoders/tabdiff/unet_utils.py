@@ -339,6 +339,7 @@ class Unet1DDiffusion(nn.Module):
         d_token_in = self.one_lat_dim
         d_token_out = self.one_lat_dim
         self.tokenizer = Tokenizer(d_numerical, categories, d_token, bias = True)
+        
         if with_transformer:
 
             self.encoder = Transformer(num_layers, d_token_in, n_head, d_token_out, factor)
