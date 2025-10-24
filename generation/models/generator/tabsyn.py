@@ -20,7 +20,7 @@ from ...data.data_types import (
     split_seq_tail,
 )
 from . import BaseGenerator, ModelConfig
-from .utils import match_seqs, post_process_generation
+from .utils import match_batches, post_process_generation
 
 logger = logging.getLogger()
 
@@ -127,13 +127,15 @@ class LatentDiffusionGenerator(BaseGenerator):
         hist = deepcopy(hist)
         method = self.model_config.params.get("reference_seq", "repeat")
         if (method == "repeat") and (self.history_len > 0):
-            return get_seq_tail(latent_hist, self.history_len)
+            latent_ref = get_seq_tail(latent_hist, self.history_len)
+            orig_ref = hist.tail(self.history_len)
+            return latent_ref, orig_ref
         elif method == "history_encoder":
             assert self.history_len == self.generation_len
             pred = self.history_encoder.generate(hist, self.generation_len)
             hist.append(pred)
             encoded_batch = self.autoencoder.encoder(hist)
-            return get_seq_tail(encoded_batch, self.generation_len)
+            return get_seq_tail(encoded_batch, self.generation_len), pred
         else:
             raise NotImplementedError(f"What is {method}?")
 
@@ -144,16 +146,16 @@ class LatentDiffusionGenerator(BaseGenerator):
             x (GenBatch): Input sequence [L, B, D]
 
         """
-        target_seq = hist.get_target_batch()
-        if self.repeat_matching:
-            repeat = hist.tail(self.history_len)
-            target_seq = match_seqs(repeat, target_seq, self.data_conf)
-
         latent_hist, latent_target = self.get_latent_batch(hist)
         history_embedding = self.get_history_emb(hist, latent_hist)
-        history_seq = self.get_reference_seq(hist, latent_hist)
+        latent_ref, orig_ref = self.get_reference_seq(hist, latent_hist)
+        if self.repeat_matching:
+            hist = deepcopy(hist)
+            target_batch = hist.get_target_batch()
+            target_batch = match_batches(orig_ref, target_batch, self.data_conf)
+            latent_target = self.autoencoder.encoder(target_batch)
         # TODO: static condition
-        return self.encoder(latent_target, None, history_embedding, history_seq)
+        return self.encoder(latent_target, None, history_embedding, latent_ref)
 
     @torch.no_grad()
     def generate(
@@ -177,9 +179,9 @@ class LatentDiffusionGenerator(BaseGenerator):
         # return self.autoencoder.decoder.generate(latent_target, orig_hist=hist)
         # for _ in range(0, gen_len, self.generation_len):
         history_embedding = self.get_history_emb(hist, latent_hist)
-        history_seq = self.get_reference_seq(hist, latent_hist)
+        latent_ref, _ = self.get_reference_seq(hist, latent_hist)
         sampled_seq = self.encoder.generate(
-            B, None, history_embedding, history_seq
+            B, None, history_embedding, latent_ref
         )  # Seq [L, B, D]
         sampled_batch = self.autoencoder.decoder.generate(sampled_seq, orig_hist=hist)
         if self.repeat_matching or self.model_config.latent_encoder.params.get(

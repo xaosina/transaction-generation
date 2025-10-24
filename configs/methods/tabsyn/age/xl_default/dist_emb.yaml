@@ -1,0 +1,37 @@
+config_factory: [start, datasets/age/age, methods/tabsyn/base, metrics/with_detection/age]
+
+model:
+  autoencoder:
+    params:
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
+    checkpoint: /home/transaction-generation/log/generation/ready/age/old_vae.ckpt
+  
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+  params:
+    history_encoder:
+      checkpoint: /home/transaction-generation/log/generation/ready/age/dist.ckpt
+      name: OneShotDistributionGenerator
+      latent_encoder:
+        name: GRU
+        params:
+          hidden_size: 504
+          num_layers: 1
+          dropout: 1.3502129508773067e-10
+      autoencoder:
+        name: BaselineAE
+        params:
+          cat_emb_dim: 76
+          num_emb_dim: 86
+          num_norm: true
+          use_time: true
+        pretrain: false
+        frozen: True
+        checkpoint: null
+        batch_transforms: null
+      pooler: last
+      params: null
