@@ -12,7 +12,7 @@ model:
     params:
       base_factor: 512 # unetXL
   params:
-    reference_seq: "history_encoder" # "repeat"
+    reference_seq: "history_encoder"
     history_encoder:
       checkpoint: /home/transaction-generation/log/generation/ready/alphabattle_small/detpp.ckpt
       name: DeTPP
