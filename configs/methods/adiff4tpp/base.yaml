@@ -1,0 +1,70 @@
+trainer:
+  ckpt_track_metric: loss
+  metrics_on_train: True
+  ema_metrics_on_train: True
+  total_iters: 10_000_000 # may be it is too much...
+  use_trainval: False
+  patience: -1
+  ema:
+    beta: 0.9999
+    update_after_step: 15000
+    update_every: 10
+
+data_conf:
+  train_resamples: 50
+  batch_size: 256
+  train_random_end: time
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true # Base processing must be minimal
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+# MODEL
+model:
+  name: LatentDiffusionGenerator
+  autoencoder: 
+    name: VAE
+    params:
+      use_time: True
+    pretrain: False
+    frozen: True
+
+  latent_encoder:
+    name: AsynDiffEncoder 
+    params:
+      hidden_size: 1152 ## must be the times of laten_size
+      depth: 7
+      num_heads: 16
+      mlp_ratio: 4
+      learn_sigma: False
+      loss_type: l2-squared # l2,l2-squared and huber
+      mask: False
+      schedule: Sync
+      int_ode: rk4
+      generation_len: ${data_conf.generation_len}
+      history_len: 32
+      data_init: False
+
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-4
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2
+    wd_exclude_bias_ln: True
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 10
+      gamma: 0.2
+
+loss:
+  name: DummyLoss

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import logging
 from typing import Tuple, List, Dict, Any
+from copy import deepcopy
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,15 @@ from .tabsyn.dbim.train_util import (
 )
 from .tabsyn.dbim.karras_diffusion import karras_sample
 from .tabsyn.dbim.resample import create_named_schedule_sampler
+
+# FM (adiff4tpp)
+from .adiff4tpp.DiT_models import DiT
+from .adiff4tpp.train_util import get_loss_func as get_adifftpp_loss_func
+from .adiff4tpp.train_util import sample_t as sample_t_adifftpp
+from .adiff4tpp.async_lib import obtain_noise_schedule as obtain_adifftpp_noise_schedule
+from torchdiffeq import odeint
+
+from ...data.data_types import seq_append
 
 from ebes.model.seq2seq import BaseSeq2Seq
 # from ...generator import Reshaper
@@ -330,3 +340,159 @@ class ConditionalBridgeEncoder(BaseSeq2Seq):
                         ) for pred_x0_inst in _pred_x0
                     ]
             return samp, bridge_traj
+
+
+class AsynDiffEncoder(BaseSeq2Seq):
+
+    def __init__(self, name: str, params: dict = None):
+
+        super().__init__()
+
+        self.params = params
+        self.model = DiT(
+            num_rows=params['generation_len'] + params['history_len'],
+            latent_size=params['input_size'],
+            hidden_size=params['hidden_size'],
+            depth=params['depth'],
+            num_heads=params['num_heads'],
+            mlp_ratio=params['mlp_ratio'],
+            learn_sigma=params['learn_sigma']
+        )
+        self.Aschedule = params['schedule']
+        self.data_init = params['data_init']   
+        # self.use_history_mask = params['history_mask']
+
+        self.loss_func = get_adifftpp_loss_func(params['loss_type'])
+        self.gen_reshaper = Reshaper(params['generation_len'])
+        self.mask = params['mask']
+        self.generation_len = params['generation_len']
+        self.history_len = params['history_len']
+        self.latent_dim = params['input_size']
+    
+    @property
+    def input_history_len(self):
+        return self.history_len
+    
+    @property
+    def output_dim(self):
+        return self.latent_dim
+
+    def forward(
+            self, 
+            target_seq: Seq,
+            class_labels: torch.Tensor | None = None, 
+            history_embedding: torch.Tensor | None = None,
+            history_seq: Seq | None = None,
+        ) -> torch.Tensor :
+
+        assert history_seq is not None
+
+        target_seq = seq2tensor(target_seq) # (B, L_gen, D)
+        history_seq = seq2tensor(history_seq) # (B, L_hist, D)
+        bs = target_seq.size(0)
+        assert target_seq.shape == (bs, self.generation_len, self.latent_dim)
+        assert history_seq.shape == (bs, self.input_history_len, self.latent_dim)
+
+        hist_target_seq = torch.cat([history_seq, target_seq], dim=1)
+        assert hist_target_seq.shape == (bs, self.generation_len + self.input_history_len, self.latent_dim)
+
+        ht_len = hist_target_seq.size(1)
+        ht_lens_batch = torch.ones((target_seq.size(0),), dtype=torch.long, device=target_seq.device) * ht_len
+        A = obtain_adifftpp_noise_schedule(self.Aschedule)(ht_lens_batch, ht_len)
+
+        col_indices = torch.arange(ht_len).unsqueeze(0).to(target_seq.device)
+        history_mask = col_indices < (ht_lens_batch - self.generation_len).unsqueeze(1)
+
+        noise_fixed = deepcopy(hist_target_seq)
+        if not self.data_init:
+            noise_fixed[~history_mask] = torch.randn_like(noise_fixed[~history_mask])
+        else:
+            assert ht_len == 2 * self.generation_len
+            noise_fixed[~history_mask] = noise_fixed[history_mask]
+
+        # Sample t, zt
+        t = sample_t_adifftpp(bs).view(-1,1) # (batchsize,)
+        A_t = A(t).to(target_seq.device)
+        A_t_dot = A.derivative(t).unsqueeze(-1).to(target_seq.device)
+        zt = A_t.unsqueeze(-1)*hist_target_seq + (1-A_t.unsqueeze(-1))*noise_fixed
+        target = hist_target_seq - noise_fixed
+        
+        # Forward pass
+        if self.mask:
+            attn_mask = A.attn_mask.to(target_seq.device)
+            pred = self.model(zt, A_t, attn_mask)
+        else:
+            pred = self.model(zt, A_t)
+
+        # Compute loss
+        # if self.use_history_mask:
+        # pred = pred[~history_mask]
+        pred[history_mask] = 0.
+        target[history_mask] = 0.
+        # breakpoint()
+        assert pred.shape == target.shape
+
+        loss = self.loss_func(pred, target, A_t_dot)
+        loss = loss.mean()
+        return loss 
+
+    def generate(
+            self, 
+            n_seqs: int, 
+            class_labels: torch.Tensor | None = None, 
+            history_embedding: torch.Tensor | None = None, 
+            history_seq: Seq | None = None,
+        ) -> Seq :
+
+        assert history_seq is not None
+
+        history_seq = seq2tensor(history_seq)
+        assert history_seq.shape == (n_seqs, self.input_history_len, self.latent_dim)
+
+        target_init_seq = torch.randn(
+            (n_seqs, self.generation_len, self.latent_dim), 
+            dtype=history_seq.dtype, 
+            device=history_seq.device
+        )
+
+        hist_target_seq = torch.cat([history_seq, target_init_seq], dim=1)
+        assert hist_target_seq.shape == (n_seqs, self.generation_len + self.input_history_len, self.latent_dim)
+
+        ht_len = hist_target_seq.size(1)
+        ht_lens_batch = torch.ones((n_seqs,), dtype=torch.long, device=history_seq.device) * ht_len
+        A = obtain_adifftpp_noise_schedule(self.Aschedule)(ht_lens_batch, ht_len).to(history_seq.device)
+
+        col_indices = torch.arange(ht_len).unsqueeze(0).to(history_seq.device)
+        history_mask = col_indices < (ht_lens_batch - self.generation_len).unsqueeze(1)
+
+        noise_fixed = deepcopy(hist_target_seq)
+
+        if self.data_init:
+            assert ht_len == 2 * self.generation_len
+            noise_fixed[~history_mask] = noise_fixed[history_mask]
+        
+        # Define the ODE function for solving the reverse flow
+        def ode_func(t, x):
+            t = t.view(-1,1)
+            A_t = A(t)
+            A_t_dot = A.derivative(t).unsqueeze(-1)
+            # Compute vector field: x_0 - epsilon
+            x[history_mask] = hist_target_seq[history_mask]
+            v = self.model(x,A_t)
+            # Fix vector fields for preceding events
+            v[history_mask] = 0.
+            return A_t_dot*v
+
+        # Sample t, zt
+        solution = odeint(ode_func, noise_fixed, A.times, rtol=1e-5, atol=1e-5, method=self.params["int_ode"])
+        # Extract the result at t=0
+        
+        x_restored = solution[-1]
+        pred = x_restored[:,self.input_history_len:,:].view(n_seqs,-1)
+        return self.gen_reshaper(
+            Seq(
+                tokens=pred, 
+                lengths=torch.ones((n_seqs,)).to(history_seq.device) * self.generation_len, 
+                time=None
+            )
+        )

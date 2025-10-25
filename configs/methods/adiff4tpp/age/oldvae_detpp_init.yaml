@@ -1,0 +1,62 @@
+config_factory: [start, datasets/age/age, methods/adiff4tpp/base, metrics/with_detection/age]
+
+trainer:
+  ema:
+    beta: 0.9999
+    update_after_step: 40000
+    update_every: 10
+
+model:
+  autoencoder:
+    params:
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/ready/vae/seed_0/ckpt/epoch__0351_-_loss__-0.002042.ckpt
+  
+  latent_encoder:
+    params:
+      data_init: True
+
+  params:
+    repeat_matching: False
+
+    history_encoder:
+
+    reference_seq:
+      checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/ready/detpp/seed_0/ckpt/detpp_age.ckpt
+      name: DeTPP
+      latent_encoder:
+        name: GRU
+        params:
+          hidden_size: 386
+          num_layers: 1
+      autoencoder:
+        name: BaselineAE
+        params:
+          cat_emb_dim: 88
+          num_emb_dim: 109
+          num_norm: true
+          use_time: true
+        pretrain: false
+        frozen: True
+        checkpoint: null
+        batch_transforms:
+          - RescaleTime:
+              loc: 0
+              scale: 0.0013698630136986301
+      pooler: last
+      params:
+        k_factor: 1.0037504654857723
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-5
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2
+    wd_exclude_bias_ln: True
