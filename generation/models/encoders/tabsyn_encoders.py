@@ -368,6 +368,7 @@ class AsynDiffEncoder(BaseSeq2Seq):
         self.generation_len = params['generation_len']
         self.history_len = params['history_len']
         self.latent_dim = params['input_size']
+        self.data_init_noisesigma = params.get('data_init_noisesigma', 0.0)
     
     @property
     def input_history_len(self):
@@ -409,6 +410,7 @@ class AsynDiffEncoder(BaseSeq2Seq):
         else:
             assert ht_len == 2 * self.generation_len
             noise_fixed[~history_mask] = noise_fixed[history_mask]
+            noise_fixed[~history_mask] += torch.randn_like(noise_fixed[~history_mask]) * self.data_init_noisesigma
 
         # Sample t, zt
         t = sample_t_adifftpp(bs).view(-1,1) # (batchsize,)
@@ -470,6 +472,7 @@ class AsynDiffEncoder(BaseSeq2Seq):
         if self.data_init:
             assert ht_len == 2 * self.generation_len
             noise_fixed[~history_mask] = noise_fixed[history_mask]
+            noise_fixed[~history_mask] += torch.randn_like(noise_fixed[~history_mask]) * self.data_init_noisesigma
         
         # Define the ODE function for solving the reverse flow
         def ode_func(t, x):

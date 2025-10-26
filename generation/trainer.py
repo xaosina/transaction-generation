@@ -417,6 +417,7 @@ class Trainer:
             _model = self._ema_model.ema_model
             flatten_rnn_params(_model)
         assert _model is not None
+        _model = _model.eval()
         assert get_loss or get_metrics, "Choose at least one: [loss, metrics]"
         if loader is None:
             if self._val_loader is None:
