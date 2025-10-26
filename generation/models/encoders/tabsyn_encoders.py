@@ -368,7 +368,8 @@ class AsynDiffEncoder(BaseSeq2Seq):
         self.generation_len = params['generation_len']
         self.history_len = params['history_len']
         self.latent_dim = params['input_size']
-        self.data_init_noisesigma = params.get('data_init_noisesigma', 0.0)
+        # self.data_init_noisesigma = params.get('data_init_noisesigma', 0.0)
+        self.data_init_noisesigma = params['data_init_noisesigma']
     
     @property
     def input_history_len(self):
