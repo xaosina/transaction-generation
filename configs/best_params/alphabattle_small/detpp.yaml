@@ -1,23 +1,25 @@
+# Params taken from log/generation/alphabattle_small/optuna/detpp/128
+
 config_factory: [start, metrics/default, datasets/alphabattle_small/alphabattle_small, methods/detpp]
 
 optimizer:
   params:
-    weight_decay: 4.584752433652177e-08
-    lr: 0.00034663341833168846
+    weight_decay: 0.0013411338581584644
+    lr: 0.0021679677971091797
 model:
   latent_encoder:
     params:
-      hidden_size: 184
+      hidden_size: 198
       num_layers: 1
-      dropout: 0.00010532607225017183
+      dropout: 6.156057736007828e-06
   params:
-    k_factor: 2.799862020644089
+    k_factor: 1.9880601780691256
   autoencoder:
     params:
-      num_norm: true
-      cat_emb_dim: 16
-      num_emb_dim: 111
+      num_norm: false
+      cat_emb_dim: 26
+      num_emb_dim: 87
 loss:
   params:
     matching_weights:
-      _presence: 1.0235372166277856
+      _presence: 0.6989580548422127
