@@ -111,8 +111,8 @@ class Encoder(nn.Module):
             num_count = 0
 
         self.use_time = use_time
-        if use_time:
-            num_count += 1
+        # if use_time:
+        num_count += 1
         self.batch_transforms = batch_transforms
 
         self.tokenizer = Tokenizer(
@@ -146,10 +146,14 @@ class Encoder(nn.Module):
                 tf(batch)
 
         x_num, x_cat = batch.num_features, batch.cat_features
+        
+        x_num = [] if x_num is None else [x_num]
         if self.use_time:
-            x_num = [] if x_num is None else [x_num]
-            x_num += [batch.time.unsqueeze(-1)]  # L, B, 1
-            x_num = torch.cat(x_num, dim=2)
+            time = batch.time
+        else:
+            time = torch.zeros_like(batch.time)
+        x_num += [time.unsqueeze(-1)]  # L, B, 1
+        x_num = torch.cat(x_num, dim=2)
 
         D_num = x_num.size(-1) if x_num is not None else 0
         D_cat = x_cat.size(-1) if x_cat is not None else 0

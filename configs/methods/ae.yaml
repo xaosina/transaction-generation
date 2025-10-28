@@ -1,0 +1,57 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  topk: 1
+  temperature: 1.
+  metrics:
+    - OTD: {max_shift: 0, detailed: True}
+
+trainer:
+  metrics_on_train: True
+
+# data_conf:
+  # batch_size: 32
+  # train_transforms:
+  #   "0":
+  #     RescaleTime:
+  #       loc: 0.0
+  #       scale: 1
+  #   "1":
+  #     TimeToDiff:
+  #       disable: True
+  # val_transforms:
+  #   "1":
+  #     TimeToDiff:
+  #       disable: True
+
+model:
+  name: BaselineAE
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 16
+      num_emb_dim: 16
+      num_norm: True
+      use_time: True
+    pretrain: True
+    frozen: False
+    checkpoint:
+    batch_transforms:
+  latent_encoder:
+
+optimizer:
+  name: Adam
+  params:
+    lr: 3e-4
+    weight_decay: 1.e-7
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 10
+
+
+loss:
+  name: AELoss
+  params:
+    l2_coef: 0e-4
+

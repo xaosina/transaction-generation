@@ -69,10 +69,29 @@ class BaselineAE(BaseAE):
         )
 
     def forward(self, x: GenBatch) -> PredBatch:
-        raise "We don't pretrain AE"
+        hidden = self.encoder(x)
+        mu = hidden.tokens
+        hidden.tokens = hidden.tokens + torch.randn_like(hidden.tokens)
+        x = self.decoder(hidden)
+        return x, mu
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        raise "We don't use AE yet"
+    def generate(
+        self,
+        hist: GenBatch,
+        gen_len: int,
+        with_hist=False,
+        topk=1,
+        temperature=1.0,
+    ) -> GenBatch:
+        hist = deepcopy(hist)
+        assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
+        hidden = self.encoder(hist.get_target_batch())
+        x = self.decoder.generate(hidden, topk=topk, temperature=temperature)
+        if with_hist:
+            hist.append(x)
+            return hist
+        else:
+            return x
 
 
 class Batch2TransformedSeq(nn.Module):
