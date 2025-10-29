@@ -18,6 +18,8 @@ from ..utils import (
 )
 
 from .utils import PipelineConfig
+import logging
+logger = logging.getLogger(__name__)
 
 class GenerationTrainer(Runner):
     def pipeline(self, cfg: Mapping) -> dict[str, float]:
@@ -31,20 +33,8 @@ class GenerationTrainer(Runner):
         model = getattr(gen_models, cfg.model.name)(internal_dataconf, cfg.model).to(
             cfg.device
         )
-        param_groups = model.parameters()
-        if 'wd_exclude_bias_ln' in cfg.optimizer.params.keys():
-            assert 'weight_decay' in cfg.optimizer.params.keys()
-            param_groups = weight_decay_groups_exclude_bias_layernorm(
-                model, 
-                weight_decay=cfg.optimizer.params['weight_decay'])
-            del cfg.optimizer.params['wd_exclude_bias_ln']
-            del cfg.optimizer.params['weight_decay']
-            print(cfg.optimizer.params)
-#         breakpoint()
-#         optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         
-        optimizer = get_optimizer(param_groups, cfg.optimizer)
-#         optimizer = EMA(optimizer, ema_decay=0.999)
+        optimizer = get_optimizer(model.parameters(), cfg.optimizer)
         loss = get_loss(internal_dataconf, cfg.loss)
         scheduler = CompositeScheduler(optimizer, loss, cfg.schedulers)
         log_dir = Path(cfg.log_dir) / cfg.run_name

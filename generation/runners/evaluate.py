@@ -64,6 +64,17 @@ class GenerationEvaluator(Runner):
             test_metrics = trainer.validate(
                 test_loader, remove=False, get_loss=False, get_metrics=True
             )
+            if cfg.trainer.ema:
+                ema_test_metrics = trainer.validate(
+                    test_loader,
+                    remove=True,
+                    get_loss=False,
+                    get_metrics=True,
+                    use_ema_model=True,
+                )
+                ema_test_metrics = {"EMA_" + k: v for k, v in ema_test_metrics.items()}
+                test_metrics |= ema_test_metrics
+
             test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
             return dict(
                 **test_metrics
@@ -73,6 +84,17 @@ class GenerationEvaluator(Runner):
             val_metrics = trainer.validate(
                 val_loader, remove=False, get_loss=False, get_metrics=True
             )
+            if cfg.trainer.ema:
+                ema_val_metrics = trainer.validate(
+                    val_loader,
+                    remove=True,
+                    get_loss=False,
+                    get_metrics=True,
+                    use_ema_model=True,
+                )
+                ema_val_metrics = {"EMA_" + k: v for k, v in ema_val_metrics.items()}
+                val_metrics |= ema_val_metrics
+            
             val_metrics = {k: v for k, v in val_metrics.items()}
 
             return dict(

@@ -35,4 +35,3 @@ optimizer:
      - 0.999
     eps: 1e-8
     weight_decay: 1.e-2
-    wd_exclude_bias_ln: True
