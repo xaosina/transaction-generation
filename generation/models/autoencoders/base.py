@@ -257,12 +257,22 @@ class ReconstructorBase(BaseModel):
             cat_features=cat_features,
         )
 
-    def generate(self, x: Seq, topk=1, temperature=1.0) -> GenBatch:
-        # TODO add orig_hist just like in VAE
+    def generate(
+        self, x: Seq, topk=1, temperature=1.0, orig_hist: GenBatch = None
+    ) -> GenBatch:
         batch = self.forward(x).to_batch(topk, temperature)
         if self.batch_transforms is not None:
+            if orig_hist is not None:
+                batch_len = batch.shape[0]
+                hist = deepcopy(orig_hist)
+                for tf in self.batch_transforms:
+                    tf(hist)
+                hist.append(batch)
+                batch = hist
             for tf in reversed(self.batch_transforms):
                 tf.reverse(batch)
+            if orig_hist is not None:
+                batch = batch.tail(batch_len)
         return batch
 
 

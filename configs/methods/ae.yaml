@@ -8,20 +8,15 @@ evaluator:
 trainer:
   metrics_on_train: True
 
-# data_conf:
-  # batch_size: 32
-  # train_transforms:
-  #   "0":
-  #     RescaleTime:
-  #       loc: 0.0
-  #       scale: 1
-  #   "1":
-  #     TimeToDiff:
-  #       disable: True
-  # val_transforms:
-  #   "1":
-  #     TimeToDiff:
-  #       disable: True
+data_conf:
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1
+    "1":
+      TimeToDiff:
+        disable: False
 
 model:
   name: BaselineAE
@@ -41,17 +36,23 @@ model:
 optimizer:
   name: Adam
   params:
-    lr: 3e-4
-    weight_decay: 1.e-7
+    lr: 5e-2
+    weight_decay: 1.e-6
 
 schedulers:
-  "step":
-    StepLR:
-      step_size: 10
+  "plate":
+    ReduceLROnPlateau:
+      factor: 0.1
+      patience: 3
+      threshold: 0.01
+  # "step":
+  #   StepLR:
+  #     step_size: 30
 
 
 loss:
   name: AELoss
   params:
-    l2_coef: 0e-4
+    l2_coef: 1e-4
+    mse_weight: 0.5
 
