@@ -72,7 +72,6 @@ class TimeDenoisingModule(nn.Module):
         :param t: B
         :param hist: history representation, B x L_context x Dim
         """
-        breakpoint()
         t_emb = self.time_pos_emb(t)
         t_emb = self.mlp(t_emb) # B x d_model/4
 

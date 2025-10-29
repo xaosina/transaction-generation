@@ -85,6 +85,26 @@ class HistoryEncoder(nn.Module):
         """
         dynamic_features_list = []
         
+        # --- 2. 动态数值特征处理 (hist_x) ---
+        
+        # A. 提取时间间隔 dt (第 0 列)
+        hist_dt = hist_x[:, :, 0] # [B, L']
+        
+        # B. 时间编码 (dt)
+        hist_time_encoding = self.temporal_enc(hist_dt) # [B, L', D]
+        dynamic_features_list.append(hist_time_encoding)
+        
+        # C. 额外 M 个数值特征 (第 1 列及以后)
+        num_extra_numerical_features = self.num_all_numerical_features - 1
+        if num_extra_numerical_features > 0:
+            # 提取额外的数值特征 [B, L', M]
+            extra_num_features = hist_x[:, :, 1:] 
+            
+            # 投影 [B, L', M] -> [B, L', D]
+            dynamic_num_emb = self.dynamic_num_proj(extra_num_features)
+            dynamic_features_list.append(dynamic_num_emb)
+            
+
         # --- 1. 统一动态类别特征处理 ---
         
         # A. 解包所有类别特征: [B, L', F] -> F 个 [B, L'] 的张量
@@ -106,25 +126,6 @@ class HistoryEncoder(nn.Module):
         cat_concat = torch.cat(cat_embeddings, dim=-1)
         dynamic_features_list.append(cat_concat)
         
-        # --- 2. 动态数值特征处理 (hist_x) ---
-        
-        # A. 提取时间间隔 dt (第 0 列)
-        hist_dt = hist_x[:, :, 0] # [B, L']
-        
-        # B. 时间编码 (dt)
-        hist_time_encoding = self.temporal_enc(hist_dt) # [B, L', D]
-        dynamic_features_list.append(hist_time_encoding)
-        
-        # C. 额外 M 个数值特征 (第 1 列及以后)
-        num_extra_numerical_features = self.num_all_numerical_features - 1
-        if num_extra_numerical_features > 0:
-            # 提取额外的数值特征 [B, L', M]
-            extra_num_features = hist_x[:, :, 1:] 
-            
-            # 投影 [B, L', M] -> [B, L', D]
-            dynamic_num_emb = self.dynamic_num_proj(extra_num_features)
-            dynamic_features_list.append(dynamic_num_emb)
-            
         # --- 3. 最终拼接与编码 ---
 
         # 拼接所有动态特征 [B, L', D_total]
