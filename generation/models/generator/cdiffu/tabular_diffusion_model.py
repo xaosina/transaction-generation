@@ -3,9 +3,9 @@ import torch.nn.functional as F
 
 from .utils import index_to_log_onehot,log_onehot_to_index
 from .utils import log_sample_categorical
-from .hist_enc1 import HistoryEncoder
-from .type_denoising_ml import TypeDenoisingModule
-from .time_denoising_ml import TimeDenoisingModule
+from .history_encoder import HistoryEncoder
+from .type_denoising_module import TypeDenoisingModule
+from .time_denoising_module import TimeDenoisingModule
 from .time_diffusion_model import DiffusionTimeModel
 from .type_diffusion_model import DiffusionTypeModel
 from .utils import log_sample_categorical_multi_task

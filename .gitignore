@@ -36,7 +36,7 @@ res
 notebooks/my_anal/
 
 bpe_post_process.py
-temp*
+temp.*
 */exps/configs/*
 notebooks/
 *pkl

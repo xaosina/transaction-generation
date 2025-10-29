@@ -257,7 +257,10 @@ class Unet1DDiffusion(nn.Module):
             rawhist_length=0,
             d_numerical =2,
             categories = [1,1],
-            with_transformer = True
+            with_transformer = True,
+            num_layers = 4,
+            n_head = 2,
+            factor = 32
     ):
         super().__init__()
         self.d_token = d_token
@@ -327,15 +330,6 @@ class Unet1DDiffusion(nn.Module):
         }
         num_module_params(name2model)
 
-        #d_numerical = 1
-        #categories = [6,205]
-        #d_token = 4
-        #bias = True
-        num_layers = 4
-        n_head = 2
-        factor = 32
-        #use_mlp= True
-        #d_token =  self.one_lat_dim
         d_token_in = self.one_lat_dim
         d_token_out = self.one_lat_dim
         self.tokenizer = Tokenizer(d_numerical, categories, d_token, bias = True)
@@ -361,8 +355,6 @@ class Unet1DDiffusion(nn.Module):
 
         
         t = t.view(bs,ls)[:,0]
-        #
-        #t = t.view(bs,ls)
         emb = self.map_noise(t)
         emb = (
             emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)

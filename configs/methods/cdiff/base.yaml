@@ -8,7 +8,7 @@ evaluator:
 
 data_conf:
   train_resamples: 50
-  batch_size: 1024
+  batch_size: 8
   train_random_end: time
   train_transforms:
 
