@@ -317,13 +317,11 @@ class DiffusionTypeModel(torch.nn.Module):
             log_model_prob = log_model_prob.detach()
         
         kl = self.multinomial_kl_multi_task(log_true_prob, log_model_prob,self.num_classes_list)
-        ## TODO:need to check decoder_nll
         decoder_nll = -log_categorical(log_x_start, log_model_prob)
         mask = (t == torch.zeros_like(t)).float()
         mask = mask.repeat(decoder_nll.size(1),1)
         mask = mask.permute(1,0)
         loss = mask * decoder_nll + (1. - mask) * kl
-
         return loss
 
     def sample_time(self, b, device, method='uniform'):
@@ -371,6 +369,7 @@ class DiffusionTypeModel(torch.nn.Module):
             kl_prior = self.kl_prior(log_x_start)
             # Upweigh loss term of the kl
             vb_loss = kl / pt.unsqueeze(-1) + kl_prior
+            
             return -vb_loss
 
         elif self.loss_type == 'vb_all':
