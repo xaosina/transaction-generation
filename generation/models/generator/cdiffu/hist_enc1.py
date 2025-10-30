@@ -22,7 +22,7 @@ class HistoryEncoder(nn.Module):
         self.transformer_dim = transformer_dim
         self.feature_dim = feature_dim
         self.num_classes_dict = num_classes
-        all_dynamic_vocab_sizes = self.num_classes_dict.values() 
+        all_dynamic_vocab_sizes = self.num_classes_dict.values()
         num_all_numerical_features = len_numerical_features
 
         # --- 1. 动态类别特征处理（F 个特征，统一投影） ---

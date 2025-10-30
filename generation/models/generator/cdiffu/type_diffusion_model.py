@@ -172,7 +172,7 @@ class DiffusionTypeModel(torch.nn.Module):
         return kl
 
     def multinomial_kl_multi_task(self,log_prob1,log_prob2,num_classes_list):
-
+        # breakpoint()
         kl = 0
         idx = 0
         for i in num_classes_list:
@@ -180,6 +180,7 @@ class DiffusionTypeModel(torch.nn.Module):
             log_prob2_temp = log_prob2[:,idx:idx+i,:]
             kl += self.multinomial_kl(log_prob1_temp,log_prob2_temp)
             #kl_list.append(kl_res.item())
+            idx += i
         
         return kl
 
@@ -201,6 +202,7 @@ class DiffusionTypeModel(torch.nn.Module):
         return log_probs
 
     def q_pred(self, log_x_start, t):
+        # breakpoint() # TODO: Check here if we could drop some axis  
         log_cumprod_alpha_t = extract(self.log_cumprod_alpha, t, log_x_start.shape)
         log_1_min_cumprod_alpha = extract(self.log_1_min_cumprod_alpha, t, log_x_start.shape)
 
@@ -365,7 +367,8 @@ class DiffusionTypeModel(torch.nn.Module):
     def _train_loss(self, x, dt, hist,t, pt):
         b, device = x.size(0), x.device
         #
-        # breakpoint()
+
+        # TODO: You should separate this for few features. One feature - one kl.
         if self.loss_type == 'vb_stochastic':
             ## x: (B,L,D)
             
@@ -402,6 +405,7 @@ class DiffusionTypeModel(torch.nn.Module):
         num_elem = x.size(0)
         loss = self._train_loss(x, dt, hist, t, pt)
         loss = -loss / (math.log(2))
+        return loss.unsqueeze(-1) if loss.ndim == 2 else loss
         return loss.mean(dim=-1)
 
     def sample(self, num_samples, dt, hist):

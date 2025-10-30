@@ -21,10 +21,6 @@ evaluator:
     - OTD: {max_shift: 0, focus_on: [small_group]}
     - OTD: {max_shift: 0, focus_on: [small_group], f1_average: micro}
     - Cardinality
-
-    - OTD: {global_denom: False}
-    - OTD: {focus_on: [amount_rur], global_denom: False}
-    - OTD: {focus_on: [trans_date], global_denom: False}
 data_conf:
   dataset_name: age
   cat_cardinalities:
@@ -54,20 +50,18 @@ data_conf:
   val_random_end: time
   
   train_transforms:
-    "0":
+    "rescale":
       RescaleTime:
         loc: 0
         scale: 730
-    "1":
+        disable: false
+    "time_diff":
       TimeToDiff:
         disable: false
-    "ngrams":
-      NGramTransform:
-        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
-        feature_name: small_group
-        feature_counts: 203
-        max_l: *max_seq_len
-        disable: true
+    "log_time":
+      "LogTime":
+        disable: false
+        clamp: 5
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
@@ -79,19 +73,10 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "0": ${data_conf.train_transforms.0}
-    "1": ${data_conf.train_transforms.1}
+    "rescale": ${data_conf.train_transforms.rescale}
+    "time_diff": ${data_conf.train_transforms.time_diff}
+    "log_time": ${data_conf.train_transforms.log_time}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "3":
       CutTargetSequence:
         target_len: *generation_len
-    "ngrams":
-      NGramTransform:
-        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
-        feature_name: small_group
-        feature_counts: 203
-        max_l: *max_seq_len
-        disable: true
-    "shuffle_users":
-      ShuffleUsers:
-        shuffle: false

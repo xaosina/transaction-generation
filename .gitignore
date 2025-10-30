@@ -44,3 +44,4 @@ notebooks/
 *.sh
 embeddings/
 *.code-workspace
+*.ipynb_checkpoi*

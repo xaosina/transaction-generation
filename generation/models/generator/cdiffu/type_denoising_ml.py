@@ -52,7 +52,6 @@ class TypeDenoisingModule(nn.Module):
             self.cat_emb[key] = nn.Embedding(value+1, int(feature_dim))
             dynamic_feature_dim_sum += feature_dim
 
-        self.num_all_numerical_features = len_numerical_features
         num_extra_numerical_features = len_numerical_features - 1 
 
         self.num_proj = None
@@ -122,7 +121,7 @@ class TypeDenoisingModule(nn.Module):
         #for key,value in self.num_classes_dict.items():
         # breakpoint()
         for cat_name in cat_order:
-            e_temp = e[:,:,idx] if e.dim() == 3 else e
+            e_temp = e[:,:,idx]
             combined_cat.append(self.cat_emb[cat_name](e_temp))
             idx += 1
         
@@ -132,12 +131,16 @@ class TypeDenoisingModule(nn.Module):
 
         all_features.append(torch.cat(combined_cat,dim=-1))
         all_features.append(t)
+
         tgt = torch.cat(all_features, dim=-1) + order
 
 
         tgt = self.reduction_dim_layer(tgt)
+
         tgt_mask = self.generate_square_subsequent_mask(x.size(1)).to(x.device)
+
         memory = hist.permute(1, 0, -1)
+        
         tgt = tgt.permute(1, 0, -1)
         
 

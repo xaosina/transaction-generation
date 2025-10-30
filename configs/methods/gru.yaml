@@ -12,12 +12,7 @@ model:
     frozen: False
     checkpoint:
     batch_transforms:
-      'set_features':
-        Identity
-        # HideFeaturesFromTrain:
-        #   cat_features: 
-        #   num_features: 
-        #     - amount
+
   latent_encoder:
     name: GRU
     params:

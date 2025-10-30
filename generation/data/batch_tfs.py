@@ -263,13 +263,17 @@ class RescaleTime(BatchTransform):
     """Location to subtract from time."""
     scale: float
     """Scale to divide time by."""
-
+    disable: bool = False
     def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
         assert isinstance(batch.time, torch.Tensor)
         batch.time = batch.time.float()
         batch.time.sub_(self.loc).div_(self.scale)
 
     def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
         batch.time.mul_(self.scale).add_(self.loc)
 
 
@@ -480,6 +484,26 @@ class Logarithm(BatchTransform):
             if name in num_names:
                 x = batch[name].clamp(-88, 88)  # To prevent overflow
                 batch[name] = torch.expm1(torch.abs(x)) * torch.sign(x)
+
+@dataclass
+class LogTime(BatchTransform):
+    """Apply natural logarithm to specific feature."""
+    
+    disable: bool = True   
+    clamp: int = 88
+    
+    def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
+        assert batch.time is not None
+        batch.time = torch.log1p(torch.abs(batch.time)) * torch.sign(batch.time)
+
+    def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
+        assert batch.time is not None
+        x = batch.time.clamp(-self.clamp, self.clamp)  # To prevent overflow
+        batch.time = torch.expm1(torch.abs(x)) * torch.sign(x)
 
 
 @dataclass
