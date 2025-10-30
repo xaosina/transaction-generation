@@ -38,7 +38,7 @@ data_conf:
   val_ratio: 0.15
   num_workers: 4
   train_resamples: 1
-  batch_size: 128
+  batch_size: 512
 
   min_history_len: &min_history_len 32
   generation_len: &generation_len 32
@@ -54,7 +54,7 @@ data_conf:
       RescaleTime:
         loc: 0
         scale: 730
-        disable: false
+        disable: True
     "time_diff":
       TimeToDiff:
         disable: false

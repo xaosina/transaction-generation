@@ -14,7 +14,7 @@ from .utils import log_onehot_to_index_multi_task
 from copy import deepcopy
 
 class DiffusionTabularModel(torch.nn.Module):
-    def __init__(self, data_conf, model_config):
+    def __init__(self, data_conf, model_config, outer_history_encoder_dim=None, prefix_dim=None):
         super(DiffusionTabularModel, self).__init__()
 
         device = "cuda"
@@ -73,6 +73,9 @@ class DiffusionTabularModel(torch.nn.Module):
             device=device,
             len_numerical_features=len_num_features,
             feature_dim=emb_feature_dim,
+            outer_history_encoder_dim=outer_history_encoder_dim,
+            prefix_dim=prefix_dim,
+
         )
 
         self.denoise_fn_dt = TimeDenoisingModule(
@@ -85,6 +88,8 @@ class DiffusionTabularModel(torch.nn.Module):
             device=device,
             feature_dim=emb_feature_dim,
             len_numerical_features=len_num_features,
+            outer_history_encoder_dim=outer_history_encoder_dim,
+            prefix_dim=prefix_dim,
         )
 
         self.type_diff_ = DiffusionTypeModel(
@@ -97,7 +102,7 @@ class DiffusionTabularModel(torch.nn.Module):
             n_steps=self.n_steps, denoise_func=self.denoise_fn_dt
         )
 
-    def compute_loss(self, tgt_x, tgt_e, hist_x, hist_e, cat_order):
+    def compute_loss(self, tgt_x, tgt_e, hist_x, hist_e, cat_order, hist_emb=None):
         ## tgt_x,tgt_e : B,gen_len,F_{1};B,gen_len,F_{2}
         ## hist_x,hist_e: B,hist_len,F_{1};B,hist_len,F_{2}
         #
@@ -107,9 +112,9 @@ class DiffusionTabularModel(torch.nn.Module):
 
         losses = {}
         if 'type_loss' in self.loss_names:
-            losses['type_loss'] = self.type_diff_.compute_loss(tgt_e, tgt_x, hist, cat_order, t, pt)
+            losses['type_loss'] = self.type_diff_.compute_loss(tgt_e, tgt_x, hist, cat_order, t, pt, hist_emb=hist_emb)
         if 'time_loss' in self.loss_names:
-            losses['time_loss'] = self.time_diff_.compute_loss(tgt_x, tgt_e, hist, cat_order, t)
+            losses['time_loss'] = self.time_diff_.compute_loss(tgt_x, tgt_e, hist, cat_order, t, hist_emb=hist_emb)
         
         selected_losses = [losses[id] for id in self.loss_names]
         return sum(selected_losses).mean()
@@ -126,14 +131,14 @@ class DiffusionTabularModel(torch.nn.Module):
         pt = torch.ones_like(t).float() / self.n_steps
         return t, pt
 
-    def sample(self, hist_x, hist_e, tgt_len, cat_list, tgt_e=None, tgt_x=None):
+    def sample(self, hist_x, hist_e, tgt_len, cat_list, tgt_e=None, tgt_x=None, hist_emb=None):
         self.num_classes_list = [self.num_cat_dict[i] for i in cat_list]
 
-        e, x = self.sample_chain(hist_x, hist_e, tgt_len, cat_list, tgt_x=tgt_x, tgt_e=tgt_e)
+        e, x = self.sample_chain(hist_x, hist_e, tgt_len, cat_list, tgt_x=tgt_x, tgt_e=tgt_e, hist_emb=hist_emb)
 
         return log_onehot_to_index_multi_task(e[-1], self.num_classes_list) if tgt_e is None else tgt_e, x[-1]
 
-    def sample_chain(self, hist_x, hist_e, tgt_len, cat_list, tgt_x=None, tgt_e=None):
+    def sample_chain(self, hist_x, hist_e, tgt_len, cat_list, tgt_x=None, tgt_e=None, hist_emb=None):
         hist = self.get_hist(hist_x, hist_e)
         # shape = [hist.size(0), tgt_len]
         shape = [hist.size(0), tgt_len, hist_x.size(-1)]
@@ -178,13 +183,13 @@ class DiffusionTabularModel(torch.nn.Module):
             
             e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list) if tgt_e is None else e_t
             x_seq = self.time_diff_._one_diffusion_rev_step(
-                self.time_diff_.denoise_func_, x_t, e_t_index, i, hist, cat_list
+                self.time_diff_.denoise_func_, x_t, e_t_index, i, hist, cat_list, hist_emb=hist_emb
             )
             assert (x_seq[fix_mask] == tgt_x[fix_mask]).all()
             x_t_list.append(x_seq)
             # e_t, t, x_t, hist, non_padding_mask
             t_type = torch.full((b,), i, device=self.device, dtype=torch.long)
-            e_seq = self.type_diff_.p_sample(e_t, t_type, x_t, hist, cat_list) if tgt_e is None else tgt_e
+            e_seq = self.type_diff_.p_sample(e_t, t_type, x_t, hist, cat_list, hist_emb=hist_emb) if tgt_e is None else tgt_e
             e_t_list.append(e_seq)
             x_t = x_seq
             e_t = e_seq

@@ -196,7 +196,7 @@ class DiffusionTimeModel(nn.Module):
         eps = torch.randn_like(x).to(self.device) if t > 0 else torch.zeros_like(x)
         return model_mean + eps * (0.5 * model_log_variance).exp()
 
-    def _one_diffusion_rev_step(self, model, cur_x, e, i, hist, cat_list):
+    def _one_diffusion_rev_step(self, model, cur_x, e, i, hist, cat_list, hist_emb=None):
 
         noise = torch.zeros_like(cur_x) if i == 0 else torch.randn_like(cur_x)
         m = self._diff_mask(cur_x)
@@ -205,7 +205,7 @@ class DiffusionTimeModel(nn.Module):
             (cur_x.size(0), 1), i, device=self.device, dtype=torch.float32
         )
         pred_eps = self.denoise_func_(
-            cur_x.float(), e, noise_level, hist, cat_list
+            cur_x.float(), e, noise_level, hist, cat_list, hist_emb=hist_emb
         )  # (B,L,F_num)
 
         mu_num = cur_x - self.betas[i] / torch.sqrt(1 - self.alpha_bars[i]) * pred_eps
@@ -245,7 +245,7 @@ class DiffusionTimeModel(nn.Module):
         return diffusion_process
 
     def _one_diffusion_rev_step_ddim(
-        self, model, cur_x, e, i, hist, non_padding_mask, prev_i
+        self, model, cur_x, e, i, hist, non_padding_mask, prev_i, hist_emb=None
     ):
         noise_level = torch.FloatTensor([i]).repeat(cur_x.size(0), 1).to(self.device)
         pred_eps = self.denoise_func_(
@@ -254,6 +254,7 @@ class DiffusionTimeModel(nn.Module):
             noise_level.type(torch.cuda.FloatTensor),
             hist,
             non_padding_mask,
+            hist_emb=hist_emb
         ).squeeze(-1)
         # pred_x_0 = torch.sqrt(self.alpha_bars[prev_i] * (cur_x - torch.sqrt(1-self.alpha_bars[i]) * pred_eps) / torch.sqrt(self.alpha_bars[i]))
         pred_x_0 = (
@@ -277,11 +278,11 @@ class DiffusionTimeModel(nn.Module):
             x_seq.append(cur_x.unsqueeze(0))
         return x_seq
 
-    def compute_loss(self, x_0, e, hist, cat_order, t):
+    def compute_loss(self, x_0, e, hist, cat_order, t, hist_emb=None):
         t = t.clone().detach().to(self.device)
         eps = torch.randn_like(x_0)
         y_noisy = self.q_sample(x_0, t=t, noise=eps)
-        eps_pred = self.denoise_func_(y_noisy, e, t, hist, cat_order)  # (B,L,F_num)
+        eps_pred = self.denoise_func_(y_noisy, e, t, hist, cat_order, hist_emb=hist_emb)  # (B,L,F_num)
 
         m = self._diff_mask(x_0)
 

@@ -18,6 +18,8 @@ class TimeDenoisingModule(nn.Module):
         batch_first=True,
         feature_dim=8,
         len_numerical_features=2,
+        outer_history_encoder_dim=None,
+        prefix_dim=None,
     ):  # 🚀 新增 x_dim 和 e_dim 参数
         """
         :param transformer_dim:
@@ -83,7 +85,19 @@ class TimeDenoisingModule(nn.Module):
             device=self.device,
         )
 
-    def forward(self, x, e, t, hist, cat_order):
+        self.prefix_proj = None
+        if outer_history_encoder_dim is not None:
+            self.n_prefix = prefix_dim
+            self.prefix_proj = nn.Sequential(
+                nn.Linear(
+                    outer_history_encoder_dim,
+                    transformer_dim * self.n_prefix
+                ),
+                nn.Tanh(),
+            )
+
+
+    def forward(self, x, e, t, hist, cat_order, hist_emb=None):
         """
         :param x: B x Seq_Len x X_Dim (如果 X_Dim > 1)
         :param e: B x Seq_Len x E_Dim (如果 E_Dim > 1)
@@ -132,8 +146,17 @@ class TimeDenoisingModule(nn.Module):
             memory.size(2) == self.transformer_dim
         ), f"Error: history dim (got {memory.size(2)}) should equal to transformer_dim (got {self.transformer_dim})"
 
+        memory = hist.permute(1, 0, -1) # Why it is so different from type_denoising_ml?
+
+        if self.prefix_proj is not None:
+            assert hist_emb is not None, "You set history embedding to be but do not provide any embeddings."
+
+            prefix = self.prefix_proj(hist_emb)
+            prefix = prefix.view(self.n_prefix, prefix.size(0), self.transformer_dim)
+
+            memory = torch.cat([prefix, memory], dim=0)
+
         # 维度转换：B x S x D -> S x B x D
-        memory = hist.permute(1, 0, -1)
         tgt = tgt.permute(1, 0, -1)
 
         output = self.decoder(tgt, memory, tgt_mask=tgt_mask)

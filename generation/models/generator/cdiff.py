@@ -21,16 +21,22 @@ class CrossDiffusionModel(BaseGenerator):
         self.data_conf = data_conf
         self.model_config = model_config
 
-        self.history_encoder, _ = self._init_history_encoder()
+        self.help_net, _ = self._init_helpnet()
+        self.history_encoder, hist_dim = self._init_history_encoder()
+
         self.repeat_samples: int = int(model_config.params.get("repeat_samples", 1))
         logger.info(
             f"Generation is reapeating {self.repeat_samples} times to smooth time feature."
         )
 
         self.history_len: int = int(model_config.params["history_len"])
+        prefix_dim = model_config.params.get("prefix_dim", None)
         self.generation_len: int = int(model_config.params["generation_len"])
         self.model = DiffusionTabularModel(
-            data_conf=self.data_conf, model_config=self.model_config
+            data_conf=self.data_conf, 
+            model_config=self.model_config,
+            outer_history_encoder_dim=hist_dim,
+            prefix_dim=prefix_dim
         )
 
         self.fix_features: Optional[set] = set(
@@ -46,15 +52,15 @@ class CrossDiffusionModel(BaseGenerator):
         # (L, B, F) -> (B, L, F)  или (L, B) -> (B, L)
         return t.permute(1, 0, *range(2, t.ndim))  # шок
 
-    def _init_history_encoder(self) -> BaseGenerator:
+    def _init_helpnet(self) -> BaseGenerator:
         # initializing history encoder
-        params = self.model_config.params.get("history_encoder")
+        params = self.model_config.params.get("help_net")
         if not params:
-            print("No history encoder provided.")
+            print("No HelpNet provided.")
             return None, None
 
         params = deepcopy(params)
-        checkpoint = params.get("checkpoint", None)
+        checkpoint = params.pop("checkpoint", None)
         name = params.get("name")
 
         if name == "GroundTruthGenerator":
@@ -77,6 +83,33 @@ class CrossDiffusionModel(BaseGenerator):
             enc = freeze_module(enc)
 
         return enc, hist_dim
+
+    def _init_history_encoder(self) -> BaseGenerator:
+
+        params = self.model_config.params.get("history_encoder")
+        if not params:
+            print("No history encoder provided.")
+            return None, None
+
+        params = deepcopy(params)
+        checkpoint = params.pop("checkpoint", None)
+        name = params.get("name")
+
+        if name == "AutoregressiveGenerator":
+            cfg = from_dict(ModelConfig, params, Config(strict=True))
+            enc = BaseGenerator.get_model(name, self.data_conf, cfg)
+            hist_dim = getattr(getattr(enc, "encoder", None), "output_dim", None)
+        else:
+            raise ValueError("Not implemented any methods yet. Only GRU.")
+        
+        if checkpoint:
+            ckpt = torch.load(checkpoint, map_location="cpu")
+            msg = enc.load_state_dict(ckpt["model"], strict=True)
+            logger.info("History encoder: " + str(msg))
+            enc = freeze_module(enc)
+
+        return enc, hist_dim
+
 
     def _select_indices(self, names_all: List[str]) -> List[int]:
         if not names_all:
@@ -154,13 +187,17 @@ class CrossDiffusionModel(BaseGenerator):
     def forward(self, x: GenBatch) -> torch.Tensor:
         x.time = x.time.float()
         x.target_time = x.target_time.float()
+
+        embeddings = None
+        if self.history_encoder is not None:
+            embeddings = self.history_encoder.get_embeddings(x)
         self.set_numerical_diff_mask(x)
 
         hist = x.tail(self.history_len)
         tgt = x.get_target_batch()
 
         data = self.feature_preprocess(hist, tgt)
-        loss = self.model.compute_loss(*data)
+        loss = self.model.compute_loss(*data, embeddings)
         return loss
 
     def set_numerical_diff_mask(self, data):
@@ -180,6 +217,10 @@ class CrossDiffusionModel(BaseGenerator):
         hist = x.tail(self.history_len)
         tgt = x.get_target_batch()
 
+        embeddings = None
+        if self.history_encoder is not None:
+            embeddings = self.history_encoder.get_embeddings(x)
+
         _, _, hist_num, hist_cat, cat_order = self.feature_preprocess(
             hist, tgt
         )
@@ -192,8 +233,8 @@ class CrossDiffusionModel(BaseGenerator):
         provided_cat_features = []
         num_features_used = []
         cat_features_used = []
-        if self.history_encoder is not None:
-            pred = self.history_encoder.generate(x, self.generation_len, topk=-1)
+        if self.help_net is not None:
+            pred = self.help_net.generate(x, self.generation_len, topk=-1)
             num_features_number = 0
             if self.data_conf.time_name in self.focus:
                 num_features_number += 1
@@ -263,6 +304,7 @@ class CrossDiffusionModel(BaseGenerator):
                 cat_order,
                 tgt_e=tgt_cat if bool(set(self.data_conf.cat_cardinalities.keys()) & self.fix_features) else None,
                 tgt_x=tgt_num,
+                hist_emb=embeddings,
             )
 
             pred_cat[..., i] = pc

@@ -8,7 +8,7 @@ evaluator:
 
 data_conf:
   train_resamples: 10
-  batch_size: 1024
+  batch_size: 512
   train_random_end: time
   train_transforms:
     "3":
@@ -35,27 +35,6 @@ model:
     decoder_layer: 6
 
     losses: ['time_loss', 'type_loss']
-    history_encoder:
-      checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/gru.ckpt
-      name: AutoregressiveGenerator
-      latent_encoder:
-        name: GRU
-        params:
-          hidden_size: 480
-          num_layers: 1
-          dropout: 9.594490213419128e-06
-      autoencoder:
-        name: BaselineAE
-        params:
-          cat_emb_dim: 51
-          num_emb_dim: 18
-          num_norm: true
-          use_time: true
-        pretrain: false
-        frozen: True
-        batch_transforms:
-      pooler: last
-      params: null
 
 optimizer:
   name: Adam
