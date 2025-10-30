@@ -1,0 +1,22 @@
+config_factory: [start, datasets/age/age, methods/adiff4tpp/base, metrics/with_detection/age]
+
+trainer:
+  ema:
+    beta: 0.9999
+    update_after_step: 40000
+    update_every: 10
+
+model:
+  autoencoder:
+    params:
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/ready/vae/seed_0/ckpt/epoch__0351_-_loss__-0.002042.ckpt
+  
+  params:
+    repeat_matching: False
+  
+    history_encoder:
+      name: GRU
