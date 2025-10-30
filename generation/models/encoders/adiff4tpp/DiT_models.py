@@ -140,16 +140,22 @@ class DiT(nn.Module):
     """
     def __init__(
         self,
-        num_rows=32,
-        latent_size=2,
+        generation_len=32,
+        history_len=32,
+        latent_size=32,
         hidden_size=1152,
         depth=7,
         num_heads=16,
         mlp_ratio=4.0,
+        hstate_dim = 0,
         learn_sigma=True,
     ):
         super().__init__()
-        self.num_rows = num_rows
+        self.hstate_dim = hstate_dim
+        self.is_hstate_conditional = hstate_dim > 0
+        self.num_rows = generation_len + history_len
+        self.generation_len = generation_len
+        self.history_len = history_len
         self.learn_sigma = learn_sigma
         self.in_channels = 1
         self.out_channels = 1
@@ -161,12 +167,35 @@ class DiT(nn.Module):
         self.repeat_num = hidden_size // latent_size
 
         self.t_embedder = TimestepEmbedder(hidden_size)
+        self.hstate_embedder = nn.Identity()
+        if self.is_hstate_conditional:
+            self.hstate_embedder = nn.Linear(
+                self.hstate_dim, 
+                self.hidden_size
+            )
         # Will use fixed sin-cos embedding:
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_rows, hidden_size), requires_grad=False)
+        self.pos_embed = nn.Parameter(torch.zeros(1, self.num_rows, hidden_size), requires_grad=False)
         self.blocks = nn.ModuleList([
             DiTBlock(hidden_size, num_heads, mlp_ratio=mlp_ratio) for _ in range(depth)
         ])
         self.final_layer = FinalLayer(hidden_size, latent_size, self.out_channels)
+        
+        # cfg plugs
+        self.plug_reference_seq = nn.Parameter(
+            torch.zeros(1, self.history_len, self.latent_size), 
+            requires_grad=True,
+        )
+        self.plug_hstate = nn.Parameter(
+            torch.zeros(1, self.hstate_dim),
+            requires_grad=True,
+        )
+
+        # history time + hstate plug
+        self.plug_c_reference = nn.Parameter(
+            torch.zeros(1, self.history_len, hidden_size),
+            requires_grad=True,
+        )
+
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -197,29 +226,63 @@ class DiT(nn.Module):
         nn.init.normal_(self.final_layer.linear.weight, std=0.02)
         nn.init.normal_(self.final_layer.linear.bias, std=0.02)
 
-    def forward(self, x, A_t, attn_mask=None):
+    def forward(
+        self, 
+        x : torch.Tensor, 
+        noise_labels : torch.Tensor, 
+        class_labels: torch.Tensor | None = None,
+        hstate : torch.Tensor | None = None,
+        rawhist: torch.Tensor | None = None,
+        xT: torch.Tensor | None = None, # dummy variable, used for consistency with bridge models
+        attn_mask=None,
+    ) -> torch.Tensor:
         """
         Forward pass of DiT.
-        x: (B, N, L) tensor of spatial inputs (images or latent representations of images)
-        A_t: (B, N) tensor of asynchronous diffusion timesteps
-        mask_len: Tensor. Masks all events after the prediction length.
+        x: (bs, L_gen, lat) tensor of spatial inputs (images or latent representations of images)
+        noise_labels: (bs, L_gen) or (bs,) tensor of asynchronous diffusion timesteps
         """
-        x = x.repeat(1,1,self.repeat_num) + self.pos_embed  # (N, T, D), where T = H * W / patch_size ** 2
-        A_t = self.t_embedder(A_t)                          # (N, D)
-        c = A_t                                             # (N, D)
+        bs = x.size(0)
+        assert x.size(1) == self.generation_len
 
-        if attn_mask is None:
-            # Create a causal mask
-            causal_mask = torch.ones(1,1,x.shape[1],x.shape[1], dtype=x.dtype, device=x.device)
-            causal_mask[:,:,:,self.num_rows:] = 0
-        else:
-            causal_mask = attn_mask
+        if rawhist is None:
+            rawhist = self.plug_reference_seq.repeat(bs, 1, 1)
+        assert rawhist.size(1) == self.history_len
+        
+        assert noise_labels.size(0) == bs
+        if len(noise_labels.shape) == 1:
+            noise_labels = noise_labels.unsqueeze(1).repeat(1, self.generation_len)
+    
+        assert x.size(0) == rawhist.size(0) # bs
+        assert x.size(2) == rawhist.size(2) # latent dim
+        x = torch.cat([rawhist, x], dim=1)
+        x = x.repeat(1,1,self.repeat_num) + self.pos_embed  # (bs, L_hist + L_gen, D )
+        c = self.t_embedder(noise_labels)                            # (bs, L_gen, D)
+
+        if self.is_hstate_conditional:
+            if hstate is None:
+                hstate = self.plug_hstate.repeat(bs, 1)
+            assert hstate.size(1) == self.hstate_dim
+            hstate_emb = self.hstate_embedder(hstate)
+            assert hstate_emb.size(0) == c.size(0)
+            assert hstate_emb.size(1) == c.size(2)
+            c = c + hstate_emb.unsqueeze(1) # (bs, L_gen, D)
+        
+        assert c.size(2) == self.plug_c_reference.size(2)
+        c = torch.cat([self.plug_c_reference.repeat(bs, 1, 1), c], dim=1) # (bs, L_hist + L_gen, D )
+
+        # if attn_mask is None:
+        #     # Create a causal mask
+        #     # causal_mask = torch.ones(1,1,x.shape[1],x.shape[1], dtype=x.dtype, device=x.device)
+        #     # causal_mask[:,:,:,self.num_rows:] = 0
+        # else:
+        #     causal_mask = attn_mask
 
         for block in self.blocks:
-            x = block(x, c, causal_mask=causal_mask) # (N, T, D)
+            x = block(x, c, causal_mask=attn_mask) # (N, T, D)
 
         x = self.final_layer(x, c)
-        return x
+        assert x.shape == (bs, self.history_len + self.generation_len, self.latent_size)
+        return x[:,self.history_len:, :]
 
 def get_1d_sincos_pos_embed_from_grid(embed_dim, pos):
     """
