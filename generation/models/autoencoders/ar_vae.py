@@ -15,7 +15,7 @@ from .modules import Tokenizer, Transformer, Reconstructor
 from .utils import get_features_after_transform
 
 
-class VAE(BaseAE):
+class AR_VAE(BaseAE):
     def __init__(self, data_conf: LatentDataConfig, model_config):
         super().__init__()
         model_config: AEConfig = model_config.autoencoder
@@ -23,7 +23,7 @@ class VAE(BaseAE):
             "num_layers": model_config.params.get("num_layers", 2),
             "d_token": model_config.params.get("d_token", 6),
             "n_head": model_config.params.get("n_head", 2),
-            "factor": model_config.params.get("factor", 32),
+            "factor": model_config.params.get("factor", 64),
         }
         batch_transforms = create_instances_from_module(
             batch_tfs, model_config.batch_transforms
@@ -59,7 +59,7 @@ class VAE(BaseAE):
         """
 
         assert not self.encoder.pretrained
-        x, params = self.encoder(x)
+        x, params = self.encoder(x, reparametrize=True)
         x = self.decoder(x)
         return x, params
 
@@ -74,8 +74,6 @@ class VAE(BaseAE):
         hist = deepcopy(hist)
         assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
         x = self.encoder(hist.get_target_batch())
-        if not self.encoder.pretrained:
-            x = x[0]
         x = self.decoder.generate(x, topk=topk, temperature=temperature)
         if with_hist:
             hist.append(x)
@@ -90,7 +88,7 @@ class Encoder(nn.Module):
         num_layers: int = 2,
         d_token: int = 6,
         n_head: int = 2,
-        factor: int = 32,
+        factor: int = 64,
         use_time: bool = True,
         pretrain: bool = False,
         frozen: bool = False,
@@ -136,7 +134,7 @@ class Encoder(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, batch: GenBatch, copy=True) -> Seq:
+    def forward(self, batch: GenBatch, copy=True, reparametrize=False) -> Seq:
         if copy:
             batch = deepcopy(batch)
 
@@ -196,7 +194,7 @@ class Decoder(nn.Module):
         num_layers: int = 2,
         d_token: int = 6,
         n_head: int = 2,
-        factor: int = 32,
+        factor: int = 64,
         num_names: Sequence[str] | None = None,
         cat_cardinalities: Mapping[str, int] = None,
         batch_transforms: list | None = None,
@@ -273,5 +271,3 @@ class Decoder(nn.Module):
             if orig_hist is not None:
                 batch = batch.tail(batch_len)
         return batch
-
-

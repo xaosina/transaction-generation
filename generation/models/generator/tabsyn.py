@@ -203,6 +203,10 @@ class LatentDiffusionGenerator(BaseGenerator):
             B, None, history_embedding, latent_ref
         )  # Seq [L, B, D]
         sampled_batch = self.autoencoder.decoder.generate(sampled_seq, orig_hist=hist)
+
+        if not self.model_config.autoencoder.params["use_time"]:
+            sampled_batch.time = hist.target_time
+
         if self.repeat_matching or self.model_config.latent_encoder.params.get(
             "matching", False
         ):
