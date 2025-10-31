@@ -25,9 +25,13 @@ class DiffusionTabularModel(torch.nn.Module):
         cat_emb_feature_dim = 1 << model_config.params["cat_emb_dim_features_exp"]
         transformer_dim = 1 << model_config.params["dim_exp"]
         transformer_heads = 1 << model_config.params["heads_exp"]
+        dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
-        dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
+        
+        if (dim_feedforward % transformer_heads) != 0:
+            raise ValueError("(dim_feedforward % transformer_heads) != 0")
+
         prefix_dim = 1 << model_config.params.get("prefix_dim_exp", None)
 
         self.n_steps = model_config.params["diffusion_steps"]

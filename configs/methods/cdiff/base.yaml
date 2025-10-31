@@ -85,13 +85,14 @@ optuna:
 
 
     - ["model.params.diffusion_steps", ["suggest_int", {low: 400, high: 900, step: 10}]]
-    - ["model.params.num_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
-    - ["model.params.cat_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
-    - ["model.params.time_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
+    - ["model.params.num_emb_dim_features_exp", ["suggest_int", {low: 2, high: 8, step: 1}]]
+    - ["model.params.cat_emb_dim_features_exp", ["suggest_int", {low: 2, high: 8, step: 1}]]
+    - ["model.params.time_emb_dim_features_exp", ["suggest_int", {low: 2, high: 8, step: 1}]]
     - ["model.params.dim_exp", ["suggest_int", {low: 5, high: 14}]]
-    - ["model.params.heads_exp", ["suggest_int", {low: 2, high: 4, step: 2}]]
 
-    - ["model.params.hidden_scale_exp", ["suggest_int", {low: 4, high: 10, step: 1}]]
+    - ["model.params.heads_exp", ["suggest_int", {low: 1, high: 3}]]
+    - ["model.params.hidden_scale_exp", ["suggest_int", {low: 3, high: 10, step: 1}]]
+
     - ["model.params.encoder_layer", ["suggest_int", {low: 2, high: 12, step: 2}]]
     - ["model.params.decoder_layer", ["suggest_int", {low: 4, high: 12, step: 2}]]
 
