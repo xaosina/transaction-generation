@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from .temporal_pos_enc import DiscreteSinusoidalPosEmb
 import math
+from .temporal_pos_enc import get_time_pos_emb
 
 
 class Rezero(torch.nn.Module):
@@ -24,11 +24,16 @@ class TypeDenoisingModule(nn.Module):
         dropout=0.1,
         n_decoder_layers=1,
         device="cuda",
-        batch_first=True,
-        len_numerical_features=1,
-        feature_dim=8,
+        len_numerical_features=None,
+        num_feature_dim=8,
+        cat_feature_dim=8,
+        time_feature_dim=8,
         outer_history_encoder_dim=None,
         prefix_dim=None,
+        use_post_norm=False,
+        use_rezero=False,
+        diffusion_t_type='discrete',
+        use_simple_time_proj=True,
     ):
         """
 
@@ -44,34 +49,38 @@ class TypeDenoisingModule(nn.Module):
         """
         super(TypeDenoisingModule, self).__init__()
 
-        self.num_classes_dict = num_classes
-        self.feature_dim = feature_dim
+        self.device = device
+        self.time_feature_dim = time_feature_dim
+        self.cat_features_number = num_classes
 
-        # Diffusion time embedding
-        self.time_pos_emb = DiscreteSinusoidalPosEmb(int(feature_dim), n_steps)
+        self.time_pos_emb = get_time_pos_emb(diffusion_t_type, time_feature_dim, n_steps)
 
         self.mlp = nn.Sequential(
-            nn.Linear(int(feature_dim), transformer_dim),
+            nn.Linear(int(time_feature_dim), transformer_dim),
             nn.Softplus(),
-            nn.Linear(transformer_dim, feature_dim),
+            nn.Linear(transformer_dim, int(time_feature_dim)),
         )
 
-        dynamic_feature_dim_sum = 2 * feature_dim
+        # time, time, t - time twice because it was in cdiff original
+        dynamic_feature_dim_sum = 2 * time_feature_dim
 
         self.cat_emb = nn.ModuleDict()
-        for key, value in self.num_classes_dict.items():
-
-            self.cat_emb[key] = nn.Embedding(value + 1, int(feature_dim))
-            dynamic_feature_dim_sum += feature_dim
+        for key, value in self.cat_features_number.items():
+            self.cat_emb[key] = nn.Embedding(value, int(cat_feature_dim))
+            dynamic_feature_dim_sum += cat_feature_dim
 
         num_extra_numerical_features = len_numerical_features - 1
+        self.simple_time_proj = None
+        if use_simple_time_proj:
+            self.simple_time_proj = nn.Linear(1, time_feature_dim)
+            dynamic_feature_dim_sum += time_feature_dim
 
         self.num_proj = None
         if num_extra_numerical_features > 0:
-            self.num_proj = nn.Linear(num_extra_numerical_features, feature_dim)
-            dynamic_feature_dim_sum += feature_dim
-
-        self.total_d_model = dynamic_feature_dim_sum
+            self.num_proj = nn.Linear(
+                num_extra_numerical_features, int(num_feature_dim)
+            )
+            dynamic_feature_dim_sum += num_feature_dim
 
         self.nhead = transformer_heads
 
@@ -88,29 +97,29 @@ class TypeDenoisingModule(nn.Module):
             num_layers=n_decoder_layers,
             norm=decoder_norm,
         )
-        self.reduction_dim_layer = nn.Linear(self.total_d_model, transformer_dim)
+        self.reduction_dim_layer = nn.Linear(dynamic_feature_dim_sum, transformer_dim)
 
         self.output_layer_cat = nn.ModuleDict()
-        for key, value in self.num_classes_dict.items():
+        for key, value in self.cat_features_number.items():
 
             self.output_layer_cat[key] = nn.Linear(transformer_dim, value)
 
-        self.device = device
         self.transformer_dim = transformer_dim
-        self.rezero = Rezero()
+        self.prefix_post_norm = nn.LayerNorm(self.transformer_dim, eps=1e-6) if use_post_norm else None
+        self.rezero = Rezero() if use_rezero else None
 
         self.position_vec = torch.tensor(
             [
-                math.pow(10000.0, 2.0 * (i // 2) / int(feature_dim))
-                for i in range((int(feature_dim)))
+                math.pow(10000.0, 2.0 * (i // 2) / int(time_feature_dim))
+                for i in range((int(time_feature_dim)))
             ],
             device=torch.device(self.device),
         )
 
         self.order_vec = torch.tensor(
             [
-                math.pow(10000.0, 2.0 * (i // 2) / int(self.total_d_model))
-                for i in range((int(self.total_d_model)))
+                math.pow(10000.0, 2.0 * (i // 2) / int(dynamic_feature_dim_sum))
+                for i in range((int(dynamic_feature_dim_sum)))
             ],
             device=torch.device(self.device),
         )
@@ -141,7 +150,7 @@ class TypeDenoisingModule(nn.Module):
 
         order = self.order_enc(order.to(x.device))
 
-        time_embed = t.view(x.size(0), 1, int(self.feature_dim))
+        time_embed = t.view(x.size(0), 1, int(self.time_feature_dim))
         t = torch.cat([time_embed] * x.size(1), dim=1)
         # e = self.event_emb(e)
         combined_cat = []
@@ -155,6 +164,9 @@ class TypeDenoisingModule(nn.Module):
             idx += 1
 
         all_features = [self.temporal_enc(x[:, :, 0])]
+        if self.simple_time_proj is not None:
+            all_features.append(self.simple_time_proj(x[:, :, [0]]))
+
         if self.num_proj is not None:
             all_features.append(self.num_proj(x[:, :, 1:]))
 
@@ -184,9 +196,12 @@ class TypeDenoisingModule(nn.Module):
             ), "You set history embedding to be but do not provide any embeddings."
 
             prefix = self.prefix_proj(h_emb)
-            prefix = prefix.view(self.n_prefix, prefix.size(0), self.transformer_dim)
+            prefix = prefix.reshape(prefix.size(0), self.n_prefix, self.transformer_dim)
+            prefix = prefix.permute(1, 0, -1)
 
             memory = torch.cat([prefix, memory], dim=0)
+            if self.prefix_post_norm is not None:
+                memory = self.prefix_post_norm(memory)
 
         output = self.decoder(
             tgt,
@@ -195,15 +210,15 @@ class TypeDenoisingModule(nn.Module):
         )
 
         output = output.permute(1, 0, -1)
-        ##TODO: we must use seperate output laye for different category
-        # out = self.output_layer(output)
-        out_list = []
 
+        out_list = []
         for cat_name in cat_order:
             out_list.append(self.output_layer_cat[cat_name](output))
         out = torch.cat(out_list, dim=-1)
-        out = out.permute(0, 2, 1)
-        out = self.rezero(out)
+        out = out.permute(0, 2, 1) # Row from original cdiff. Mey be it should be up!!!!
+        if self.rezero is not None:
+            out = self.rezero(out)
+
         return out
 
     def generate_square_subsequent_mask(self, sz):

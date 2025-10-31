@@ -30,13 +30,11 @@ class CrossDiffusionModel(BaseGenerator):
         )
 
         self.history_len: int = int(model_config.params["history_len"])
-        prefix_dim = model_config.params.get("prefix_dim", None)
         self.generation_len: int = int(model_config.params["generation_len"])
         self.model = DiffusionTabularModel(
             data_conf=self.data_conf, 
             model_config=self.model_config,
             outer_history_encoder_dim=hist_dim,
-            prefix_dim=prefix_dim
         )
 
         self.fix_features: Optional[set] = set(
@@ -140,13 +138,7 @@ class CrossDiffusionModel(BaseGenerator):
             hist_num_features.append(hist.num_features[..., num_idxs])
 
         hist_num = torch.cat(hist_num_features, dim=-1)
-        # hist_num = (
-        #     torch.cat(
-        #         [hist.time.unsqueeze(-1), hist.num_features[..., num_idxs]], dim=-1
-        #     )
-        #     if num_idxs
-        #     else hist.time.unsqueeze(-1)
-        # )
+
         
         tgt_num = None
         tgt_num_features = []
@@ -157,15 +149,6 @@ class CrossDiffusionModel(BaseGenerator):
                 tgt_num_features.append(tgt.num_features[..., num_idxs])
 
             tgt_num = torch.cat(tgt_num_features, dim=-1)
-        
-        # if tgt is not None:
-        #     tgt_num = (
-        #         torch.cat(
-        #             [tgt.time.unsqueeze(-1), tgt.num_features[..., num_idxs]], dim=-1
-        #         )
-        #         if num_idxs
-        #         else tgt.time.unsqueeze(-1)
-        #     )
 
         # categorical
         hist_cat = hist.cat_features[..., cat_idxs]
@@ -255,28 +238,6 @@ class CrossDiffusionModel(BaseGenerator):
             tgt_num = self._to_blf(torch.cat(provided_num_features, dim=-1).float())
             tgt_cat = self._to_blf(torch.cat(provided_cat_features, dim=-1).long())
 
-        # # self.model.time_diff_.set_diffusion_mask(diff_idx, num_features_dim=hist_num.size(-1))
-        # breakpoint()
-        # # Optional - get features from history_encoder
-        # provided_num_feature = None
-        # if self.history_encoder is not None:
-        #     breakpoint()
-        #     pred = self.history_encoder.generate(x, self.generation_len, topk=-1)
-        #     if self.fix_features:
-        #         if self.data_conf.time_name in self.fix_features:
-        #             provided_time_feature = self._to_blf(pred.time).unsqueeze(-1)
-        #         for name in self.data_conf.num_names:
-        #             provided_num_feature = []
-        #             if idx in self.fix_features:
-        #                 idx = pred.num_features_index.index(name)
-        #                 provided_num_feature.append(self._to_blf(pred.num_features[..., [idx]]))
-                
-        #         for name in pred.cat_features_names:
-        #             provided_cat_feature = []
-        #             if name in self.fix_features:
-        #                 idx = pred.cat_features_names.index(name)
-        #                 provided_cat_feature.append(self._to_blf(pred.cat_features[..., [idx]]))
-
         B, _, F_cat = hist_cat.shape
         _, _, F_num = hist_num.shape
 
@@ -338,38 +299,6 @@ class CrossDiffusionModel(BaseGenerator):
             new_vals = pred_num[..., i, 0] # 0 - takes first. If you need some aggregating preprocess based on several samplings for your num feature - welcome
             idx = x.num_features_names.index(feature)
             num[..., idx] = new_vals.float().permute(1, 0)
-
-
-        # if has_provided:
-        #     cat = x.target_cat_features.clone()
-        #     num = x.target_num_features.clone()
-        #     time = x.target_time.clone()
-
-        #     if (
-        #         provided_cat_feature is not None
-        #         and self.diff_features in x.cat_features_names
-        #     ):
-        #         assert (
-        #             pred_cat.shape[-2] == 1
-        #         ), "Expected exactly one provided categorical feature."
-        #         new_vals = pred_cat[..., 0, 0]
-        #         cat_idx = x.cat_features_names.index(self.diff_features)
-
-        #         cat[..., cat_idx] = new_vals.long().permute(1, 0)
-        #     elif (
-        #         provided_num_feature is not None
-        #         and self.diff_features in x.num_features_names
-        #     ):
-        #         assert pred_num.shape[-2] == 2, "Expected time and one numeric feature."
-        #         new_vals = pred_num[..., 1, 0]
-        #         num_idx = x.num_features_names.index(self.diff_features)
-        #         num[..., num_idx] = new_vals.permute(1, 0)
-        #     else:
-        #         time = pred_num[..., 0, :].mean(dim=-1).permute(1, 0)
-        # else:
-        #     time = pred_num[..., 0, :].mean(dim=-1).permute(1, 0)
-        #     num = pred_num[..., 1:, 0].permute(1, 0, 2)
-        #     cat = pred_cat[..., 0].permute(1, 0, 2).long()
 
         sampled_batch = self.toGenBatch(
             cat, num, time, x.num_features_names, x.cat_features_names

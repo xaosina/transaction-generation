@@ -17,15 +17,14 @@ data_conf:
 model:
   params:
     # focus: ["trans_date", "small_group"]
-    fix_features: ["small_group", "amount_rur"]
-    diff_features: ["trans_date"]
-    losses: ["time_loss"]
-    prefix_dim: 4
+    fix_features: ["trans_date", "trans_date" ]
+    diff_features: ["small_group"]
+    losses: ["type_loss"]
     help_net:
       name: GroundTruthGenerator
       checkpoint:
     history_encoder:
-      # checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/gru.ckpt
+      checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/gru.ckpt
       name: AutoregressiveGenerator
       latent_encoder:
         name: GRU

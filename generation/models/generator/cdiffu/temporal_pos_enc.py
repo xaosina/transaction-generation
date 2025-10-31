@@ -2,6 +2,13 @@ import torch
 import torch.nn as nn
 import math
 
+def get_time_pos_emb(emb_type, dim, n_steps):
+    if emb_type == "discrete":
+        return DiscreteSinusoidalPosEmb(int(dim), n_steps)
+    elif emb_type == "continuous":
+        return ContinuousSinusoidalPosEmb(int(dim), n_steps)
+    else:
+        raise ValueError(f"Unknown embedding type: {emb_type}")
 
 class ContinuousSinusoidalPosEmb(nn.Module):
     def __init__(self, dim, num_steps=1000):

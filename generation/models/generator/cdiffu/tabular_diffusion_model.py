@@ -20,18 +20,27 @@ class DiffusionTabularModel(torch.nn.Module):
         device = "cuda"
         self.device = device
 
-        emb_feature_dim = 1 << model_config.params["emb_dim_features_exp"]
+        time_emb_feature_dim = 1 << model_config.params["time_emb_dim_features_exp"]
+        num_emb_feature_dim = 1 << model_config.params["num_emb_dim_features_exp"]
+        cat_emb_feature_dim = 1 << model_config.params["cat_emb_dim_features_exp"]
         transformer_dim = 1 << model_config.params["dim_exp"]
         transformer_heads = 1 << model_config.params["heads_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
         dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
+        prefix_dim = 1 << model_config.params.get("prefix_dim_exp", None)
+
         self.n_steps = model_config.params["diffusion_steps"]
         num_timesteps = model_config.params["diffusion_steps"]
+        history_encoder_causal_mask = model_config.params["history_encoder_causal_mask"]
+        outer_he_use_post_norm = model_config.params["use_post_norm"]
+        use_rezero = model_config.params["use_rezero"]
+        use_simple_t_project = model_config.params.get("use_simple_t_project")
+        num_diffusion_t_type = model_config.params["num_diffusion_t_type"]
+        cat_diffusion_t_type = model_config.params["cat_diffusion_t_type"]
         self.data_config = data_conf
         self.model_config = model_config
         self.loss_names = self.model_config.params["losses"]
-        
         self.fix_features: Optional[set] = set(self.model_config.params.get("fix_features", []))
         self.diff_features: Optional[set] = set(self.model_config.params.get("diff_features", []))
 
@@ -60,7 +69,11 @@ class DiffusionTabularModel(torch.nn.Module):
             num_encoder_layers=num_encoder_layers,
             dim_feedforward=dim_feedforward,
             len_numerical_features=len_num_features,
-            feature_dim=emb_feature_dim,
+            num_feature_dim=num_emb_feature_dim,
+            cat_feature_dim=cat_emb_feature_dim,
+            time_feature_dim=time_emb_feature_dim,
+            causal_mask=history_encoder_causal_mask,
+            use_simple_time_proj=use_simple_t_project,
         )
 
         self.denoise_fn_type = TypeDenoisingModule(
@@ -72,9 +85,15 @@ class DiffusionTabularModel(torch.nn.Module):
             n_decoder_layers=num_decoder_layers,
             device=device,
             len_numerical_features=len_num_features,
-            feature_dim=emb_feature_dim,
+            num_feature_dim=num_emb_feature_dim,
+            cat_feature_dim=cat_emb_feature_dim,
+            time_feature_dim=time_emb_feature_dim,
             outer_history_encoder_dim=outer_history_encoder_dim,
             prefix_dim=prefix_dim,
+            use_rezero=use_rezero,
+            use_post_norm=outer_he_use_post_norm,
+            diffusion_t_type=cat_diffusion_t_type,
+            use_simple_time_proj=use_simple_t_project,
 
         )
 
@@ -86,10 +105,16 @@ class DiffusionTabularModel(torch.nn.Module):
             dim_feedforward=dim_feedforward,
             n_decoder_layers=num_decoder_layers,
             device=device,
-            feature_dim=emb_feature_dim,
+            num_feature_dim=num_emb_feature_dim,
+            cat_feature_dim=cat_emb_feature_dim,
+            time_feature_dim=time_emb_feature_dim,
             len_numerical_features=len_num_features,
             outer_history_encoder_dim=outer_history_encoder_dim,
             prefix_dim=prefix_dim,
+            use_post_norm=outer_he_use_post_norm,
+            diffusion_t_type=num_diffusion_t_type,
+            use_simple_time_proj=use_simple_t_project,
+
         )
 
         self.type_diff_ = DiffusionTypeModel(

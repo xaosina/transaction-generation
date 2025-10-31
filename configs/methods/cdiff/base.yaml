@@ -26,21 +26,28 @@ model:
     generation_len: 32
     diffusion_steps: 500
     repeat_samples: 1
-
-    emb_dim_features_exp: 3
+    num_emb_dim_features_exp: 3
+    cat_emb_dim_features_exp: 3
+    time_emb_dim_features_exp: 3
     dim_exp: 6
     heads_exp: 3
     hidden_scale_exp: 7
     encoder_layer: 6
     decoder_layer: 6
-
+    history_encoder_causal_mask: True
+    use_rezero: True
     losses: ['time_loss', 'type_loss']
+    num_diffusion_t_type: discrete
+    cat_diffusion_t_type: discrete
+    use_simple_time_proj: True
+    use_post_norm: True
+    prefix_dim_exp: 5
+
 
 optimizer:
   name: Adam
   params:
     lr: 0.00009858780215263926
-    # lr: 0.001
     weight_decay: 0.00019210481290337137
 
 schedulers:
@@ -60,9 +67,10 @@ optuna:
     request_list: []
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
+    - ["schedulers.step.StepLR.step_size", ["suggest_int", {low: 2, high: 30, step: 2}]]
+
     - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-2, log: True}]]
     - ["optimizer.params.lr", ["suggest_float", {low: 1.e-7, high: 0.1, log: True}]]
-
     - 
       - ["data_conf.train_transforms.time_diff.TimeToDiff.disable", "data_conf.val_transforms.time_diff.TimeToDiff.disable"]
       - ["suggest_categorical", {choices: [True, False]}]
@@ -77,10 +85,22 @@ optuna:
 
 
     - ["model.params.diffusion_steps", ["suggest_int", {low: 400, high: 900, step: 10}]]
-    - ["model.params.emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
+    - ["model.params.num_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
+    - ["model.params.cat_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
+    - ["model.params.time_emb_dim_features_exp", ["suggest_int", {low: 1, high: 8}]]
     - ["model.params.dim_exp", ["suggest_int", {low: 5, high: 14}]]
     - ["model.params.heads_exp", ["suggest_int", {low: 2, high: 4, step: 2}]]
 
     - ["model.params.hidden_scale_exp", ["suggest_int", {low: 4, high: 10, step: 1}]]
     - ["model.params.encoder_layer", ["suggest_int", {low: 2, high: 12, step: 2}]]
     - ["model.params.decoder_layer", ["suggest_int", {low: 4, high: 12, step: 2}]]
+
+    - ["model.params.num_diffusion_t_type", ["suggest_categorical", {choices: ["discrete", "continuous"]}]]
+    - ["model.params.cat_diffusion_t_type", ["suggest_categorical", {choices: ["discrete", "continuous"]}]]
+    
+    - ["model.params.history_encoder_causal_mask", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.params.use_rezero", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.params.use_simple_time_proj", ["suggest_categorical", {choices: [True, False]}]]
+     # Only works with history embedding
+    # - ["model.params.use_post_norm", ["suggest_categorical", {choices: [True, False]}]]
+    # - ["model.params.prefix_dim_exp", ["suggest_int", {low: 2, high: 10, step: 2}]]

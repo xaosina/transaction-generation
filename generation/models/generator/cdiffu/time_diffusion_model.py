@@ -205,7 +205,7 @@ class DiffusionTimeModel(nn.Module):
             (cur_x.size(0), 1), i, device=self.device, dtype=torch.float32
         )
         pred_eps = self.denoise_func_(
-            cur_x.float(), e, noise_level, hist, cat_list, hist_emb=hist_emb
+            cur_x.float(), e, noise_level, hist, cat_list, h_emb=hist_emb
         )  # (B,L,F_num)
 
         mu_num = cur_x - self.betas[i] / torch.sqrt(1 - self.alpha_bars[i]) * pred_eps
@@ -282,7 +282,7 @@ class DiffusionTimeModel(nn.Module):
         t = t.clone().detach().to(self.device)
         eps = torch.randn_like(x_0)
         y_noisy = self.q_sample(x_0, t=t, noise=eps)
-        eps_pred = self.denoise_func_(y_noisy, e, t, hist, cat_order, hist_emb=hist_emb)  # (B,L,F_num)
+        eps_pred = self.denoise_func_(y_noisy, e, t, hist, cat_order, h_emb=hist_emb)  # (B,L,F_num)
 
         m = self._diff_mask(x_0)
 
