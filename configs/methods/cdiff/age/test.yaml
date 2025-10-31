@@ -2,11 +2,9 @@ data_conf:
   train_resamples: 50
   batch_size: 1024
   train_random_end: time
-  # focus_on: ["trans_date", "small_group"]
   train_transforms:
     "3":
       CutTargetSequence:
-        #target_len: ${data_conf.generation_len}
         target_len: 32
   
   
@@ -16,10 +14,9 @@ data_conf:
 # TODO: Fix this shit
 model:
   params:
-    # focus: ["trans_date", "small_group"]
-    fix_features: ["trans_date", "trans_date" ]
-    diff_features: ["small_group"]
-    losses: ["type_loss"]
+    fix_features: []
+    diff_features: ["small_group", "trans_date", "trans_date"]
+    losses: ['time_loss', 'type_loss']
     help_net:
       name: GroundTruthGenerator
       checkpoint:
