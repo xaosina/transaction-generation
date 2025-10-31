@@ -263,13 +263,17 @@ class RescaleTime(BatchTransform):
     """Location to subtract from time."""
     scale: float
     """Scale to divide time by."""
-
+    disable: False
     def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
         assert isinstance(batch.time, torch.Tensor)
         batch.time = batch.time.float()
         batch.time.sub_(self.loc).div_(self.scale)
 
     def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
         batch.time.mul_(self.scale).add_(self.loc)
 
 
@@ -485,14 +489,13 @@ class Logarithm(BatchTransform):
 @dataclass
 class Rescale(BatchTransform):
     """Rescale feature: subtract location and divide by scale."""
-
+   
     name: str
     """Feature name."""
     loc: Any
     """Value to subtract from the feature values."""
     scale: Any
     """Value to divide by the feature values."""
-
     def __call__(self, batch: GenBatch):
         batch[self.name].sub_(self.loc).div_(self.scale)
 

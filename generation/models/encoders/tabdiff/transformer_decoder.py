@@ -69,7 +69,8 @@ class Transformer_denoise(nn.Module):
             num_classes=1,
             rawhist_length=0,
             d_numerical =2,
-            categories = [1,1]
+            categories = [1,1],
+            with_transformer=True
     ):
         super().__init__()
 
@@ -90,7 +91,7 @@ class Transformer_denoise(nn.Module):
 
         self.detokenizer = Reconstructor(d_numerical, categories, d_token)
 
-        transformer_dim = 8
+        transformer_dim = 20
         self.hist_enc = HistoryEncoder(token_fn=self.tokenizer)
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -102,14 +103,14 @@ class Transformer_denoise(nn.Module):
         decoder_norm = nn.LayerNorm(transformer_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer=decoder_layer, num_layers=2,
                                              norm=decoder_norm)
-        order_dim = 8
+        order_dim = 20
         self.order_vec = torch.tensor(
             [math.pow(10000.0, 2.0 * (i // 2) /int(order_dim)) for i in range((int(order_dim)))],
             device=torch.device(self.device))
-        self.output_layer = nn.Linear(transformer_dim,4)
+        self.output_layer = nn.Linear(transformer_dim,16)
+        self.rezero = Rezero()
 
     def forward(self, x_num, x_cat,t,hist):
-
         device = "cuda:0"
         ## 1. time embeding, t shape: (bs*ls,)
         bs,ls = hist["cat"].size(0),self.length
@@ -124,19 +125,22 @@ class Transformer_denoise(nn.Module):
 
         ## 3. tokenizer for x_num and x_cat, their shape is (bs*ls,F,d_token)
         current_token = self.tokenizer(x_num,x_cat)[:,1:,:]
-        F_token = current_token.size(1)
-        L_final = self.length * F_token
-        #history_token = self.tokenizer(hist_num,hist_cat)[:,1:,:]
+        #F_token = current_token.size(1)
+        #L_final = self.length * F_token
 
         ## 4. reshape tokens
-        curr_token = current_token.reshape(bs,L_final,self.d_token)
+        #curr_token = current_token.reshape(bs,L_final,self.d_token)
+        curr_token = current_token.reshape(bs,ls,-1)
 
-        t_emb_expanded = emb.unsqueeze(1).repeat(1, F_token, 1)
+
+        #t_emb_expanded = emb.unsqueeze(1).repeat(1, F_token, 1)
         
-        # b) 重塑和融合: (bs*ls, F_token, C) -> (bs, L_final, C)
-        t_emb_final = t_emb_expanded.reshape(bs, L_final, self.d_token)
+        # b) reshape: (bs*ls, F_token, C) -> (bs, L_final, C)
+        #t_emb_final = t_emb_expanded.reshape(bs, L_final, self.d_token)
+        t_emb_final = emb.reshape(bs,ls,-1)
+        #order = torch.arange(L_final, device=device).unsqueeze(0).repeat(bs, 1)
+        order = torch.arange(ls, device=device).unsqueeze(0).repeat(bs, 1)
 
-        order = torch.arange(L_final, device=device).unsqueeze(0).repeat(bs, 1)
         order_emb = self.order_enc(order) # order_emb 形状: (bs, L_final, C)
 
         ## 5. concate time embeding and tokens,
@@ -144,13 +148,15 @@ class Transformer_denoise(nn.Module):
         tgt = torch.cat([curr_token,t_emb_final],dim=-1) + order_emb
         #tgt = curr_token + t_emb_final + order_emb
         ## 6. get the mask for subsequent event
-        tgt_mask = self.generate_square_subsequent_mask(L_final).to(device)
+        #tgt_mask = self.generate_square_subsequent_mask(L_final).to(device)
+        tgt_mask = self.generate_square_subsequent_mask(ls).to(device)
         ## 7. input into transformer encoder
         output = self.decoder(tgt, memory, tgt_mask=tgt_mask)
 
         ## 8. get the predicted output from transformer
         out = self.output_layer(output)
 
+        out = self.rezero(out)
         x = out.reshape(bs*ls,-1,self.d_token) ##(Bs*len,F,d_token)
         x_num_pred, x_cat_pred = self.detokenizer(x)
         x_cat_pred = torch.cat(x_cat_pred, dim=-1) if len(x_cat_pred)>0 else torch.zeros_like(x_cat).to(x_num_pred.dtype)

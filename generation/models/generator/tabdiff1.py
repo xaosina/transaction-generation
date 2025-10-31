@@ -129,6 +129,7 @@ class ContinuousDiscreteDiffusionGenerator1(BaseGenerator):
         #print(pred_num[:10],target_batch.time.permute(1,0)[:10])
         pred_cat = pred_cat.reshape(bs,gen_len,pred_cat.shape[1])
         pred_num = pred_num.reshape(bs,gen_len,pred_num.shape[1])
+
         features_name = [history_batch.cat_features_names,history_batch.num_features_names]
         
         aggregate_batch = self.replace_data(corrupt_dict,tgt_data,pred_num,pred_cat)

@@ -5,20 +5,19 @@ import math
 class HistoryEncoder(nn.Module):
     def __init__(self,
                  token_fn,
-                 transformer_dim=128,
+                 d_token = 4,
+                 transformer_dim=20,
                  transformer_heads=2,
                  dim_feedforward=64,
                  dropout=0.1,
                  num_encoder_layers=3,
-                 num_classes=10, 
-                 device='cuda',
-                 len_numerical_features=1,
-                 feature_dim = 8): 
+                 num_features = 4
+                 ): 
         
         super(HistoryEncoder, self).__init__()
 
         self.tokenizer = token_fn
-        self.total_d_model = 4
+        self.total_d_model = d_token * num_features
         encoder_layer = nn.TransformerEncoderLayer(d_model=self.total_d_model, nhead=transformer_heads,
                                                    dim_feedforward=dim_feedforward,
                                                    dropout=dropout,
@@ -28,7 +27,8 @@ class HistoryEncoder(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer=encoder_layer,
                                              num_layers=num_encoder_layers,
                                              norm=encoder_norm)
-        self.output_layer = nn.Linear(self.total_d_model,8)
+        
+        self.output_layer = nn.Linear(self.total_d_model,transformer_dim)
 
 
     def forward(self, hist):
@@ -40,10 +40,12 @@ class HistoryEncoder(nn.Module):
         x_num, x_cat = hist["num"].reshape(-1,hist["num"].shape[2]),hist["cat"].reshape(-1,hist["cat"].shape[2])
         hist_token =  self.tokenizer(x_num,x_cat)[:,1:,:]
 
-        num_features = 4
-        src = hist_token.reshape(bs,ls*num_features,-1)
+        #num_features = 4
+        #src = hist_token.reshape(bs,ls*num_features,-1)
+        src = hist_token.reshape(bs,ls,-1)
         # Transformer 编码
-        src_mask = self.generate_square_subsequent_mask(4*ls).to(device)
+        #src_mask = self.generate_square_subsequent_mask(4*ls).to(device)
+        src_mask = self.generate_square_subsequent_mask(ls).to(device) 
         src_mask = src_mask != 0
         
         

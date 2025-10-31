@@ -54,10 +54,11 @@ data_conf:
   val_random_end: time
   
   train_transforms:
-    # "0":
-    #   RescaleTime:
-    #     loc: 0
-    #     scale: 730
+    "0":
+       RescaleTime:
+         loc: 0
+         scale: 730
+         disable: false
     "1":
       TimeToDiff:
         disable: false
@@ -79,7 +80,7 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    # "0": ${data_conf.train_transforms.0}
+    "0": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "3":

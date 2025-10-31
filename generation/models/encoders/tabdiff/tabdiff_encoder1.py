@@ -25,6 +25,7 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         device = "cuda:0"
         model_params = model_config.params
         self.cond_col,self.corrupt_col = name_dict
+        self.model_backbone = model_params["backbone"]
         # self.cond_col = {"cat":["small_group"],"num":["trans_date"]}
         # self.corrupt_col = {"cat":["age"],"num":["amount_rur"]}
         #num_numerical_features = len(data_conf.num_names)+1
@@ -61,13 +62,18 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         for i in range(1, len(offsets)):
             self.slices_for_classes_with_mask.append(np.arange(offsets[i - 1], offsets[i]))
 
-        # backbone = Transformer_denoise(d_numerical=num_numerical_features,
-        #                            categories=self.num_classes_w_mask,
-        #                            **model_params['unet_params'])
 
-        backbone = Unet1DDiffusion(d_numerical=total_num_numerical_features,
-                                   categories=self.total_num_classes + 1,
-                                   **model_params['unet_params'])
+        if model_params['backbone'] == 'Transformer_denoise':
+            backbone = Transformer_denoise(d_numerical=num_numerical_features,
+                                    categories=self.num_classes_w_mask,
+                                    **model_params['unet_params'])
+        
+            
+        elif model_params['backbone'] == 'Unet1DDiffusion':
+            backbone = Unet1DDiffusion(d_numerical=total_num_numerical_features,
+                                       categories=self.total_num_classes + 1,
+                                       **model_params['unet_params'])
+
         
         model = Model(backbone, **model_params['edm_params'])
         self._denoise_fn = model
@@ -142,9 +148,12 @@ class ConditionalContinuousDiscreteEncoder1(nn.Module):
         hist["cat"] = tensor_to_one_hot(hist["cat"],self.total_num_classes+1)
         
         # Sample noise level for each batch, and the repeat L times to match the length of data:bs*ls
-        #    
-        t = torch.rand(bs, device=device, dtype=x_num.dtype)
-        t = torch.repeat_interleave(t,ls)
+        if self.model_backbone == 'Transformer_denoise':
+            t = torch.rand(bs*ls, device=device, dtype=x_num.dtype)
+        elif self.model_backbone == 'Unet1DDiffusion':
+            t = torch.rand(bs, device=device, dtype=x_num.dtype)
+            t = torch.repeat_interleave(t,ls)
+
         t = t[:, None]
         sigma_num = self.num_schedule.total_noise(t)
         sigma_cat = self.cat_schedule.total_noise(t)
