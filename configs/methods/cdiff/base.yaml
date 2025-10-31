@@ -1,5 +1,5 @@
 trainer:
-  metrics_on_train: True
+  metrics_on_train: False
   total_iters: 1_000_000
 
 evaluator:
@@ -37,8 +37,8 @@ model:
     history_encoder_causal_mask: True
     use_rezero: True
     losses: ['time_loss', 'type_loss']
-    num_diffusion_t_type: discrete
-    cat_diffusion_t_type: discrete
+    num_diffusion_t_type: "discrete"
+    cat_diffusion_t_type: "discrete"
     use_simple_time_proj: True
     use_post_norm: True
     prefix_dim_exp: 5
@@ -103,5 +103,5 @@ optuna:
     - ["model.params.use_rezero", ["suggest_categorical", {choices: [True, False]}]]
     - ["model.params.use_simple_time_proj", ["suggest_categorical", {choices: [True, False]}]]
      # Only works with history embedding
-    # - ["model.params.use_post_norm", ["suggest_categorical", {choices: [True, False]}]]
-    # - ["model.params.prefix_dim_exp", ["suggest_int", {low: 2, high: 10, step: 1}]]
+    - ["model.params.use_post_norm", ["suggest_categorical", {choices: [True, False]}]]
+    - ["model.params.prefix_dim_exp", ["suggest_int", {low: 2, high: 10, step: 1}]]
