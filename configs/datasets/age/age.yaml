@@ -60,7 +60,7 @@ data_conf:
         disable: false
     "log_time":
       "LogTime":
-        disable: false
+        disable: true
         clamp: 5
     "log_tfs":
       Logarithm:

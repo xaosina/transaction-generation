@@ -24,6 +24,7 @@ model:
       name: GroundTruthGenerator
       checkpoint:
     history_encoder:
+      # checkpoint: /workspace/transaction-generation/log/generation/ready/age/gru.ckpt
       checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/gru.ckpt
       name: AutoregressiveGenerator
       latent_encoder:

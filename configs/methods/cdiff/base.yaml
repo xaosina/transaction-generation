@@ -63,7 +63,7 @@ loss:
 optuna:
   params:
     n_trials: 100
-    n_startup_trials: 3
+    n_startup_trials: 5
     request_list: []
     target_metric: ${trainer.ckpt_track_metric}
   suggestions:
@@ -103,4 +103,4 @@ optuna:
     - ["model.params.use_simple_time_proj", ["suggest_categorical", {choices: [True, False]}]]
      # Only works with history embedding
     # - ["model.params.use_post_norm", ["suggest_categorical", {choices: [True, False]}]]
-    # - ["model.params.prefix_dim_exp", ["suggest_int", {low: 2, high: 10, step: 2}]]
+    # - ["model.params.prefix_dim_exp", ["suggest_int", {low: 2, high: 10, step: 1}]]
