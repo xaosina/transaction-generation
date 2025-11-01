@@ -1,0 +1,48 @@
+config_factory: [start, datasets/age/age, methods/tabsyn/base, metrics/with_detection/age]
+
+trainer:
+  ema:
+    beta: 0.9999
+    update_after_step: 10000
+    update_every: 10
+
+model:
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 16
+      num_emb_dim: 16
+      num_norm: True
+      use_time: True
+    pretrain: False
+    frozen: True
+    checkpoint: /home/transaction-generation/log/generation/ready/age/ae.ckpt
+    batch_transforms:
+
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+
+data_conf:
+  train_resamples: 5
+  batch_size: 128
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1
+    "1":
+      TimeToDiff:
+        disable: False
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-3
+    weight_decay: 1.e-2
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 20
+      gamma: 0.2

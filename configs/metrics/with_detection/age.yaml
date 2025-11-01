@@ -1,4 +1,5 @@
 evaluator:
+  devices: ["cuda:0", "cuda:0", "cuda:0"] 
   metrics:
     - OTD
     - OTD: {f1_average: micro}
@@ -14,8 +15,7 @@ evaluator:
     - Detection:
         report_std: True
         condition_len: ${data_conf.generation_len}
-        verbose: True
-
+        verbose: False
     - OTD: {global_denom: False}
     - OTD: {focus_on: [amount_rur], global_denom: False}
     - OTD: {focus_on: [trans_date], global_denom: False}

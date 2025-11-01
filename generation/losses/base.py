@@ -224,3 +224,24 @@ class VAELoss(BaseLoss):
 
     def update_beta(self, value):
         self._beta = value
+
+class AELoss(BaseLoss):
+    def __init__(
+        self,
+        data_conf: LatentDataConfig,
+        mse_weight: float = 0.5,
+        l2_coef: float = 0.001,
+        ignore_index: int = -100,
+    ):
+        super().__init__(data_conf, mse_weight, ignore_index)
+        self.l2_coef = l2_coef
+        print(l2_coef)
+
+    def __call__(self, y_true: GenBatch, data) -> torch.Tensor:
+        y_pred, hidden = data
+        base_loss = super().__call__(y_true, y_pred)["loss"]
+
+        hidden = hidden[y_true.valid_mask] # L*B, D
+        l2_term = (hidden ** 2).sum(-1).mean(0)
+
+        return {"loss": base_loss + self.l2_coef * l2_term, "l2_term": l2_term}

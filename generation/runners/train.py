@@ -59,6 +59,7 @@ class GenerationTrainer(Runner):
 
         train_loader.collate_fn = val_loader.collate_fn
         train_loader.dataset.random_end = val_loader.dataset.random_end
+        train_loader.dataset.n_resamples = 1
 
         val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
         train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)

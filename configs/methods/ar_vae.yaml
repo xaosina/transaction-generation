@@ -1,0 +1,63 @@
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  topk: 1
+  temperature: 1.
+  metrics:
+    - OTD: {max_shift: 0, detailed: True}
+
+trainer:
+  metrics_on_train: True
+
+# MODEL
+model:
+  name: AR_VAE
+  autoencoder:
+    name: AR_VAE
+    params:
+      use_time: True
+      num_layers: 3
+      d_token: 72
+      n_head: 8
+      factor: 32
+    pretrain: True
+    frozen: False
+    checkpoint:
+    batch_transforms:
+  latent_encoder:
+
+data_conf:
+  train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1
+    "1":
+      TimeToDiff:
+        disable: True    
+    "log_tfs":
+      VariableRangeDecimal:
+        disable: True
+        num_names: ${data_conf.num_names}
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 5.e-5
+    weight_decay: 1.e-2
+
+schedulers:
+  "plateau":
+    ReduceLROnPlateau:
+      factor: 0.7
+      patience: 3
+      threshold: 0.01
+  "beta":
+    BetaScheduler:
+      init_beta: 5
+      factor: 0.7
+      patience: 5
+      min_beta: 0.05
+      verbose: True
+
+loss:
+  name: VAELoss

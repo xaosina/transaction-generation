@@ -35,6 +35,8 @@ class BaseGenerator(BaseModel):
 
     def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch: ...
 
+    def get_embeddings(self, hist: GenBatch) -> torch.Tensor: ...
+
 
 class AutoregressiveGenerator(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
@@ -102,6 +104,13 @@ class AutoregressiveGenerator(BaseGenerator):
         else:
             return hist.tail(gen_len)  # Return GenBatch of size [gen_len, B, D]
 
+    def get_embeddings(self, hist: GenBatch):
+        hist = deepcopy(hist)
+        x = self.autoencoder.encoder(hist)
+        x = self.encoder.generate(x)
+        assert x.tokens.shape[0] == 1
+        return x.tokens[0]
+        
 
 class Reshaper(BaseModel):
     def __init__(self, gen_len: int):
@@ -194,6 +203,14 @@ class OneShotGenerator(BaseGenerator):
         else:
             return pred  # Return GenBatch of size [gen_len, B, D]
 
+    def get_embeddings(self, hist: GenBatch):
+        hist = deepcopy(hist)
+        x = self.autoencoder.encoder(hist)
+        x = self.encoder.generate(x)
+        assert x.tokens.shape[0] == 1
+        assert isinstance(self.poller, TakeLastHidden)
+        return x.tokens[0]
+
     def collect(
         self,
         hist: GenBatch,
@@ -268,6 +285,14 @@ class OneShotDistributionGenerator(BaseGenerator):
         if x.num_features is not None:
             x.num_features = self.num_projection(x.num_features)
         return x
+
+    def get_embeddings(self, hist: GenBatch):
+        hist = deepcopy(hist)
+        x = self.autoencoder.encoder(hist)
+        x = self.encoder.generate(x)
+        assert x.tokens.shape[0] == 1
+        assert isinstance(self.poller, TakeLastHidden)
+        return x.tokens[0]
 
     def scale_to_gen_len(self, probs: torch.tensor, gen_len: int):
         scaled = probs * gen_len

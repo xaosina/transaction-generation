@@ -1,0 +1,30 @@
+config_factory: [start, datasets/alphabattle_small/alphabattle_small, methods/tabsyn/base, metrics/with_detection/alphabattle_small]
+
+model:
+  autoencoder:
+    params:
+      d_token: 88
+      num_layers: 1
+      n_head: 1
+      factor: 4
+    checkpoint: /home/transaction-generation/log/generation/ready/alphabattle_small/kl_vae.ckpt
+    pretrain: True
+  latent_encoder:
+    params:
+      base_factor: 512 # unetXL
+
+data_conf:
+  train_resamples: 10
+  val_ratio: 0.15
+
+# optimizer:
+#   name: AdamW
+#   params:
+#     lr: 5.e-4
+#     weight_decay: 1.e-9
+
+# schedulers:
+#   "step":
+#     StepLR:
+#       step_size: 10
+#       gamma: 0.2

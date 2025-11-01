@@ -11,7 +11,12 @@ model:
       num_layers: 10
       n_head: 4
       factor: 28
+      use_time: False
 data_conf:
+  focus_on:
+    - age
+    - small_group
+    - amount_rur
   train_transforms:
     '1':
       TimeToDiff:
