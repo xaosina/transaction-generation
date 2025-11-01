@@ -34,6 +34,7 @@ class LatentDiffusionGenerator(BaseGenerator):
 
         self.autoencoder = self._init_autoencoder()
         self.history_encoder, hist_enc_dim = self._init_history_encoder()
+        self.help_net = self._init_helpnet()
         self.reference_generator = self._init_reference_generator()
 
         # initializing encoder
@@ -125,6 +126,36 @@ class LatentDiffusionGenerator(BaseGenerator):
             history_encoder = freeze_module(history_encoder)
         return history_encoder, hist_enc_dim
 
+    def _init_helpnet(self) -> BaseGenerator:
+        # initializing helpnet
+        params = self.model_config.params.get("help_net")
+        if not params:
+            return
+        else:
+            print("HelpNet is provided.")
+
+        params = deepcopy(params)
+        checkpoint = params.pop("checkpoint", None)
+        name = params.get("name")
+
+        if name == "GroundTruthGenerator":
+            enc = BaseModel.get_model(name)
+        elif name == "GRU":
+            input_size = params.get("input_size", 256)
+            gru_cfg = dict(input_size=input_size, num_layers=1, hidden_size=256)
+            enc = nn.Sequential(BaseModel.get_model("GRU", **gru_cfg), TakeLastHidden())
+        else:
+            cfg = from_dict(ModelConfig, params, Config(strict=True))
+            enc = BaseGenerator.get_model(name, self.data_conf, cfg)
+
+        if checkpoint:
+            ckpt = torch.load(checkpoint, map_location="cpu")
+            msg = enc.load_state_dict(ckpt["model"], strict=True)
+            logger.info("History encoder: " + str(msg))
+            enc = freeze_module(enc)
+
+        return enc
+
     def get_latent_batch(self, hist: GenBatch):
         target_len = hist.target_time.shape[0]
         hist = deepcopy(hist)
@@ -134,6 +165,17 @@ class LatentDiffusionGenerator(BaseGenerator):
         encoded_batch = self.autoencoder.encoder(hist)
         latent_hist, latent_target = split_seq_tail(encoded_batch, target_len)
         return latent_hist, latent_target
+
+    def get_target_trans_time(
+        self,
+        hist: GenBatch,
+    ):
+        if self.help_net is None:
+            return None
+
+        hist = deepcopy(hist)
+        x = self.help_net.generate(hist, self.generation_len, topk=-1)
+        return x.time.T
 
     def get_history_emb(self, hist, latent_hist):
         if self.history_encoder is None:
@@ -157,7 +199,7 @@ class LatentDiffusionGenerator(BaseGenerator):
             hist.append(pred)
             encoded_batch = self.autoencoder.encoder(hist)
             return get_seq_tail(encoded_batch, self.generation_len), pred
-        
+
     def forward(self, hist: GenBatch) -> torch.Tensor:
         """
         Forward pass of Latent diffusion model with inherent loss compute
@@ -168,13 +210,18 @@ class LatentDiffusionGenerator(BaseGenerator):
         latent_hist, latent_target = self.get_latent_batch(hist)
         history_embedding = self.get_history_emb(hist, latent_hist)
         latent_ref, orig_ref = self.get_reference_seq(hist, latent_hist)
+        time_deltas = self.get_target_trans_time(hist)
+        
         if self.repeat_matching:
             hist = deepcopy(hist)
             target_batch = hist.get_target_batch()
             target_batch = match_batches(orig_ref, target_batch, self.data_conf)
             latent_target = self.autoencoder.encoder(target_batch)
         # TODO: static condition
-        return self.encoder(latent_target, None, history_embedding, latent_ref)
+
+        return self.encoder(
+            latent_target, None, history_embedding, latent_ref, time_deltas=time_deltas
+        )
 
     @torch.no_grad()
     def generate(
@@ -199,8 +246,10 @@ class LatentDiffusionGenerator(BaseGenerator):
         # for _ in range(0, gen_len, self.generation_len):
         history_embedding = self.get_history_emb(hist, latent_hist)
         latent_ref, _ = self.get_reference_seq(hist, latent_hist)
+        time_deltas = self.get_target_trans_time(hist)
+
         sampled_seq = self.encoder.generate(
-            B, None, history_embedding, latent_ref
+            B, None, time_deltas, history_embedding, latent_ref
         )  # Seq [L, B, D]
         sampled_batch = self.autoencoder.decoder.generate(sampled_seq, orig_hist=hist)
 

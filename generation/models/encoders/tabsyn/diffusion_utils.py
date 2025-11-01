@@ -27,6 +27,7 @@ def sample(
         dim, 
         num_steps = 50, 
         class_labels : torch.Tensor | None = None,
+        time_deltas : torch.Tensor | None = None,
         hstate : torch.Tensor | None = None,
         rawhist : torch.Tensor | None = None,
     ):
@@ -56,6 +57,7 @@ def sample(
                 t_next, 
                 x_next, 
                 class_labels=class_labels, 
+                time_deltas=time_deltas,
                 hstate=hstate,
                 rawhist=rawhist)
 
@@ -64,6 +66,7 @@ def sample(
 def sample_step(
         net, num_steps, i, t_cur, t_next, x_next, 
         class_labels : torch.Tensor | None = None,
+        time_deltas : torch.Tensor | None = None,
         hstate : torch.Tensor | None = None,
         rawhist: torch.Tensor | None = None,
     ):
@@ -79,6 +82,7 @@ def sample_step(
         x_hat, 
         t_hat.unsqueeze(0).repeat(x_hat.size(0)), 
         class_labels=class_labels, 
+        time_deltas=time_deltas,
         hstate=hstate, 
         rawhist=rawhist,
     ).to(torch.float32)
@@ -92,6 +96,7 @@ def sample_step(
             x_next, 
             t_next.unsqueeze(0).repeat(x_next.size(0)), 
             class_labels=class_labels, 
+            time_deltas=time_deltas,
             hstate=hstate, 
             rawhist=rawhist
         ).to(torch.float32)
@@ -190,6 +195,7 @@ class EDMLoss:
     def __call__(
             self, denoise_fn, data, 
             class_labels: torch.Tensor | None = None,
+            time_deltas: torch.Tensor | None = None,
             hstate: torch.Tensor | None = None,
             rawhist: torch.Tensor | None = None,
             match_emb_size: int = None
@@ -206,6 +212,7 @@ class EDMLoss:
             y + n, 
             sigma, 
             class_labels=class_labels, 
+            time_deltas=time_deltas,
             hstate=hstate, 
             rawhist=rawhist,
         )

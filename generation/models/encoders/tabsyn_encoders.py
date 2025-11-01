@@ -79,6 +79,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             num_classes=params['num_classes'],
             hstate_condition=hstate_condition,
             hstate_dim=params['history_encoder_dim'],
+            trans_time_conditional=params['time_deltas'],
             rawhist_length=params['history_len']
         )
 
@@ -110,7 +111,8 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             target_seq: Seq,
             class_labels: torch.Tensor | None = None, 
             history_embedding: torch.Tensor | None = None,
-            history_seq: Seq | None = None
+            history_seq: Seq | None = None,
+            time_deltas: torch.Tensor | None = None,
         ) -> torch.Tensor :
 
         target_seq = seq2tensor(target_seq) # (B, L_gen, D)
@@ -123,12 +125,15 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         if history_seq is not None:
             assert history_seq.shape == (bs, self.history_len, self.latent_dim)
             history_seq = torch.flatten(history_seq, start_dim=1)
+        if time_deltas is not None:
+            assert time_deltas.shape == (bs, self.generation_len)
         if history_embedding is not None:
             assert history_embedding.shape == (bs, self.history_encoder_dim)
 
         return self.model(
             target_seq,
             class_labels,
+            time_deltas,
             history_embedding,
             history_seq,
             match_emb_size=self.match_emb_size,
@@ -138,6 +143,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             self, 
             n_seqs: int, 
             class_labels: torch.Tensor | None = None, 
+            time_deltas: torch.Tensor | None = None,
             history_embedding: torch.Tensor | None = None, 
             history_seq: Seq | None = None
         ) -> Seq :
@@ -151,12 +157,15 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
 
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
+        if time_deltas is not None:
+            assert time_deltas.shape == (n_seqs, self.generation_len)
 
         _samp = sample(
             self.model.denoise_fn_D, 
             n_seqs, 
             self.latent_dim * self.generation_len, 
             class_labels=class_labels, 
+            time_deltas=time_deltas,
             hstate=history_embedding, 
             rawhist=history_seq
         ) # [B, L*D]

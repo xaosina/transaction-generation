@@ -16,12 +16,16 @@ model:
       use_time: False
     pretrain: False
     frozen: True
-    checkpoint: /home/transaction-generation/log/generation/ready/age/vae_no_time.ckpt
+    checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/vae_no_time.ckpt
     batch_transforms:
 
   latent_encoder:
     params:
       base_factor: 512 # unetXL
+      time_deltas: True
+  params:    
+    help_net:
+      name: GroundTruthGenerator
 
 data_conf:
   train_resamples: 5

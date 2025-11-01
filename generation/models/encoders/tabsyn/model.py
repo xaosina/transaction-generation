@@ -9,6 +9,7 @@ from torch import Tensor
 from .diffusion_utils import EDMLoss
 import pdb
 
+
 def num_module_params(moduledict: Dict, verbose: bool = True) -> Dict:
     numparamsdict = dict()
     for name, model in moduledict.items():
@@ -18,6 +19,7 @@ def num_module_params(moduledict: Dict, verbose: bool = True) -> Dict:
             print(f"Module {name}: #params = {num_params}")
         numparamsdict[name] = num_params
     return numparamsdict
+
 
 ModuleType = Union[str, Callable[..., nn.Module]]
 
@@ -125,7 +127,7 @@ class DoubleConv(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv1d(mid_channels, out_channels, kernel_size=3, padding=1),
             nn.BatchNorm1d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
@@ -139,7 +141,7 @@ class Down(nn.Module):
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool1d(2, ceil_mode=True) if down else nn.Identity(),
-            DoubleConv(in_channels, out_channels)
+            DoubleConv(in_channels, out_channels),
         )
 
     def forward(self, x):
@@ -154,12 +156,15 @@ class Up(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         # if bilinear:
-        self.up = nn.Upsample(scale_factor=2, mode='linear', align_corners=True) if up else nn.Identity()
+        self.up = (
+            nn.Upsample(scale_factor=2, mode="linear", align_corners=True)
+            if up
+            else nn.Identity()
+        )
         self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
         # else:
         #     self.up = nn.ConvTranspose2d(in_channels , in_channels // 2, kernel_size=2, stride=2)
         #     self.conv = DoubleConv(in_channels, out_channels)
-
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
@@ -233,8 +238,10 @@ class CondUp(nn.Module):
 
     def __init__(self, in_channels, out_channels, z_channels):
         super().__init__()
-        self.up = nn.Upsample(scale_factor=2, mode='linear', align_corners=True)
-        self.conv = CondDoubleConv(in_channels, out_channels, z_channels, in_channels // 2)
+        self.up = nn.Upsample(scale_factor=2, mode="linear", align_corners=True)
+        self.conv = CondDoubleConv(
+            in_channels, out_channels, z_channels, in_channels // 2
+        )
 
     def forward(self, x1, x2, z):
         x1 = self.up(x1)
@@ -242,7 +249,13 @@ class CondUp(nn.Module):
         # diffY = torch.tensor([x2.size()[2] - x1.size()[2]])
         diffX = torch.tensor([x2.size()[2] - x1.size()[2]])
 
-        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,])
+        x1 = F.pad(
+            x1,
+            [
+                diffX // 2,
+                diffX - diffX // 2,
+            ],
+        )
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x, z)
 
@@ -255,15 +268,16 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 class CUNet(nn.Module):
 
     def __init__(
-            self, 
-            n_channels, 
-            n_classes, 
-            z_channels, 
-            base_factor=32, 
-            reduce_profile = [False, True, False, True]
+        self,
+        n_channels,
+        n_classes,
+        z_channels,
+        base_factor=32,
+        reduce_profile=[False, True, False, True],
     ):
         super(CUNet, self).__init__()
         self.n_channels = n_channels
@@ -271,7 +285,12 @@ class CUNet(nn.Module):
         self.z_channels = z_channels
         self.base_factor = base_factor
         self.reduce_profile = reduce_profile
-        r1, r2, r3, r4 = reduce_profile[0], reduce_profile[1], reduce_profile[2], reduce_profile[3]
+        r1, r2, r3, r4 = (
+            reduce_profile[0],
+            reduce_profile[1],
+            reduce_profile[2],
+            reduce_profile[3],
+        )
 
         self.inc = DoubleConv(n_channels, base_factor)
         self.down1 = Down(base_factor, 2 * base_factor, down=r1)
@@ -292,7 +311,9 @@ class CUNet(nn.Module):
     def forward(self, x, z):
         # pdb.set_trace()
         x1 = self.inc(x)
-        x2 = self.down1(x1, )
+        x2 = self.down1(
+            x1,
+        )
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
@@ -311,22 +332,22 @@ class CUNet(nn.Module):
 class MLPDiffusion(nn.Module):
 
     def __init__(
-            self, 
-            d_in, 
-            dim_t=512,
-            num_classes=1,
-            dim_classes_emb = 64,
-            hstate_condition: bool = False,
-            hstate_dim = 24,
-            dim_rawhist = 0,
-        ):
+        self,
+        d_in,
+        dim_t=512,
+        num_classes=1,
+        dim_classes_emb=64,
+        hstate_condition: bool = False,
+        hstate_dim=24,
+        dim_rawhist=0,
+    ):
         super().__init__()
         self.dim_t = dim_t
         self.is_hstate_conditional = hstate_condition
         self.is_rawhist_conditional = dim_rawhist > 0
         self.dim_rawhist = dim_rawhist
 
-        dim_proj_in = d_in 
+        dim_proj_in = d_in
         if self.is_hstate_conditional:
             dim_proj_in += hstate_dim
         if self.is_rawhist_conditional:
@@ -345,7 +366,6 @@ class MLPDiffusion(nn.Module):
         if self.is_class_conditional:
             self.dim_mlp_input += dim_classes_emb
 
-
         self.mlp = nn.Sequential(
             nn.Linear(self.dim_mlp_input, dim_t * 2),
             nn.SiLU(),
@@ -362,23 +382,23 @@ class MLPDiffusion(nn.Module):
         )
 
         name2model = {
-            'proj': self.proj,
-            'mlp': self.mlp,
-            'map_noise': self.map_noise,
-            'time_embed': self.time_embed,
-            'map_classes': self.map_classes,
+            "proj": self.proj,
+            "mlp": self.mlp,
+            "map_noise": self.map_noise,
+            "time_embed": self.time_embed,
+            "map_classes": self.map_classes,
             # 'map_hstate': self.map_hstate,
         }
         num_module_params(name2model)
 
     def forward(
-            self, 
-            x, 
-            noise_labels, 
-            class_labels = None, 
-            hstate = None,
-            rawhist = None,
-        ):
+        self,
+        x,
+        noise_labels,
+        class_labels=None,
+        hstate=None,
+        rawhist=None,
+    ):
         if self.is_class_conditional:
             assert class_labels is not None
         if self.is_hstate_conditional:
@@ -388,7 +408,7 @@ class MLPDiffusion(nn.Module):
             assert isinstance(rawhist, torch.Tensor)
             assert rawhist.ndim == 2
             assert rawhist.size(1) == self.dim_rawhist
-        
+
         emb = self.map_noise(noise_labels)
         emb = (
             emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
@@ -403,27 +423,30 @@ class MLPDiffusion(nn.Module):
         x = self.proj(x) + emb
         if self.is_class_conditional:
             # pdb.set_trace()
-            class_emb = self.map_classes(class_labels).view(class_labels.size(0), self.dim_classes_emb)
+            class_emb = self.map_classes(class_labels).view(
+                class_labels.size(0), self.dim_classes_emb
+            )
             x = torch.cat([x, class_emb], dim=1)
-            
+
         return self.mlp(x)
 
 
 class Unet1DDiffusion(nn.Module):
 
     def __init__(
-            self, 
-            latent_dim, 
-            dim_t=512, 
-            length=2,
-            base_factor=32,
-            num_classes=1,
-            hstate_condition: bool = False,
-            hstate_dim = 24,
-            rawhist_length=0,
+        self,
+        latent_dim,
+        dim_t=512,
+        length=2,
+        base_factor=32,
+        num_classes=1,
+        hstate_condition: bool = False,
+        hstate_dim=24,
+        trans_time_conditional=False,
+        rawhist_length=0,
     ):
         super().__init__()
-        
+
         self.dim_t = dim_t
         self.length = length
         self.num_classes = num_classes
@@ -433,11 +456,12 @@ class Unet1DDiffusion(nn.Module):
 
         self.is_class_conditional = num_classes > 1
         self.is_hstate_conditional = hstate_condition
+        self.is_trans_time_conditional = trans_time_conditional
         self.is_rawhist_conditional = rawhist_length > 0
-        
+
         def _check_in_borders(val: int, lb: int, rb: int):
             return val >= lb and val < rb
-        
+
         if _check_in_borders(self.unet_length, 2, 6):
             reduce_profile = [False, False, False, False]
         elif _check_in_borders(self.unet_length, 6, 12):
@@ -447,14 +471,16 @@ class Unet1DDiffusion(nn.Module):
             assert self.unet_length % 4 == 0
             reduce_profile = [False, True, False, True]
         elif _check_in_borders(self.unet_length, 24, 48):
-            assert self.unet_length %  8 == 0
+            assert self.unet_length % 8 == 0
             reduce_profile = [False, True, True, True]
         elif _check_in_borders(self.unet_length, 48, 128):
-            assert self.unet_length %  16 == 0
+            assert self.unet_length % 16 == 0
             reduce_profile = [True, True, True, True]
         else:
-            raise Exception(f'The overal length, {self.unet_length}, is too high or too low')
-        
+            raise Exception(
+                f"The overal length, {self.unet_length}, is too high or too low"
+            )
+
         cunet_chans = self.one_lat_dim
         basic_emb_dim = cunet_chans
 
@@ -463,99 +489,139 @@ class Unet1DDiffusion(nn.Module):
 
         TIME_Z_CHAN_FACTOR = 1
         CLASS_CONDI_Z_CHAN_FACTOR = 1
+        TRANS_TIME_Z_CHAN_FACTOR = 1
         HSTATE_CONDI_Z_CHAN_FACTOR = 2
 
         self.time_emb_dim = TIME_Z_CHAN_FACTOR * basic_emb_dim
         self.classes_emb_dim = CLASS_CONDI_Z_CHAN_FACTOR * basic_emb_dim
+        self.trans_time_emb_dim = TRANS_TIME_Z_CHAN_FACTOR * basic_emb_dim
         self.hstate_emb_dim = HSTATE_CONDI_Z_CHAN_FACTOR * basic_emb_dim
 
         z_channels += self.time_emb_dim
         if self.is_class_conditional:
             z_channels += self.classes_emb_dim
+        if self.is_trans_time_conditional:
+            z_channels += self.trans_time_emb_dim
         if self.is_hstate_conditional:
             z_channels += self.hstate_emb_dim
 
         self.cunet = CUNet(
-            cunet_chans, 
-            cunet_chans, 
-            z_channels, 
-            base_factor=base_factor, 
-            reduce_profile=reduce_profile
+            cunet_chans,
+            cunet_chans,
+            z_channels,
+            base_factor=base_factor,
+            reduce_profile=reduce_profile,
         )
 
         # mapping time
         self.map_noise = PositionalEmbedding(num_channels=dim_t)
         self.time_embed = nn.Sequential(
-            nn.Linear(dim_t, dim_t), 
-            nn.SiLU(), 
-            nn.Linear(dim_t, self.time_emb_dim)
+            nn.Linear(dim_t, dim_t), nn.SiLU(), nn.Linear(dim_t, self.time_emb_dim)
         )
 
         # mapping classes
         self.map_classes = nn.Identity()
         if self.is_class_conditional:
             self.map_classes = nn.Embedding(num_classes, self.classes_emb_dim)
-        
+
+        self.map_trans_time = nn.Identity()
+        if self.is_trans_time_conditional:
+            trans_time_dim = self.length
+            self.map_trans_time = nn.Sequential(
+                nn.Linear(trans_time_dim, self.trans_time_emb_dim),
+                nn.SiLU(),
+                nn.Linear(self.trans_time_emb_dim, self.trans_time_emb_dim),
+            )
+
         # mapping hstate
         self.map_hstate = nn.Identity()
         if self.is_hstate_conditional:
             self.map_hstate = nn.Sequential(
-                nn.Linear(hstate_dim, self.hstate_emb_dim), 
-                nn.SiLU(), 
-                nn.Linear(self.hstate_emb_dim, self.hstate_emb_dim)
+                nn.Linear(hstate_dim, self.hstate_emb_dim),
+                nn.SiLU(),
+                nn.Linear(self.hstate_emb_dim, self.hstate_emb_dim),
             )
 
         name2model = {
-            'cunet': self.cunet,
-            'map_noise': self.map_noise,
-            'time_embed': self.time_embed,
-            'map_classes': self.map_classes,
-            'map_hstate': self.map_hstate
+            "cunet": self.cunet,
+            "map_noise": self.map_noise,
+            "time_embed": self.time_embed,
+            "map_classes": self.map_classes,
+            "map_trans_time": self.map_trans_time,
+            "map_hstate": self.map_hstate,
         }
         num_module_params(name2model)
 
     def forward(
-            self, 
-            x, 
-            noise_labels, 
-            class_labels : torch.Tensor | None = None, 
-            hstate : torch.Tensor | None = None,
-            rawhist: torch.Tensor | None = None,
-            xT: torch.Tensor | None = None, # dummy variable, used for consistency with bridge models
-        ):
+        self,
+        x,
+        noise_labels,
+        class_labels: torch.Tensor | None = None,
+        time_deltas: torch.Tensor | None = None,
+        hstate: torch.Tensor | None = None,
+        rawhist: torch.Tensor | None = None,
+        xT: (
+            torch.Tensor | None
+        ) = None,  # dummy variable, used for consistency with bridge models
+    ):
+
         emb = self.map_noise(noise_labels)
         emb = (
             emb.reshape(emb.shape[0], 2, -1).flip(1).reshape(*emb.shape)
         )  # swap sin/cos
         emb = self.time_embed(emb)[:, :, None]
-        
+
         # adding class condition
         if self.is_class_conditional:
-            assert isinstance(class_labels, torch.Tensor), 'Model is class conditional, `class_labels` has to be provided'
+            assert isinstance(
+                class_labels, torch.Tensor
+            ), "Model is class conditional, `class_labels` has to be provided"
             # pdb.set_trace() # check dimension
-            class_emb = self.map_classes(class_labels).view(class_labels.size(0), self.classes_emb_dim, 1)
+            class_emb = self.map_classes(class_labels).view(
+                class_labels.size(0), self.classes_emb_dim, 1
+            )
             emb = torch.cat([emb, class_emb], dim=1)
-        
+
+        # adding class condition
+        if self.is_trans_time_conditional:
+            assert isinstance(
+                time_deltas, torch.Tensor
+            ), "Model is time conditional, `time_deltas` has to be provided"
+            trans_time_emb = self.map_trans_time(time_deltas).view(
+                time_deltas.size(0), self.trans_time_emb_dim, 1
+            )
+            emb = torch.cat([emb, trans_time_emb], dim=1)
+
         # adding hstate condition
         if self.is_hstate_conditional:
-            assert isinstance(hstate, torch.Tensor), "Model is hstate conditional, `hstate` has to be provided"
+            assert isinstance(
+                hstate, torch.Tensor
+            ), "Model is hstate conditional, `hstate` has to be provided"
             # pdb.set_trace()
-            hstate_emb = self.map_hstate(hstate).view(hstate.size(0), self.hstate_emb_dim, 1)
+            hstate_emb = self.map_hstate(hstate).view(
+                hstate.size(0), self.hstate_emb_dim, 1
+            )
             emb = torch.cat([emb, hstate_emb], dim=1)
-        
+
         # pdb.set_trace()
         batch_size = x.size(0)
         assert x.ndim == 2
         assert x.size(1) % self.length == 0
-        x = x.reshape(batch_size, self.length, self.one_lat_dim)  # (bs, len, one_lat_dim)
+        x = x.reshape(
+            batch_size, self.length, self.one_lat_dim
+        )  # (bs, len, one_lat_dim)
 
         # adding rawhist condition
         if self.is_rawhist_conditional:
-            assert isinstance(rawhist, torch.Tensor), 'Model is rawhist conditional, `rawhsit` has to be provided'
+            assert isinstance(
+                rawhist, torch.Tensor
+            ), "Model is rawhist conditional, `rawhsit` has to be provided"
             assert rawhist.ndim == 2
             assert rawhist.size(0) == batch_size
             assert rawhist.size(1) % self.rawhist_length == 0
-            rawhist = rawhist.reshape(rawhist.size(0), self.rawhist_length, self.one_lat_dim)
+            rawhist = rawhist.reshape(
+                rawhist.size(0), self.rawhist_length, self.one_lat_dim
+            )
             x = torch.cat([rawhist, x], dim=1)
             assert x.size(1) == self.unet_length
 
@@ -565,7 +631,7 @@ class Unet1DDiffusion(nn.Module):
 
         if self.is_rawhist_conditional:
             # removing leading history dims
-            x = x[:, -self.length:]
+            x = x[:, -self.length :]
 
         x = x.reshape(x.shape[0], -1)
 
@@ -589,11 +655,14 @@ class Precond(nn.Module):
         self.denoise_fn_F = denoise_fn
 
     def forward(
-            self, x, sigma, 
-            class_labels : torch.Tensor | None = None, 
-            hstate : torch.Tensor | None = None,
-            rawhist: torch.Tensor | None = None,
-        ):
+        self,
+        x,
+        sigma,
+        class_labels: torch.Tensor | None = None,
+        time_deltas: torch.Tensor | None = None,
+        hstate: torch.Tensor | None = None,
+        rawhist: torch.Tensor | None = None,
+    ):
         # pdb.set_trace()
 
         x = x.to(torch.float32)
@@ -608,11 +677,12 @@ class Precond(nn.Module):
 
         x_in = c_in * x
         F_x = self.denoise_fn_F(
-            (x_in).to(dtype), 
-            c_noise.flatten(), 
-            class_labels=class_labels, 
-            hstate=hstate, 
-            rawhist=rawhist
+            (x_in).to(dtype),
+            c_noise.flatten(),
+            class_labels=class_labels,
+            time_deltas=time_deltas,
+            hstate=hstate,
+            rawhist=rawhist,
         )
 
         assert F_x.dtype == dtype
@@ -635,18 +705,19 @@ class EDM(nn.Module):
         super().__init__()
 
         self.denoise_fn_D = Precond(denoise_fn)
-        self.loss_fn = EDMLoss(
-            P_mean, P_std, sigma_data, gamma=gamma
-        )
+        self.loss_fn = EDMLoss(P_mean, P_std, sigma_data, gamma=gamma)
 
     def forward(
-            self, 
-            x: torch.Tensor, 
-            class_labels: torch.Tensor | None = None, 
-            hstate: torch.Tensor | None = None,
-            rawhist: torch.Tensor | None = None,
-            match_emb_size: int = None
-        ):
+        self,
+        x: torch.Tensor,
+        class_labels: torch.Tensor | None = None,
+        time_deltas: torch.Tensor | None = None,
+        hstate: torch.Tensor | None = None,
+        rawhist: torch.Tensor | None = None,
+        match_emb_size: int = None,
+    ):
 
-        loss = self.loss_fn(self.denoise_fn_D, x, class_labels, hstate, rawhist, match_emb_size)
+        loss = self.loss_fn(
+            self.denoise_fn_D, x, class_labels, time_deltas, hstate, rawhist, match_emb_size,
+        )
         return loss.mean(-1).mean()
