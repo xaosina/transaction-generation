@@ -1,1 +1,1 @@
-config_factory: [start, datasets/age/age, methods/baselines/repeat]
+config_factory: [start, datasets/age/age, methods/ar_vae]
