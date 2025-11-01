@@ -14,9 +14,9 @@ data_conf:
 # TODO: Fix this shit
 model:
   params:
-    fix_features: []
-    diff_features: ["small_group", "trans_date", "trans_date"]
-    losses: ['time_loss', 'type_loss']
+    fix_features: [ "trans_date", "trans_date"]
+    diff_features: ["small_group",]
+    losses: ['type_loss']
     help_net:
       name: GroundTruthGenerator
       checkpoint:

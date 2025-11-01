@@ -58,7 +58,7 @@ class GenerationEvaluator(Runner):
         train_loader.dataset.random_end = val_loader.dataset.random_end
 
         # val_metrics = trainer.validate(val_loader, remove=False)
-        # train_metrics = trainer.validate(train_loader, remove=False)
+        # train_metrics = trainer.validate(train_loader, remove=False, get_loss=True, get_metrics=False)
         test_metrics = trainer.validate(
             test_loader, remove=False, get_loss=False, get_metrics=True
         )
