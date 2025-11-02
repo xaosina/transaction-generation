@@ -455,7 +455,7 @@ class Trainer:
 
         best_metric = float("-inf")
         patience = self._patience
-
+        prev_lr = self._sched.schedulers[0].get_last_lr()[0]
         while self._last_iter < self._total_iters:
             train_iters = min(
                 self._total_iters - self._last_iter,
@@ -465,7 +465,10 @@ class Trainer:
             losses = self.train(train_iters)
             if self._sched:
                 self._sched.step(loss=losses.pop("loss_ema"))
-
+            current_lr = self._sched.schedulers[0].get_last_lr()[0]  # get current LR
+            if current_lr != prev_lr:
+                print(f"\n\n\n\nReducing learning rate to {current_lr:.2e}")
+                prev_lr = current_lr
             self._metric_values = None
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)
