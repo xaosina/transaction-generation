@@ -1,0 +1,4 @@
+# no history encoder
+model:
+  params:
+    history_encoder:

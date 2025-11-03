@@ -1,0 +1,29 @@
+trainer:
+  ckpt_track_metric: loss
+  metrics_on_train: True
+  ema_metrics_on_train: False
+  total_iters: 10_000_000 # may be it is too much...
+  use_trainval: False
+  patience: -1
+  ema:
+    beta: 0.9999
+    update_after_step: 40000
+    update_every: 10
+
+data_conf:
+  train_resamples: 50
+  batch_size: 256
+  train_random_end: time
+  train_transforms:
+    "3":
+      CutTargetSequence:
+        target_len: ${data_conf.generation_len}
+
+schedulers:
+  "step":
+    StepLR:
+      step_size: 10
+      gamma: 0.2
+
+loss:
+  name: DummyLoss

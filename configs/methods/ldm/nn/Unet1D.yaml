@@ -1,0 +1,16 @@
+model:
+  latent_encoder:
+    params:
+      denoiser_name: Unet1D
+      base_factor: 512 # unetS: 64, unetM: 128, unetL: 256, unetXL: 512
+      dim_t : 1024
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-3
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2

@@ -1,0 +1,19 @@
+# default vae autoencoder
+model:
+  autoencoder:
+    name: VAE
+    params:
+      use_time: True
+      d_token: 8
+      num_layers: 10
+      n_head: 4
+      factor: 28
+    pretrain: False
+    frozen: True
+    checkpoint: /workspace/transactionsv2/transaction-generation/log/generation/age/ready/vae/seed_0/ckpt/epoch__0351_-_loss__-0.002042.ckpt
+
+data_conf:
+  train_transforms:
+    '1':
+      TimeToDiff:
+        disable: true
