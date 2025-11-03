@@ -29,6 +29,7 @@ def sample(
         class_labels : torch.Tensor | None = None,
         history_embedding : torch.Tensor | None = None,
         reference : torch.Tensor | None = None,
+        cfg_w: float = 1.0,
     ):
     device = next(iter(net.parameters())).device
     latents = torch.randn([num_samples, *dims], device=device)
@@ -57,7 +58,8 @@ def sample(
                 x_next, 
                 class_labels=class_labels, 
                 history_embedding=history_embedding,
-                reference=reference)
+                reference=reference, 
+                cfg_w=cfg_w)
 
     return x_next
 
@@ -66,6 +68,7 @@ def sample_step(
         class_labels : torch.Tensor | None = None,
         history_embedding : torch.Tensor | None = None,
         reference: torch.Tensor | None = None,
+        cfg_w: float = 1.0,
     ):
     # pdb.set_trace()
     x_cur = x_next
@@ -82,6 +85,18 @@ def sample_step(
         history_embedding=history_embedding, 
         reference=reference,
     ).to(torch.float32)
+    
+    if cfg_w != 1.0:
+        # cfg
+        denoised_uncond = net(
+            x_hat, 
+            t_hat.unsqueeze(0).repeat(x_hat.size(0)),
+            class_labels=None, 
+            history_embedding=None, 
+            reference=None,
+        )
+
+        denoised = denoised_uncond + cfg_w * (denoised - denoised_uncond)
 
     d_cur = (x_hat - denoised) / t_hat
     x_next = x_hat + (t_next - t_hat) * d_cur

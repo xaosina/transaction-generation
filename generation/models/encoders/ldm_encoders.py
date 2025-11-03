@@ -81,6 +81,14 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             self.match_emb_size = self.generation_len
         else:
             self.match_emb_size = None
+        
+        # cfg
+        self.cfg_p_uncond = params.get('cfg_p_uncond', 0.0)
+        self.cfg_w = params.get('cfg_w', 1.0)
+        if self.cfg_p_uncond > 0.:
+            logger.info('model will be trained with cfg support!')
+        else:
+            assert self.cfg_w == 1.0
     
     @property
     def output_dim(self):
@@ -96,6 +104,12 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
 
         target_seq = seq2tensor(target_seq) # (B, L_gen, D)
         reference_seq = seq2tensor(reference_seq) # (B, L_ref, D)
+
+        # cfg
+        if torch.rand((1,)).item() < self.cfg_p_uncond:
+            class_labels = None
+            history_embedding = None
+            reference_seq = None
 
         # asserts dimensions
         bs = target_seq.size(0)
@@ -138,7 +152,8 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             dims= (self.generation_len, self.latent_dim), 
             class_labels=class_labels, 
             history_embedding=history_embedding, 
-            reference=reference_seq
+            reference=reference_seq,
+            cfg_w=self.cfg_w
         ) # [B, L, D]
 
         return self.gen_reshaper(
