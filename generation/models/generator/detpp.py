@@ -75,7 +75,6 @@ class DeTPP(BaseGenerator):
         if model_config.autoencoder.checkpoint:
             ckpt = torch.load(model_config.autoencoder.checkpoint, map_location="cpu")
             msg = self.autoencoder.load_state_dict(ckpt["model"], strict=False)
-            print(msg)
         if model_config.autoencoder.frozen:
             self.autoencoder = freeze_module(self.autoencoder)
 
@@ -111,7 +110,7 @@ class DeTPP(BaseGenerator):
         x.time = deltas
         return x
 
-    def _sort_time_and_revert_delta(self, hist, pred,revert=True):
+    def _sort_time_and_revert_delta(self, hist, pred):
         # Sort by time.
         order = pred.time.argsort(dim=0)  # (L, B).
         for attr in ["time", "num_features", "cat_features"]:
@@ -124,8 +123,7 @@ class DeTPP(BaseGenerator):
             tensor = tensor.take_along_dim(shaped_order, dim=0)
             setattr(pred, attr, tensor)
         # Revert delta from hist
-        if revert:
-            pred.time += hist.time[hist.lengths - 1, torch.arange(hist.shape[1])]
+        pred.time += hist.time[hist.lengths - 1, torch.arange(hist.shape[1])]
         return pred
 
     def forward(self, x: GenBatch) -> PredBatch:
@@ -153,6 +151,7 @@ class DeTPP(BaseGenerator):
         assert x.tokens.shape[0] == 1
         return x.tokens[0]
     
+
     def generate(
         self,
         hist: GenBatch,
@@ -164,55 +163,39 @@ class DeTPP(BaseGenerator):
         orig_hist = deepcopy(hist)
         hist = deepcopy(hist)
         already_generated = 0
-        latent_target = self.autoencoder.encoder(hist.get_target_batch())
-        return self.autoencoder.decoder.generate(latent_target)
-
-    # def generate(
-    #     self,
-    #     hist: GenBatch,
-    #     gen_len: int,
-    #     with_hist=False,
-    #     topk=1,
-    #     temperature=1.0,
-    # ) -> GenBatch:
-    #     orig_hist = deepcopy(hist)
-    #     hist = deepcopy(hist)
-    #     already_generated = 0
-    #     with torch.no_grad():
-    #         for _ in range(0, gen_len, self.k_gen):
-    #             # 1. Generate k_gen
-    #             L, B = hist.shape
-    #             x = hist 
-    #             revert_tag = False
-    #             if self.autoencoder_name == "BaselineAE":
-    #                 x = self._apply_delta(hist)
-    #                 revert_tag = True
-    #             x = self.autoencoder.encoder(x, copy=False)
-    #             x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
-    #             x = self.next_k_head(x)  # 1, B, K * D
-    #             # Filter events
-    #             x = x.tokens.reshape(B, self.k_output, -1).transpose(0, 1)  # K, B, D
-    #             presence_scores = self.presence_head(x).reshape(self.k_output, B)
-    #             topk_indices = torch.topk(presence_scores, self.k_gen, dim=0)[1]
-    #             x = torch.take_along_dim(x, topk_indices.unsqueeze(-1), dim=0)
-    #             x = Seq(
-    #                 tokens=x,
-    #                 lengths=torch.full((B,), self.k_gen, device=hist.device),
-    #                 time=None,
-    #             )
-    #             # Reconstruct
-    #             x = self.autoencoder.decoder.generate(x, topk=topk, temperature=temperature)
-    #             x.time = x.time.clip(min=0)
-    #             x = self._sort_time_and_revert_delta(hist, x,revert = revert_tag)
-    #             # 2. Save gen and append to history
-    #             already_generated += self.k_gen
-    #             hist.append(x)  # Append GenBatch, result is [L+K, B, D]
+        with torch.no_grad():
+            for _ in range(0, gen_len, self.k_gen):
+                # 1. Generate k_gen
+                L, B = hist.shape
+                x = hist 
+                if self.autoencoder_name == "BaselineAE":
+                    x = self._apply_delta(hist)
+                x = self.autoencoder.encoder(x, copy=False)
+                x = self.encoder.generate(x)  # Sequence of shape [1, B, D]
+                x = self.next_k_head(x)  # 1, B, K * D
+                # Filter events
+                x = x.tokens.reshape(B, self.k_output, -1).transpose(0, 1)  # K, B, D
+                presence_scores = self.presence_head(x).reshape(self.k_output, B)
+                topk_indices = torch.topk(presence_scores, self.k_gen, dim=0)[1]
+                x = torch.take_along_dim(x, topk_indices.unsqueeze(-1), dim=0)
+                x = Seq(
+                    tokens=x,
+                    lengths=torch.full((B,), self.k_gen, device=hist.device),
+                    time=None,
+                )
+                # Reconstruct
+                x = self.autoencoder.decoder.generate(x, topk=topk, temperature=temperature)
+                x.time = x.time.clip(min=0)
+                x = self._sort_time_and_revert_delta(hist, x)
+                # 2. Save gen and append to history
+                already_generated += self.k_gen
+                hist.append(x)  # Append GenBatch, result is [L+K, B, D]
         
-    #     # Cut excess predictions:
-    #     pred_batch = hist.tail(already_generated).head(gen_len)
+        # Cut excess predictions:
+        pred_batch = hist.tail(already_generated).head(gen_len)
         
-    #     if with_hist:
-    #         orig_hist.append(pred_batch)
-    #         return orig_hist  # Return GenBatch of size [L + gen_len, B, D]
-    #     else:
-    #         return pred_batch  # Return GenBatch of size [gen_len, B, D]
+        if with_hist:
+            orig_hist.append(pred_batch)
+            return orig_hist  # Return GenBatch of size [L + gen_len, B, D]
+        else:
+            return pred_batch  # Return GenBatch of size [gen_len, B, D]
