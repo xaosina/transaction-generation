@@ -259,7 +259,11 @@ class Decoder(nn.Module):
             with_pad = torch.zeros(L * B, D_cat, device=seq.tokens.device)
             with_pad[valid_mask] = cat
             cat_features[name] = with_pad.view(L, B, D_cat)
-        return PredBatch(lengths=seq.lengths, time=seq.time, cat_features=cat_features)
+        return PredBatch(
+            lengths=seq.lengths,
+            time=torch.zeros((L, B), device=valid_mask.device),
+            cat_features=cat_features,
+        )
 
     def forward(self, seq: Seq, batch: GenBatch) -> PredBatch:
         z_seq, tgt_tokens = self._prepare_tensors(seq, batch)
