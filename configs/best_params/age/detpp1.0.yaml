@@ -2,6 +2,9 @@
 
 config_factory: [start, metrics/default, datasets/age/age, methods/detpp1.0]
 
+trainer:
+  metrics_on_train: true
+
 optimizer:
   params:
     weight_decay: 6.959570367051137e-14
