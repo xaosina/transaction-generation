@@ -20,6 +20,7 @@ model:
     frozen: True
     checkpoint: /trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/vae_age/old_vae_age.ckpt
 
+
   latent_encoder:
     name: GRU
     params:
@@ -52,7 +53,7 @@ data_conf:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 1
+        scale: 730
     "1":
       TimeToDiff:
         disable: True

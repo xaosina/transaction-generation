@@ -54,22 +54,23 @@ class GenerationTrainer(Runner):
             device=cfg.device,
             **asdict(cfg.trainer),
         )
-        trainer.run()
-        trainer.load_best_model()
+        # trainer.run()
+        # trainer.load_best_model()
 
-        train_loader.collate_fn = val_loader.collate_fn
-        train_loader.dataset.random_end = val_loader.dataset.random_end
-        train_loader.dataset.n_resamples = 1
+        # train_loader.collate_fn = val_loader.collate_fn
+        # train_loader.dataset.random_end = val_loader.dataset.random_end
+        # train_loader.dataset.n_resamples = 1
 
-        val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
-        train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
-        test_metrics = trainer.validate(test_loader, get_loss=True, get_metrics=True)
+        # val_metrics = trainer.validate(val_loader, get_loss=True, get_metrics=True)
+        # train_metrics = trainer.validate(train_loader, get_loss=False, get_metrics=True)
+        test_metrics = trainer.validate(test_loader, get_loss=False, get_metrics=True)
 
-        val_metrics = {k: v for k, v in val_metrics.items()}
-        train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
+        # val_metrics = {k: v for k, v in val_metrics.items()}
+        # train_metrics = {"train_" + k: v for k, v in train_metrics.items()}
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
-        return dict(**train_metrics, **val_metrics, **test_metrics)
+        #return dict(**train_metrics, **val_metrics, **test_metrics)
+        return test_metrics
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)
