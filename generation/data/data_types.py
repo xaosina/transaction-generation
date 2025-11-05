@@ -35,8 +35,8 @@ class DataConfig:
     num_names: Optional[list[str]] = None
     index_name: Optional[str] = None
     loader_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
-    train_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
-    val_transforms: Optional[Mapping[str, Mapping[str, Any] | str]] = None
+    train_transforms: Optional[Mapping[str, Optional[Mapping[str, Any] | str]]] = None
+    val_transforms: Optional[Mapping[str, Optional[Mapping[str, Any] | str]]] = None
     padding_value: float = 0
     # List of features to focus on in loss and metrics. If None->focus on all
     focus_on: Optional[list[str]] = None

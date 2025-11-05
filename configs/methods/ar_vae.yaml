@@ -27,17 +27,13 @@ model:
 
 data_conf:
   train_transforms:
-    "0":
-      RescaleTime:
-        loc: 0.0
-        scale: 1
-    "1":
-      TimeToDiff:
-        disable: True    
-    "log_tfs":
+    "0": null
+    "1": null
+    "log_tfs": null
+    "vr_decimal":
       VariableRangeDecimal:
-        disable: True
-        num_names: ${data_conf.num_names}
+        names: ${data_conf.num_names}
+        time_name: ${data_conf.time_name}
 
 optimizer:
   name: AdamW
