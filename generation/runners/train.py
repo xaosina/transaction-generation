@@ -70,6 +70,7 @@ class GenerationTrainer(Runner):
         test_metrics = {"test_" + k: v for k, v in test_metrics.items()}
 
         return dict(**train_metrics, **val_metrics, **test_metrics)
+        #return test_metrics
 
     def param_grid(self, trial, config):
         suggest_conf(config["optuna"]["suggestions"], config, trial)
