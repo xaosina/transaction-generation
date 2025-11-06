@@ -11,4 +11,6 @@ Levenshtein==0.26.1
 pyrallis==0.3.1
 dacite==1.9.2
 ema-pytorch==0.7.7
+torchdiffeq==0.2.4
+timm==1.0.20
 torch-linear-assignment==0.0.4 # to make it work run `pip install --no-build-isolation torch-linear-assignment`

@@ -1,0 +1,15 @@
+model:
+  autoencoder:
+    name: VAE
+    params:
+      use_time: True
+      d_token: 40
+      num_layers: 4
+      n_head: 1
+      factor: 5
+    checkpoint: /home/transaction-generation/log/generation/ready/age/diff_vae.ckpt
+    pretrain: True
+    frozen: True
+    batch_transforms:
+      - TimeToDiff:
+          disable: False

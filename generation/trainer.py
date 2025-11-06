@@ -341,9 +341,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                # torch.nn.utils.clip_grad_norm_(
-                #     self._model.parameters(), max_norm=self._grad_clip
-                # )
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
                 self._opt.step()
 
                 self._opt.zero_grad()

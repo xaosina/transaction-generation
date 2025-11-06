@@ -1,0 +1,24 @@
+# TabSyn++ with 
+# - diff vae autoencoder, 
+# - default DiT denoiser architecture
+# - repeat reference
+# - (learnable) GRU history encoder
+
+config_factory: [
+  start, 
+  datasets/age/age, 
+  methods/ldm/train_defaults, 
+  methods/ldm/ae/age/diffvae, # old vae on age as autoencoder 
+  methods/ldm/nn/DiT, # DiT as denoiser
+  methods/ldm/ref/repeat, # repeat reference
+  methods/ldm/histemb/gru, # (learnable) GRU history encoder
+  methods/ldm/tabsyn/base,
+  metrics/with_detection/age
+]
+
+model:
+  latent_encoder:
+    params:
+      hidden_size: 1440 # must be divisible by num_heads and latent dim (40 in our case)
+      cfg_p_uncond: 0.2
+      cfg_w: 1. # during training - it is better to set cfg_w = 1, set 2. to see how it works.
