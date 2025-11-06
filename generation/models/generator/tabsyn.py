@@ -211,13 +211,13 @@ class LatentDiffusionGenerator(BaseGenerator):
         history_embedding = self.get_history_emb(hist, latent_hist)
         latent_ref, orig_ref = self.get_reference_seq(hist, latent_hist)
         time_deltas = self.get_target_trans_time(hist)
+        time_deltas = torch.cat([hist.time[-self.generation_len:, :].T, time_deltas], dim=1)
         
         if self.repeat_matching:
             hist = deepcopy(hist)
             target_batch = hist.get_target_batch()
             target_batch = match_batches(orig_ref, target_batch, self.data_conf)
             latent_target = self.autoencoder.encoder(target_batch)
-        # TODO: static condition
 
         return self.encoder(
             latent_target, None, history_embedding, latent_ref, time_deltas=time_deltas
@@ -247,6 +247,8 @@ class LatentDiffusionGenerator(BaseGenerator):
         history_embedding = self.get_history_emb(hist, latent_hist)
         latent_ref, _ = self.get_reference_seq(hist, latent_hist)
         time_deltas = self.get_target_trans_time(hist)
+        time_deltas = torch.cat([hist.time[-self.generation_len:, :].T, time_deltas], dim=1)
+
 
         sampled_seq = self.encoder.generate(
             B, None, time_deltas, history_embedding, latent_ref

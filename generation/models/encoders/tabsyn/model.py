@@ -489,24 +489,20 @@ class Unet1DDiffusion(nn.Module):
 
         TIME_Z_CHAN_FACTOR = 1
         CLASS_CONDI_Z_CHAN_FACTOR = 1
-        TRANS_TIME_Z_CHAN_FACTOR = 1
         HSTATE_CONDI_Z_CHAN_FACTOR = 2
 
         self.time_emb_dim = TIME_Z_CHAN_FACTOR * basic_emb_dim
         self.classes_emb_dim = CLASS_CONDI_Z_CHAN_FACTOR * basic_emb_dim
-        self.trans_time_emb_dim = TRANS_TIME_Z_CHAN_FACTOR * basic_emb_dim
         self.hstate_emb_dim = HSTATE_CONDI_Z_CHAN_FACTOR * basic_emb_dim
 
         z_channels += self.time_emb_dim
         if self.is_class_conditional:
             z_channels += self.classes_emb_dim
-        if self.is_trans_time_conditional:
-            z_channels += self.trans_time_emb_dim
         if self.is_hstate_conditional:
             z_channels += self.hstate_emb_dim
 
         self.cunet = CUNet(
-            cunet_chans,
+            cunet_chans + (1 if self.is_trans_time_conditional else 0),
             cunet_chans,
             z_channels,
             base_factor=base_factor,
@@ -524,15 +520,6 @@ class Unet1DDiffusion(nn.Module):
         if self.is_class_conditional:
             self.map_classes = nn.Embedding(num_classes, self.classes_emb_dim)
 
-        self.map_trans_time = nn.Identity()
-        if self.is_trans_time_conditional:
-            trans_time_dim = self.length
-            self.map_trans_time = nn.Sequential(
-                nn.Linear(trans_time_dim, self.trans_time_emb_dim),
-                nn.SiLU(),
-                nn.Linear(self.trans_time_emb_dim, self.trans_time_emb_dim),
-            )
-
         # mapping hstate
         self.map_hstate = nn.Identity()
         if self.is_hstate_conditional:
@@ -547,7 +534,6 @@ class Unet1DDiffusion(nn.Module):
             "map_noise": self.map_noise,
             "time_embed": self.time_embed,
             "map_classes": self.map_classes,
-            "map_trans_time": self.map_trans_time,
             "map_hstate": self.map_hstate,
         }
         num_module_params(name2model)
@@ -582,16 +568,6 @@ class Unet1DDiffusion(nn.Module):
             )
             emb = torch.cat([emb, class_emb], dim=1)
 
-        # adding class condition
-        if self.is_trans_time_conditional:
-            assert isinstance(
-                time_deltas, torch.Tensor
-            ), "Model is time conditional, `time_deltas` has to be provided"
-            trans_time_emb = self.map_trans_time(time_deltas).view(
-                time_deltas.size(0), self.trans_time_emb_dim, 1
-            )
-            emb = torch.cat([emb, trans_time_emb], dim=1)
-
         # adding hstate condition
         if self.is_hstate_conditional:
             assert isinstance(
@@ -610,7 +586,7 @@ class Unet1DDiffusion(nn.Module):
         x = x.reshape(
             batch_size, self.length, self.one_lat_dim
         )  # (bs, len, one_lat_dim)
-
+               
         # adding rawhist condition
         if self.is_rawhist_conditional:
             assert isinstance(
@@ -624,6 +600,10 @@ class Unet1DDiffusion(nn.Module):
             )
             x = torch.cat([rawhist, x], dim=1)
             assert x.size(1) == self.unet_length
+
+        if self.is_trans_time_conditional:
+            assert x.shape[:2] == time_deltas.shape[:2]
+            x = torch.cat([x, time_deltas.unsqueeze(-1)], dim=-1)
 
         x = x.transpose(1, 2)  # (bs, one_lat_dim, len)
         x = self.cunet(x, emb)

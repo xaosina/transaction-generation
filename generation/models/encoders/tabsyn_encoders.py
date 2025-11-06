@@ -126,7 +126,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
             assert history_seq.shape == (bs, self.history_len, self.latent_dim)
             history_seq = torch.flatten(history_seq, start_dim=1)
         if time_deltas is not None:
-            assert time_deltas.shape == (bs, self.generation_len)
+            assert time_deltas.shape == (bs, self.history_len + self.generation_len)
         if history_embedding is not None:
             assert history_embedding.shape == (bs, self.history_encoder_dim)
 
@@ -158,7 +158,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
         if time_deltas is not None:
-            assert time_deltas.shape == (n_seqs, self.generation_len)
+            assert time_deltas.shape == (n_seqs, self.history_len + self.generation_len)
 
         _samp = sample(
             self.model.denoise_fn_D, 
