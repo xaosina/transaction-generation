@@ -196,7 +196,7 @@ class DiffusionTimeModel(nn.Module):
         eps = torch.randn_like(x).to(self.device) if t > 0 else torch.zeros_like(x)
         return model_mean + eps * (0.5 * model_log_variance).exp()
 
-    def _one_diffusion_rev_step(self, model, cur_x, e, i, hist, cat_list, hist_emb=None):
+    def _one_diffusion_rev_step(self, model, cur_x, e, i, hist, cat_list, hist_emb=None, cfg_w=1.0, plug_hist=None, plug_emb=None):
 
         noise = torch.zeros_like(cur_x) if i == 0 else torch.randn_like(cur_x)
         m = self._diff_mask(cur_x)
@@ -205,8 +205,14 @@ class DiffusionTimeModel(nn.Module):
             (cur_x.size(0), 1), i, device=self.device, dtype=torch.float32
         )
         pred_eps = self.denoise_func_(
-            cur_x.float(), e, noise_level, hist, cat_list, h_emb=hist_emb
+            cur_x, e, noise_level, hist, cat_list, h_emb=hist_emb
         )  # (B,L,F_num)
+
+        if cfg_w != 1.0:
+            uncond_pred_eps = self.denoise_func_(
+                cur_x, e, noise_level, plug_hist, cat_list, plug_emb
+            )
+            pred_eps = uncond_pred_eps + cfg_w * (pred_eps - uncond_pred_eps)
 
         mu_num = cur_x - self.betas[i] / torch.sqrt(1 - self.alpha_bars[i]) * pred_eps
         mu_theta = torch.sqrt(1 / self.alphas[i]) * mu_num
@@ -267,6 +273,7 @@ class DiffusionTimeModel(nn.Module):
         return x
 
     def p_sample_loop(self, model, e, hist, non_padding_mask, tgt_len=20):
+        raise ValueError("Not implemented error.")
         shape = [hist.size(0), tgt_len]
         cur_x = torch.randn(shape).to(self.device)
         x_seq = [cur_x.unsqueeze(0)]

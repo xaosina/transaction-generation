@@ -13,8 +13,11 @@ from .utils import log_sample_categorical_multi_task
 from .utils import log_onehot_to_index_multi_task
 from copy import deepcopy
 
+
 class DiffusionTabularModel(torch.nn.Module):
-    def __init__(self, data_conf, model_config, outer_history_encoder_dim=None, prefix_dim=None):
+    def __init__(
+        self, data_conf, model_config, outer_history_encoder_dim=None, prefix_dim=None
+    ):
         super(DiffusionTabularModel, self).__init__()
 
         device = "cuda"
@@ -28,7 +31,8 @@ class DiffusionTabularModel(torch.nn.Module):
         dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
-        
+        self.cfg_p_uncond = 0.2
+
         if (dim_feedforward % transformer_heads) != 0:
             raise ValueError("(dim_feedforward % transformer_heads) != 0")
 
@@ -45,23 +49,35 @@ class DiffusionTabularModel(torch.nn.Module):
         self.data_config = data_conf
         self.model_config = model_config
         self.loss_names = self.model_config.params["losses"]
-        self.fix_features: Optional[set] = set(self.model_config.params.get("fix_features", []))
-        self.diff_features: Optional[set] = set(self.model_config.params.get("diff_features", []))
+        self.fix_features: Optional[set] = set(
+            self.model_config.params.get("fix_features", [])
+        )
+        self.diff_features: Optional[set] = set(
+            self.model_config.params.get("diff_features", [])
+        )
 
         self.diff_focus = self.fix_features | self.diff_features
 
         if self.diff_focus is not None:
-            self.num_cat_dict = {key: val for key, val in data_conf.cat_cardinalities.items() if key in self.diff_focus}
+            self.num_cat_dict = {
+                key: val
+                for key, val in data_conf.cat_cardinalities.items()
+                if key in self.diff_focus
+            }
         else:
             self.num_cat_dict = data_conf.cat_cardinalities
 
         self.num_classes_list = []
 
-        assert data_conf.time_name is not None, 'It seems you forget provide a time feature.'
+        assert (
+            data_conf.time_name is not None
+        ), "It seems you forget provide a time feature."
         ## because of time interv must in the num features, so we add 1
         len_num_features = 1
         if self.diff_focus is not None:
-            len_num_features += len([v for v in data_conf.num_names if v in self.diff_focus])
+            len_num_features += len(
+                [v for v in data_conf.num_names if v in self.diff_focus]
+            )
         else:
             len_num_features += len(data_conf.num_names)
 
@@ -98,7 +114,6 @@ class DiffusionTabularModel(torch.nn.Module):
             use_post_norm=outer_he_use_post_norm,
             diffusion_t_type=cat_diffusion_t_type,
             use_simple_time_proj=use_simple_t_project,
-
         )
 
         self.denoise_fn_dt = TimeDenoisingModule(
@@ -118,7 +133,6 @@ class DiffusionTabularModel(torch.nn.Module):
             use_post_norm=outer_he_use_post_norm,
             diffusion_t_type=num_diffusion_t_type,
             use_simple_time_proj=use_simple_t_project,
-
         )
 
         self.type_diff_ = DiffusionTypeModel(
@@ -130,21 +144,38 @@ class DiffusionTabularModel(torch.nn.Module):
         self.time_diff_ = DiffusionTimeModel(
             n_steps=self.n_steps, denoise_func=self.denoise_fn_dt
         )
+        self.plug_hist = torch.nn.Parameter(
+            torch.zeros(1, self.data_config.generation_len, transformer_dim),
+            requires_grad=True,
+        )
+
+        self.plug_embedding = torch.nn.Parameter(
+            torch.zeros(1, outer_history_encoder_dim), requires_grad=True
+        )
 
     def compute_loss(self, tgt_x, tgt_e, hist_x, hist_e, cat_order, hist_emb=None):
         ## tgt_x,tgt_e : B,gen_len,F_{1};B,gen_len,F_{2}
         ## hist_x,hist_e: B,hist_len,F_{1};B,hist_len,F_{2}
         #
-        hist = self.get_hist(hist_x, hist_e)
-        ## t,pt are (B,)
+        # TODO: If CFG WE put something else instead of hist!!!!
+        B = hist_x.size(0)
+        if torch.rand((1,)).item() < self.cfg_p_uncond:
+            hist = self.plug_hist.repeat(B, 1, 1)
+            hist_emb = self.plug_embedding.repeat(B, 1)
+        else:
+            hist = self.get_hist(hist_x, hist_e)
+
         t, pt = self.sample_time(tgt_e.size(0), device=self.device)
 
         losses = {}
-        if 'type_loss' in self.loss_names:
-            losses['type_loss'] = self.type_diff_.compute_loss(tgt_e, tgt_x, hist, cat_order, t, pt, hist_emb=hist_emb)
-        if 'time_loss' in self.loss_names:
-            losses['time_loss'] = self.time_diff_.compute_loss(tgt_x, tgt_e, hist, cat_order, t, hist_emb=hist_emb)
-        
+        if "type_loss" in self.loss_names:
+            losses["type_loss"] = self.type_diff_.compute_loss(
+                tgt_e, tgt_x, hist, cat_order, t, pt, hist_emb=hist_emb
+            )
+        if "time_loss" in self.loss_names:
+            losses["time_loss"] = self.time_diff_.compute_loss(
+                tgt_x, tgt_e, hist, cat_order, t, hist_emb=hist_emb
+            )
         selected_losses = [losses[id] for id in self.loss_names]
         return sum(selected_losses).mean()
 
@@ -160,69 +191,173 @@ class DiffusionTabularModel(torch.nn.Module):
         pt = torch.ones_like(t).float() / self.n_steps
         return t, pt
 
-    def sample(self, hist_x, hist_e, tgt_len, cat_list, tgt_e=None, tgt_x=None, hist_emb=None):
+    def sample(
+        self,
+        hist_x,
+        hist_e,
+        tgt_len,
+        cat_list,
+        tgt_e=None,
+        tgt_x=None,
+        hist_emb=None,
+        return_chain: bool = False,  # не хранить цепочку по умолчанию
+        step_stride: int = 1,  # подвыборка шагов: 1 == как было
+        cfg_w=1.0,
+        dtype=None,  # torch.float16 / torch.bfloat16 / None
+    ):
         self.num_classes_list = [self.num_cat_dict[i] for i in cat_list]
 
-        e, x = self.sample_chain(hist_x, hist_e, tgt_len, cat_list, tgt_x=tgt_x, tgt_e=tgt_e, hist_emb=hist_emb)
+        e_last, x_last = self.sample_chain(
+            hist_x,
+            hist_e,
+            tgt_len,
+            cat_list,
+            tgt_x=tgt_x,
+            tgt_e=tgt_e,
+            hist_emb=hist_emb,
+            return_chain=return_chain,
+            step_stride=step_stride,
+            dtype=dtype,
+            cfg_w=cfg_w,
+        )
 
-        return log_onehot_to_index_multi_task(e[-1], self.num_classes_list) if tgt_e is None else tgt_e, x[-1]
+        if tgt_e is None:
+            e_last = log_onehot_to_index_multi_task(e_last, self.num_classes_list)
+        else:
+            e_last = tgt_e
+        return e_last, x_last
 
-    def sample_chain(self, hist_x, hist_e, tgt_len, cat_list, tgt_x=None, tgt_e=None, hist_emb=None):
+    @torch.no_grad()
+    def sample_chain(
+        self,
+        hist_x,
+        hist_e,
+        tgt_len,
+        cat_list,
+        tgt_x=None,
+        tgt_e=None,
+        hist_emb=None,
+        return_chain: bool = False,
+        step_stride: int = 1,
+        dtype=None,
+        cfg_w=1.0,
+    ):
         hist = self.get_hist(hist_x, hist_e)
-        # shape = [hist.size(0), tgt_len]
-        shape = [hist.size(0), tgt_len, hist_x.size(-1)]
+        B, F_num = hist.size(0), hist_x.size(-1)
+        T = tgt_len
 
-        fix_mask = (~self.time_diff_._diff_mask(tgt_x).bool())
-        full_noise = torch.randn(shape).to(self.device)
+        shape = (B, T, F_num)
+        diff_mask = self.time_diff_._diff_mask(tgt_x).bool()
+        fix_mask = ~diff_mask
+
+        device = self.device
 
         if tgt_x is None:
-            init_x = full_noise
+            x_t = torch.randn(shape).to(device)
         else:
-            init_x = deepcopy(tgt_x)
-            init_x[~fix_mask] = full_noise[~fix_mask]
-            
-        # x_t_list = [init_x.unsqueeze(0)]
-        x_t_list = [init_x]
+            x_t = tgt_x.clone()
+            noise = torch.randn(shape).to(device)
+            x_t = torch.where(diff_mask, noise, x_t)
 
-        x_t = init_x
+        if return_chain:
+            x_chain_last = [x_t]
 
-        shape = (tgt_len,)
-        b = hist.size(0)
-        # uniform_logits = torch.zeros(
-        #     (b, self.num_classes,) + shape, device=self.device)
         if tgt_e is None:
-            uniform_logits = torch.zeros(
-                (
-                    b,
-                    sum(self.num_classes_list),
-                )
-                + shape,
-                device=self.device,
+            total_C = sum(self.num_classes_list)
+            uniform_logits = x_t.new_zeros((B, total_C, T))
+            e_t = log_sample_categorical_multi_task(
+                uniform_logits, self.num_classes_list
             )
-            # e_t = log_sample_categorical(uniform_logits,self.num_classes)
-            #
-            e_t = log_sample_categorical_multi_task(uniform_logits, self.num_classes_list)
-
         else:
             e_t = tgt_e
 
-        e_t_list = [e_t]
-        for i in reversed(range(0, self.n_steps)):
-            # e_t_index = log_onehot_to_index(e_t)
-            
-            e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list) if tgt_e is None else e_t
-            x_seq = self.time_diff_._one_diffusion_rev_step(
-                self.time_diff_.denoise_func_, x_t, e_t_index, i, hist, cat_list, hist_emb=hist_emb
+        if return_chain:
+            e_chain_last = [e_t]
+        # ----- timesteps (можно редуцировать шаги) -----
+        timesteps = range(self.n_steps - 1, -1, -step_stride)
+
+        t_type = torch.empty((B,), device=device, dtype=torch.long)
+
+        if tgt_e is not None:
+            e_t_index = e_t
+        else:
+            e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list)
+
+        if cfg_w != 1.0:
+            plug_emb = self.plug_embedding.repeat(B, 1)
+            plug_hist = self.plug_hist.repeat(B, 1, 1)
+
+        for i in timesteps:
+            x_t = self.sample_numerical(
+                x_t,
+                e_t_index,
+                i,
+                hist,
+                cat_list,
+                hist_emb,
+                tgt_x,
+                fix_mask,
+                cfg_w,
+                plug_hist=plug_hist,
+                plug_emb=plug_emb,
             )
-            assert (x_seq[fix_mask] == tgt_x[fix_mask]).all()
-            x_t_list.append(x_seq)
-            # e_t, t, x_t, hist, non_padding_mask
-            t_type = torch.full((b,), i, device=self.device, dtype=torch.long)
-            e_seq = self.type_diff_.p_sample(e_t, t_type, x_t, hist, cat_list, hist_emb=hist_emb) if tgt_e is None else tgt_e
-            e_t_list.append(e_seq)
-            x_t = x_seq
-            e_t = e_seq
-        return e_t_list, x_t_list
+
+            if return_chain:
+                x_chain_last.append(x_t)
+
+            if tgt_e is None:
+                t_type.fill_(i)
+                e_t = self.type_diff_.p_sample(
+                    e_t,
+                    t_type,
+                    x_t,
+                    hist,
+                    cat_list,
+                    hist_emb=hist_emb,
+                    cfg_w=cfg_w,
+                    plug_hist=plug_hist,
+                    plug_emb=plug_emb,
+                )
+                e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list)
+                if return_chain:
+                    e_chain_last.append(e_t)
+        e_out = e_t if not return_chain else e_chain_last
+        x_out = x_t if not return_chain else x_chain_last
+        return e_out, x_out
+
+    def sample_numerical(
+        self,
+        x_t,
+        e_t_index,
+        i,
+        hist,
+        cat_list,
+        hist_emb,
+        tgt_x,
+        fix_mask,
+        cfg_w=1.0,
+        plug_hist=None,
+        plug_emb=None,
+    ):
+
+        x_t = self.time_diff_._one_diffusion_rev_step(
+            self.time_diff_.denoise_func_,
+            x_t,
+            e_t_index,
+            i,
+            hist,
+            cat_list,
+            hist_emb=hist_emb,
+            cfg_w=cfg_w,
+            plug_hist=plug_hist,
+            plug_emb=plug_emb,
+        )
+
+        if tgt_x is not None:
+            x_t = torch.where(fix_mask, tgt_x, x_t)
+
+        return x_t
+    
 
     def _build_num_diff_idx(self, num_features_names):
         """
@@ -231,7 +366,9 @@ class DiffusionTabularModel(torch.nn.Module):
         """
         diff_idx = []
         # time — если указан в diff_features
-        if (self.data_config.time_name in self.diff_features) or (len(self.diff_features) == 0):
+        if (self.data_config.time_name in self.diff_features) or (
+            len(self.diff_features) == 0
+        ):
             diff_idx.append(0)
         # остальные числовые
         if num_features_names:

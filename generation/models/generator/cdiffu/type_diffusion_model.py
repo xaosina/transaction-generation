@@ -232,17 +232,9 @@ class DiffusionTypeModel(torch.nn.Module):
 
         return log_probs
 
-    def predict_start(self, log_x_t, t, dt, hist, hist_embedding=None):
-        # pass a dict to contains name:num_classes.
-        # then predict category one by one
-        ## x_t: (B,L,F_c)
-        #
+    def predict_start(self, log_x_t, t, dt, hist, hist_embedding=None, cfg_w=1.0, plug_hist=None, plug_emb=None):
         x_t = log_onehot_to_index_multi_task(log_x_t, self.num_classes_list)
-        # t, e, x, hist
-        ## t:(B,)
-        ## x is cat: (B,L,F_cat)
-        ## dt is num:(B,L,F_num)
-        ## out :(B,sum C_{i},L)
+
         out = self._denoise_fn(
             t,
             x_t,
@@ -251,13 +243,21 @@ class DiffusionTypeModel(torch.nn.Module):
             self.cat_order,
             h_emb=hist_embedding,
         )
-        # # assert out.size(0) == x_t.size(0)
-        # # assert out.size(1) == self.num_classes
-        # # assert out.size()[2:] == x_t.size()[1:]
-        # # log_pred = F.log_softmax(out, dim=1)
-        #
         log_pred = softmax_to_logits_multi_task(out, self.num_classes_list)
-        return log_pred
+
+        if cfg_w != 1.0:
+            uncond_out = self._denoise_fn(
+                t, x_t, dt, plug_hist,
+                self.cat_order, h_emb=plug_emb,
+            )
+            log_uncond_pred = softmax_to_logits_multi_task(uncond_out, self.num_classes_list)
+
+            logits = log_uncond_pred + cfg_w * (log_pred - log_uncond_pred)
+            
+            log_norm = logsumexp_multi_task(logits, self.num_classes_list)
+            return logits - log_norm
+        else:
+            return log_pred
 
     def q_posterior(self, log_x_start, log_x_t, t):
         # q(xt-1 | xt, x0) = q(xt | xt-1, x0) * q(xt-1 | x0) / q(xt | x0)
@@ -279,23 +279,23 @@ class DiffusionTypeModel(torch.nn.Module):
 
         return log_EV_xtmin_given_xt_given_xstart
 
-    def p_pred(self, log_x, t, dt, hist, hist_emb=None):
+    def p_pred(self, log_x, t, dt, hist, hist_emb=None, cfg_w=1.0, plug_hist=None, plug_emb=None):
         if self.parametrization == "x0":
-            log_x_recon = self.predict_start(log_x, t=t, dt=dt, hist=hist, hist_embedding=hist_emb)
+            log_x_recon = self.predict_start(log_x, t=t, dt=dt, hist=hist, hist_embedding=hist_emb, cfg_w=cfg_w, plug_hist=plug_hist, plug_emb=plug_emb)
             log_model_pred = self.q_posterior(
                 log_x_start=log_x_recon, log_x_t=log_x, t=t
             )
         elif self.parametrization == "direct":
-            log_model_pred = self.predict_start(log_x, t=t, dt=dt, hist=hist, hist_embedding=hist_emb)
+            log_model_pred = self.predict_start(log_x, t=t, dt=dt, hist=hist, hist_embedding=hist_emb, cfg_w=cfg_w, plug_hist=plug_hist, plug_emb=plug_emb)
         else:
             raise ValueError
         return log_model_pred
 
     @torch.no_grad()
-    def p_sample(self, log_x, t, dt, hist, cat_list, hist_emb=None):
+    def p_sample(self, log_x, t, dt, hist, cat_list, hist_emb=None, cfg_w=1.0, plug_hist=None, plug_emb=None):
         self.num_classes_list = [self.num_classes_dict[i] for i in cat_list]
         self.cat_order = cat_list
-        model_log_prob = self.p_pred(log_x=log_x, t=t, dt=dt, hist=hist, hist_emb=hist_emb)
+        model_log_prob = self.p_pred(log_x=log_x, t=t, dt=dt, hist=hist, hist_emb=hist_emb, cfg_w=cfg_w, plug_hist=plug_hist, plug_emb=plug_emb)
         out = log_sample_categorical_multi_task(model_log_prob, self.num_classes_list)
         return out
 
