@@ -151,19 +151,19 @@ class DeTPP(BaseGenerator):
         assert x.tokens.shape[0] == 1
         return x.tokens[0]
     
-    # def generate(
-    #     self,
-    #     hist: GenBatch,
-    #     gen_len: int,
-    #     with_hist=False,
-    #     topk=1,
-    #     temperature=1.0,
-    # ) -> GenBatch:
-    #     orig_hist = deepcopy(hist)
-    #     hist = deepcopy(hist)
-    #     already_generated = 0
-    #     latent_target = self.autoencoder.encoder(hist.get_target_batch())
-    #     return self.autoencoder.decoder.generate(latent_target)
+    def generate(
+        self,
+        hist: GenBatch,
+        gen_len: int,
+        with_hist=False,
+        topk=1,
+        temperature=1.0,
+    ) -> GenBatch:
+        orig_hist = deepcopy(hist)
+        hist = deepcopy(hist)
+        already_generated = 0
+        latent_target = self.autoencoder.encoder(hist.get_target_batch())
+        return self.autoencoder.decoder.generate(latent_target)
 
 
     def generate(

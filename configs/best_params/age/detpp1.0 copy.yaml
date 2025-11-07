@@ -18,3 +18,5 @@ model:
   autoencoder:
     params:
       num_norm: true
+      cat_emb_dim: 88
+      num_emb_dim: 109

@@ -16,13 +16,15 @@ model:
       num_layers: 10
       n_head: 4
       factor: 28
+      cat_emb_dim: 88
+      num_emb_dim: 109
     pretrain: False
     frozen: True
     checkpoint: /trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/vae_age/old_vae_age.ckpt
-    # batch_transforms:
-    # - RescaleTime:
-    #     loc: 0
-    #     scale: 730
+    batch_transforms:
+    - RescaleTime:
+        loc: 0
+        scale: 730
 
   latent_encoder:
     name: GRU
@@ -56,7 +58,7 @@ data_conf:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 730
+        scale: 1.0
     "1":
       TimeToDiff:
         disable: True
