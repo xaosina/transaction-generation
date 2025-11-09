@@ -22,3 +22,13 @@ model:
       hidden_size: 1440 # must be divisible by num_heads and latent dim (40 in our case)
       cfg_p_uncond: 0.2
       cfg_w: 1. # during training - it is better to set cfg_w = 1, set 2. to see how it works.
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 2.e-4
+    betas:
+     - 0.9
+     - 0.999
+    eps: 1e-8
+    weight_decay: 1.e-2
