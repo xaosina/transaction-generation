@@ -1,6 +1,6 @@
 data_conf:
-  train_resamples: 50
-  batch_size: 1024
+  train_resamples: 5
+  batch_size: 128
   train_random_end: time
   train_transforms:
     "3":
@@ -14,10 +14,11 @@ data_conf:
 # TODO: Fix this shit
 model:
   params:
-    fix_features: [ ]
+    fix_features: []
     diff_features: ["small_group", "trans_date", "amount_rur"]
     losses: ['type_loss', 'time_loss']
     cfg_w: 1.
+    order_invariant_mode: False
     help_net:
       name: GroundTruthGenerator
       checkpoint:

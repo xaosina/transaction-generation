@@ -34,6 +34,7 @@ class TypeDenoisingModule(nn.Module):
         use_rezero=False,
         diffusion_t_type='discrete',
         use_simple_time_proj=True,
+        order_invariant_mode=False
     ):
         """
 
@@ -52,6 +53,7 @@ class TypeDenoisingModule(nn.Module):
         self.device = device
         self.time_feature_dim = time_feature_dim
         self.cat_features_number = num_classes
+        self.order_invariant_mode = order_invariant_mode
 
         self.time_pos_emb = get_time_pos_emb(diffusion_t_type, time_feature_dim, n_steps)
 
@@ -115,14 +117,16 @@ class TypeDenoisingModule(nn.Module):
             ],
             device=torch.device(self.device),
         )
-
-        self.order_vec = torch.tensor(
-            [
-                math.pow(10000.0, 2.0 * (i // 2) / int(dynamic_feature_dim_sum))
-                for i in range((int(dynamic_feature_dim_sum)))
-            ],
-            device=torch.device(self.device),
-        )
+        if not self.order_invariant_mode:
+            self.order_vec = torch.tensor(
+                [
+                    math.pow(10000.0, 2.0 * (i // 2) / int(dynamic_feature_dim_sum))
+                    for i in range((int(dynamic_feature_dim_sum)))
+                ],
+                device=torch.device(self.device),
+            )
+        else:
+            self.order_vec = None
 
         self.prefix_proj = None
         if outer_history_encoder_dim is not None:
@@ -145,10 +149,6 @@ class TypeDenoisingModule(nn.Module):
         ##
         t = self.time_pos_emb(t)
         t = self.mlp(t)
-
-        order = torch.cat([torch.arange(x.size(1)).unsqueeze(0)] * x.size(0), dim=0)
-
-        order = self.order_enc(order.to(x.device))
 
         time_embed = t.view(x.size(0), 1, int(self.time_feature_dim))
         t = torch.cat([time_embed] * x.size(1), dim=1)
@@ -173,11 +173,17 @@ class TypeDenoisingModule(nn.Module):
         all_features.append(torch.cat(combined_cat, dim=-1))
         all_features.append(t)
 
-        tgt = torch.cat(all_features, dim=-1) + order
+        if self.order_invariant_mode:
+            tgt = torch.cat(all_features, dim=-1)
+            tgt_mask = None
+        else:
+            order = torch.cat([torch.arange(x.size(1)).unsqueeze(0)] * x.size(0), dim=0)
+            order = self.order_enc(order.to(x.device))
+            tgt = torch.cat(all_features, dim=-1) + order
+            tgt_mask = self.generate_square_subsequent_mask(x.size(1)).to(x.device)
 
         tgt = self.reduction_dim_layer(tgt)
 
-        tgt_mask = self.generate_square_subsequent_mask(x.size(1)).to(x.device)
 
         memory = hist.permute(1, 0, -1)
 

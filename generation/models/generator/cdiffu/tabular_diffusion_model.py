@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 from .utils import index_to_log_onehot, log_onehot_to_index
 from .utils import log_sample_categorical
-from .hist_enc1 import HistoryEncoder
+from .hist_encoder import HistoryEncoder
 from .type_denoising_ml import TypeDenoisingModule
 from .time_denoising_ml import TimeDenoisingModule
 from .time_diffusion_model import DiffusionTimeModel
@@ -31,7 +31,8 @@ class DiffusionTabularModel(torch.nn.Module):
         dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
-        self.cfg_p_uncond = 0.2
+        self.cfg_p_uncond = model_config.params["cfg_p", 0.0]
+        self.order_invariant_mode = bool(model_config.params.get("order_invariant_mode", False))
 
         if (dim_feedforward % transformer_heads) != 0:
             raise ValueError("(dim_feedforward % transformer_heads) != 0")
@@ -114,6 +115,7 @@ class DiffusionTabularModel(torch.nn.Module):
             use_post_norm=outer_he_use_post_norm,
             diffusion_t_type=cat_diffusion_t_type,
             use_simple_time_proj=use_simple_t_project,
+            order_invariant_mode=self.order_invariant_mode
         )
 
         self.denoise_fn_dt = TimeDenoisingModule(
@@ -133,6 +135,7 @@ class DiffusionTabularModel(torch.nn.Module):
             use_post_norm=outer_he_use_post_norm,
             diffusion_t_type=num_diffusion_t_type,
             use_simple_time_proj=use_simple_t_project,
+            order_invariant_mode=self.order_invariant_mode
         )
 
         self.type_diff_ = DiffusionTypeModel(
@@ -153,17 +156,39 @@ class DiffusionTabularModel(torch.nn.Module):
             torch.zeros(1, outer_history_encoder_dim), requires_grad=True
         )
 
+    def _permute_target(self, tgt_x, tgt_e):
+        if tgt_x is None or tgt_e is None:
+            return tgt_x, tgt_e
+
+        B, L = tgt_x.size(0), tgt_x.size(1)
+        device = tgt_x.device
+
+        # отдельная перестановка для каждого объекта в батче
+        perms = torch.stack(
+            [torch.randperm(L, device=device) for _ in range(B)],
+            dim=0
+        )  # (B, L)
+
+        # расширяем под фичи
+        idx_x = perms.unsqueeze(-1).expand(-1, -1, tgt_x.size(-1))
+        idx_e = perms.unsqueeze(-1).expand(-1, -1, tgt_e.size(-1))
+
+        tgt_x_perm = torch.gather(tgt_x, 1, idx_x)
+        tgt_e_perm = torch.gather(tgt_e, 1, idx_e)
+        return tgt_x_perm, tgt_e_perm
+
+
     def compute_loss(self, tgt_x, tgt_e, hist_x, hist_e, cat_order, hist_emb=None):
-        ## tgt_x,tgt_e : B,gen_len,F_{1};B,gen_len,F_{2}
-        ## hist_x,hist_e: B,hist_len,F_{1};B,hist_len,F_{2}
-        #
-        # TODO: If CFG WE put something else instead of hist!!!!
         B = hist_x.size(0)
         if torch.rand((1,)).item() < self.cfg_p_uncond:
+            assert self.cfg_p_uncond != 0.0 # Stupid check
             hist = self.plug_hist.repeat(B, 1, 1)
             hist_emb = self.plug_embedding.repeat(B, 1)
         else:
             hist = self.get_hist(hist_x, hist_e)
+
+        if self.order_invariant_mode:
+            tgt_x, tgt_e = self._permute_target(tgt_x, tgt_e)
 
         t, pt = self.sample_time(tgt_e.size(0), device=self.device)
 
@@ -283,6 +308,8 @@ class DiffusionTabularModel(torch.nn.Module):
         else:
             e_t_index = log_onehot_to_index_multi_task(e_t, self.num_classes_list)
 
+        plug_emb = None
+        plug_hist = None
         if cfg_w != 1.0:
             plug_emb = self.plug_embedding.repeat(B, 1)
             plug_hist = self.plug_hist.repeat(B, 1, 1)

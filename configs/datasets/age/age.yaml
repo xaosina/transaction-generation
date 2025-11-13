@@ -54,7 +54,7 @@ data_conf:
       RescaleTime:
         loc: 0
         scale: 730
-        disable: True
+        disable: true
     "time_diff":
       TimeToDiff:
         disable: false

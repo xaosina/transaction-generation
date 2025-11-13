@@ -1,5 +1,5 @@
 trainer:
-  metrics_on_train: False
+  metrics_on_train: True
   total_iters: 1_000_000
 
 evaluator:
@@ -24,36 +24,37 @@ model:
     history_len: 32
     #generation_len:  ${data_conf.generation_len}
     generation_len: 32
-    diffusion_steps: 500
+    diffusion_steps: 700
     repeat_samples: 1
     num_emb_dim_features_exp: 3
     cat_emb_dim_features_exp: 3
-    time_emb_dim_features_exp: 3
-    dim_exp: 6
-    heads_exp: 3
-    hidden_scale_exp: 7
-    encoder_layer: 6
-    decoder_layer: 6
-    history_encoder_causal_mask: True
-    use_rezero: True
+    time_emb_dim_features_exp: 5
+    dim_exp: 8
+    heads_exp: 2
+    hidden_scale_exp: 9
+    encoder_layer: 4
+    decoder_layer: 4
+    num_diffusion_t_type: discrete
+    cat_diffusion_t_type: discrete
     losses: ['time_loss', 'type_loss']
-    num_diffusion_t_type: "discrete"
-    cat_diffusion_t_type: "discrete"
-    use_simple_time_proj: True
-    use_post_norm: True
-    prefix_dim_exp: 5
+    history_encoder_causal_mask: true
+    use_rezero: true
+    use_simple_time_proj: false
+    use_post_norm: true
+    prefix_dim_exp: 6
 
 
 optimizer:
   name: Adam
   params:
-    lr: 0.00009858780215263926
-    weight_decay: 0.00019210481290337137
+    weight_decay: 1.4432769618850247e-05
+    lr: 0.0001374534672097334
+
 
 schedulers:
   "step":
     StepLR: # Note: I didn't adjust hyperparams&schedulers
-      step_size: 20
+      step_size: 22
 
 
 loss:
