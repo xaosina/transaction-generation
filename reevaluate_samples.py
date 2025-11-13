@@ -1,7 +1,7 @@
 import sys
 import os
 os.chdir("/home/dev/2025/transaction-generation")
-
+# os.chdir("/workspace/transaction-generation")
 from omegaconf import OmegaConf
 from pathlib import Path
 from dataclasses import asdict
@@ -13,9 +13,9 @@ from generation.runners.utils import PipelineConfig
 from dacite import from_dict, Config
 
 dataset: Literal['age', 'alphabattle_small'] = 'age'
-
+# repo_path = Path("/workspace/transaction-generation") #YOUR PATH TO REPO
 repo_path = Path("/home/dev/2025/transaction-generation") #YOUR PATH TO REPO
-samples_relpath = Path(f"./log/generation/{dataset}/evaluation/full-old-params/temp1.0_topk1(4)") # YOUR PATH TO GENERATED SAMPLES
+samples_relpath = Path(f"./log/generation/{dataset}/full_diff(1)") # YOUR PATH TO GENERATED SAMPLES
 log_relpath = Path(f"./log/generation/{dataset}/evaluation") # seems that this path not actually used
 config_path = (repo_path / samples_relpath) / 'seed_0' / 'config.yaml'
 gen_dir = (repo_path / samples_relpath) / "seed_0" / 'evaluation' / 'samples' / 'gen'
