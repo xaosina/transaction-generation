@@ -8,7 +8,7 @@ trainer:
     update_every: 10
 
 data_conf:
-  train_resamples: 50
+  train_resamples: 5
   batch_size: 128
   train_random_end: time
   train_transforms:
@@ -17,10 +17,11 @@ data_conf:
         target_len: ${data_conf.generation_len}
 
 schedulers:
-  "step":
-    StepLR:
-      step_size: 20
-      gamma: 0.2
+  "plate":
+    ReduceLROnPlateau:
+      factor: 0.1
+      patience: 3
+      threshold: 0.01
 
 loss:
   name: DummyLoss

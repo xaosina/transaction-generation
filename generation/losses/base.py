@@ -216,9 +216,7 @@ class VAELoss(BaseLoss):
 
         mu_z = params["mu_z"]
         std_z = params["std_z"]
-        kld_term = -0.5 * torch.mean(
-            (1 + std_z - mu_z.pow(2) - std_z.exp()).mean(-1).mean()
-        )
+        kld_term = -0.5 * (1 + std_z - mu_z.pow(2) - std_z.exp()).mean(0).sum()
 
         return {"loss": base_loss + self._beta * kld_term, "kl_loss": kld_term}
 
