@@ -102,6 +102,9 @@ class BetaScheduler(BaseScheduler):
     def get_beta(self) -> float:
         return self._beta
 
+    def get_last_lr(self):
+        return [0]
+
     def step(self, loss: float) -> None:
         if loss < self._best_loss:
             self._best_loss = loss
