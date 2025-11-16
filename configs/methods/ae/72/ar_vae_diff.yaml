@@ -46,11 +46,11 @@ optimizer:
     lr: 1.e-3
 
 schedulers:
-  "plateau":
-    ReduceLROnPlateau:
-      factor: 0.5
-      patience: 7
-      threshold: 0.01
+  # "plateau":
+  #   ReduceLROnPlateau:
+  #     factor: 0.5
+  #     patience: 7
+  #     threshold: 0.01
   "beta":
     BetaScheduler:
       init_beta: 1
