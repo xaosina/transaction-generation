@@ -214,6 +214,14 @@ class OTD(BaseMetric):
     detailed: bool = False
     global_denom: bool = True
 
+    def __post_init__(self):
+        if self.focus_on:
+            focus_on = [
+                f if f != "<target_token>" else self.data_conf.target_token
+                for f in self.focus_on
+            ]
+            object.__setattr__(self, "focus_on", focus_on)
+
     def __call__(self, orig, gen):
         assert (orig.columns == gen.columns).all()
         results = {}
