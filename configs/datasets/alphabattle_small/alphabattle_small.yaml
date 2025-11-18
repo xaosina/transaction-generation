@@ -30,10 +30,10 @@ evaluator:
 data_conf:
   dataset_name: alphabattle_small
   cat_cardinalities:
-    - ["payment_system", 7]
     - ["mcc_category", 28]
-    - ["card_type", 166]
     - ["mcc", 109]
+    - ["payment_system", 7]
+    - ["card_type", 166]
   num_names:
     - amnt
   index_name: app_id
@@ -64,6 +64,7 @@ data_conf:
     "1":
       TimeToDiff:
         disable: True
+    "vr_decimal": null
     "local_shuffle":
       LocalShuffle:
         max_shift: 0
@@ -74,6 +75,7 @@ data_conf:
   val_transforms:
     "0": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
+    "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":
       CutTargetSequence:
         target_len: *generation_len

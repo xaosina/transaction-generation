@@ -341,9 +341,9 @@ class Trainer:
                 loss_ema = loss.item() if i == 0 else 0.9 * loss_ema + 0.1 * loss.item()
                 pbar.set_postfix_str(f"Loss: {loss_ema:.4g}")
 
-                # torch.nn.utils.clip_grad_norm_(
-                #     self._model.parameters(), max_norm=self._grad_clip
-                # )
+                torch.nn.utils.clip_grad_norm_(
+                    self._model.parameters(), max_norm=self._grad_clip
+                )
                 self._opt.step()
 
                 self._opt.zero_grad()
@@ -455,7 +455,7 @@ class Trainer:
 
         best_metric = float("-inf")
         patience = self._patience
-
+        prev_lr = self._sched.schedulers[0].get_last_lr()[0]
         while self._last_iter < self._total_iters:
             train_iters = min(
                 self._total_iters - self._last_iter,
@@ -465,7 +465,10 @@ class Trainer:
             losses = self.train(train_iters)
             if self._sched:
                 self._sched.step(loss=losses.pop("loss_ema"))
-
+            current_lr = self._sched.schedulers[0].get_last_lr()[0]  # get current LR
+            if current_lr != prev_lr:
+                print(f"\n\n\n\nReducing learning rate to {current_lr:.2e}")
+                prev_lr = current_lr
             self._metric_values = None
             if self._sample_evaluator is not None:
                 self.validate(get_metrics=self._metrics_on_train)

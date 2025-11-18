@@ -62,20 +62,10 @@ data_conf:
     "1":
       TimeToDiff:
         disable: True
-    "TCD":
-      TimeToCatDiff:
-        disable: True
-        target: *target_token
-    "ngrams":
-      NGramTransform:
-        model_path: 'data/age/preprocessed/ngrams-mapper-32.pt'
-        feature_name: small_group
-        feature_counts: 203
-        max_l: *max_seq_len
-        disable: true
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
+    "vr_decimal": null
     "local_shuffle":
       LocalShuffle:
         max_shift: 0
@@ -88,6 +78,7 @@ data_conf:
     "1": ${data_conf.train_transforms.1}
     "tcd": ${data_conf.train_transforms.TCD}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
+    "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":
       CutTargetSequence:
         target_len: *generation_len

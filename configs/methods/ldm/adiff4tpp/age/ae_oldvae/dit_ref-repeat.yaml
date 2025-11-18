@@ -1,0 +1,17 @@
+# Adiff4TPP with 
+# - old vae autoencoder, 
+# - default DiT denoiser architecture
+# - repeat reference
+# - WITHOUT GRU history encoder
+
+config_factory: [
+  start, 
+  datasets/age/age, 
+  methods/ldm/train_defaults, 
+  methods/ldm/ae/age/oldvae, # old vae on age as autoencoder 
+  methods/ldm/nn/DiT, # DiT as denoiser
+  methods/ldm/ref/repeat, # repeat reference
+  methods/ldm/histemb/none, # no history encoder
+  methods/ldm/adiff4tpp/base,
+  metrics/with_detection/age
+]
