@@ -8,7 +8,9 @@ except ImportError:
     from .utils import batch_linear_assignment
 
 
-def match_batches(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig):
+def get_batch_assignment(
+    reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig
+):
     assert reference.shape == target.shape
     assert (reference.lengths == target.lengths).all()
     L, B = reference.shape
@@ -41,7 +43,13 @@ def match_batches(reference: GenBatch, target: GenBatch, data_conf: LatentDataCo
 
     if cost.isnan().any():
         return torch.tensor(float("nan"))
-    assignment = batch_linear_assignment(cost).T  # L, B
+    assignment = batch_linear_assignment(cost)  # B, L
+    return assignment, cost
+
+
+def match_batches(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig):
+    assignment = get_batch_assignment(reference, target, data_conf)[0].T  # L, B
+
     for attr in ["time", "num_features", "cat_features"]:
         field = getattr(target, attr)
         if isinstance(field, torch.Tensor):
@@ -49,6 +57,14 @@ def match_batches(reference: GenBatch, target: GenBatch, data_conf: LatentDataCo
             field = field.take_along_dim(assign, 0)
         setattr(target, attr, field)
     return target
+
+
+def get_best_cost(reference: GenBatch, target: GenBatch, data_conf: LatentDataConfig):
+    assignment, cost = get_batch_assignment(reference, target, data_conf)
+    cost = cost.take_along_dim(assignment.unsqueeze(-1), -1)  # B, L, 1
+    cost = cost.sum((1, 2))  # B
+    return cost
+
 
 def post_process_generation(pred: GenBatch, hist: GenBatch, linear_clip=False):
     if not hist.monotonic_time:
