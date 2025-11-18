@@ -21,26 +21,5 @@ model:
     order_invariant_mode: False
     help_net:
       name: GroundTruthGenerator
-      checkpoint:
-    history_encoder:
-      # checkpoint: /workspace/transaction-generation/log/generation/ready/age/gru.ckpt
-      checkpoint: /home/dev/2025/transaction-generation/log/generation/ready/age/gru.ckpt
-      name: AutoregressiveGenerator
-      latent_encoder:
-        name: GRU
-        params:
-          hidden_size: 480
-          num_layers: 1
-          dropout: 9.594490213419128e-06
-      autoencoder:
-        name: BaselineAE
-        params:
-          cat_emb_dim: 51
-          num_emb_dim: 18
-          num_norm: true
-          use_time: true
-        pretrain: false
-        frozen: True
-        batch_transforms:
-      pooler: last
-      params: null
+      # checkpoint:
+    
