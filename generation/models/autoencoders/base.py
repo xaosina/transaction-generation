@@ -69,10 +69,29 @@ class BaselineAE(BaseAE):
         )
 
     def forward(self, x: GenBatch) -> PredBatch:
-        raise "We don't pretrain AE"
+        hidden = self.encoder(x)
+        mu = hidden.tokens
+        hidden.tokens = hidden.tokens + torch.randn_like(hidden.tokens)
+        x = self.decoder(hidden)
+        return x, mu
 
-    def generate(self, hist: GenBatch, gen_len: int, with_hist=False) -> GenBatch:
-        raise "We don't use AE yet"
+    def generate(
+        self,
+        hist: GenBatch,
+        gen_len: int,
+        with_hist=False,
+        topk=1,
+        temperature=1.0,
+    ) -> GenBatch:
+        hist = deepcopy(hist)
+        assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
+        hidden = self.encoder(hist.get_target_batch())
+        x = self.decoder.generate(hidden, topk=topk, temperature=temperature)
+        if with_hist:
+            hist.append(x)
+            return hist
+        else:
+            return x
 
 
 class Batch2TransformedSeq(nn.Module):
@@ -95,20 +114,6 @@ class Batch2TransformedSeq(nn.Module):
             num_count = 0
         # Init batch_transforms. Update initial features.
         self.batch_transforms = batch_transforms
-        if self.batch_transforms:
-            for tfs in self.batch_transforms:
-                assert isinstance(tfs, NewFeatureTransform)
-                for _ in tfs.num_names:
-                    num_count += 1
-                for cat_name, card in tfs.cat_cardinalities.items():
-                    cat_cardinalities[cat_name] = card
-                for _ in tfs.num_names_removed:
-                    num_count -= 1
-                cat_cardinalities = {
-                    k: v
-                    for k, v in cat_cardinalities.items()
-                    if k not in tfs.cat_names_removed
-                }
         self.use_time = use_time
         if use_time:
             num_count += 1
@@ -252,12 +257,22 @@ class ReconstructorBase(BaseModel):
             cat_features=cat_features,
         )
 
-    def generate(self, x: Seq, topk=1, temperature=1.0) -> GenBatch:
-        # TODO add orig_hist just like in VAE
+    def generate(
+        self, x: Seq, topk=1, temperature=1.0, orig_hist: GenBatch = None
+    ) -> GenBatch:
         batch = self.forward(x).to_batch(topk, temperature)
         if self.batch_transforms is not None:
+            if orig_hist is not None:
+                batch_len = batch.shape[0]
+                hist = deepcopy(orig_hist)
+                for tf in self.batch_transforms:
+                    tf(hist)
+                hist.append(batch)
+                batch = hist
             for tf in reversed(self.batch_transforms):
                 tf.reverse(batch)
+            if orig_hist is not None:
+                batch = batch.tail(batch_len)
         return batch
 
 

@@ -103,8 +103,8 @@ class DeTPP(BaseGenerator):
     def _apply_delta(self, x: GenBatch):
         x = deepcopy(x)
         deltas = x.time
-        deltas[:, 1:] -= deltas[:, :-1]
-        deltas[:, 0] = 0
+        deltas[1:] = deltas[1:] - deltas[:-1]
+        deltas[0] = 0
         # deltas.clip_(min=0, max=self._max_time_delta)
         x.time = deltas
         return x

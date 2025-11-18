@@ -1,0 +1,12 @@
+model:
+  name: LatentDiffusionGenerator
+  latent_encoder:
+    name: AsyncDiffEncoder 
+    params:
+      loss_type: l2-squared # l2,l2-squared and huber
+      schedule: async
+      int_ode: rk4
+      generation_len: ${data_conf.generation_len}
+      reference_len: ${data_conf.generation_len}
+      data_init: False
+      data_init_noisesigma: 0

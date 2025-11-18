@@ -7,7 +7,7 @@ from torch.nn import Module
 
 from generation.data.data_types import GenBatch, LatentDataConfig
 
-from .base import BaselineLoss, NoOrderLoss, TailLoss, VAELoss
+from .base import BaselineLoss, NoOrderLoss, TailLoss, VAELoss, AELoss
 from .oneshot import DistLoss, GaussianDistLoss, MatchedLoss, TargetLoss
 from .detpp.detpp import DeTPPLoss
 

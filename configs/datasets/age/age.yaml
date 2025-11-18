@@ -65,6 +65,7 @@ data_conf:
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
+    "vr_decimal": null
     "local_shuffle":
       LocalShuffle:
         max_shift: 0
@@ -77,6 +78,7 @@ data_conf:
     "time_diff": ${data_conf.train_transforms.time_diff}
     "log_time": ${data_conf.train_transforms.log_time}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
+    "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":
       CutTargetSequence:
         target_len: *generation_len

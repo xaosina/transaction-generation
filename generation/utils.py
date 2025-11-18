@@ -229,6 +229,8 @@ def create_instances_from_module(
             configs = configs.values()
         instances = []
         for config in configs:
+            if config is None:
+                continue
             if isinstance(config, str):
                 instances.append(getattr(module, config)(**common_kwargs))
                 continue

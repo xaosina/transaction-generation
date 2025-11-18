@@ -1,0 +1,12 @@
+# default conditioning is repeat reference + (learnable) gru history embedder
+model:
+  name: LatentDiffusionGenerator
+  latent_encoder:
+    name: ConditionalDiffusionEncoder
+    params:
+      generation_len: ${data_conf.generation_len}
+      reference_len: ${data_conf.generation_len} # another value is possible
+      num_classes: 1
+  
+  params:
+    repeat_matching: False

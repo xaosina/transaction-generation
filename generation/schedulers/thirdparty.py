@@ -1,4 +1,7 @@
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR
+import math
+import logging
+logger = logging.getLogger(__name__)
 
 class ReduceLROnPlateauScheduler(ReduceLROnPlateau):
     
@@ -29,3 +32,29 @@ class ReduceLROnPlateauScheduler(ReduceLROnPlateau):
     def step(self, epoch=None, loss=None, metrics=None):
         assert loss is not None
         super().step(loss)
+
+class CosineWithWarmUp(LambdaLR):
+    
+    def __init__(
+        self, 
+        optimizer, 
+        warmup=4,
+        total_steps=100,
+    ):
+        def lr_lambda(step):
+            if step < warmup:
+                res = float(step + 1) / float(max(1, warmup))
+                logger.info(f'CosineWithWarmUp lr setted to {res}')
+                return res
+            progress = float(step + 1 - warmup) / float(max(1, total_steps - warmup))
+            res = 0.5 * (1.0 + math.cos(math.pi * progress))  # cosine to 0
+            logger.info(f'CosineWithWarmUp lr setted to {res}')
+            return res
+
+        super().__init__(
+            optimizer, 
+            lr_lambda,
+        )
+    
+    def step(self, epoch=None, loss=None, metrics=None):
+        super().step(epoch=epoch)

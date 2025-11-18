@@ -55,8 +55,11 @@ class CompositeScheduler(BaseScheduler):
                 kwargs["epoch"] = epoch
             if "loss" in sig.parameters and loss is not None:
                 kwargs["loss"] = loss
-            if "metrics" in sig.parameters and metrics is not None:
-                kwargs["metrics"] = metrics
+            if "metrics" in sig.parameters:
+                if metrics is not None:
+                    kwargs["metrics"] = metrics
+                else:
+                    kwargs["metrics"] = loss
 
             scheduler.step(**kwargs)
 
@@ -98,6 +101,9 @@ class BetaScheduler(BaseScheduler):
 
     def get_beta(self) -> float:
         return self._beta
+
+    def get_last_lr(self):
+        return [0]
 
     def step(self, loss: float) -> None:
         if loss < self._best_loss:

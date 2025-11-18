@@ -1,0 +1,18 @@
+model:
+  autoencoder:
+    name: BaselineAE
+    params:
+      cat_emb_dim: 16
+      num_emb_dim: 16
+      num_norm: True
+      use_time: True
+    pretrain: False
+    frozen: True
+    checkpoint: /home/transaction-generation/log/generation/ready/age/ae.ckpt
+    batch_transforms:
+      - RescaleTime:
+          loc: 0.0
+          scale: 0.0013698630136986301
+      - TimeToDiff:
+         disable: False
+

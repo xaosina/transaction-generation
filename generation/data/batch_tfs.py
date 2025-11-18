@@ -9,6 +9,7 @@ import pickle
 
 try:
     from torch_linear_assignment import batch_linear_assignment
+
     CPU_ASSIGNMENT = False
 except Exception:
     print("Using slow linear assignment implementation")
@@ -175,19 +176,19 @@ class LocalShuffle(BatchTransform):
         mask = mask[:, None] | mask[:, :, None]
         mask[:, torch.arange(L), torch.arange(L)] = False
         cost[mask] = torch.inf
-        
+
         # Step 3: Make independent shuffle for tail
         if self.independent_tail > 0:
             hist = torch.arange(L, device=batch.time.device) < (
                 batch.lengths[:, None] - self.independent_tail
-            ) # B, L
+            )  # B, L
             target = torch.arange(L, device=batch.time.device) >= (
                 batch.lengths[:, None] - self.independent_tail
-            ) # B, L
+            )  # B, L
             intersection = hist[:, None] & target[:, :, None]
             intersection = intersection | intersection.transpose(-1, -2)
             cost[intersection] = torch.inf
-        
+
         # Step 3: permute everything
         if CPU_ASSIGNMENT:
             cost = cost.detach().cpu()
@@ -279,99 +280,89 @@ class RescaleTime(BatchTransform):
 
 @dataclass
 class VariableRangeDecimal(NewFeatureTransform):
-    """From https://www.arxiv.org/abs/2504.07566"""
+    """
+    From https://www.arxiv.org/abs/2504.07566
 
-    name: str
+    72.34567 => ['1', '0', '7', '2', '3', '4']
+    [magnitude, sign, <top 4 decimals>]
+    """
+
+    names: list[str]
+    time_name: str
     n: int = 4
-    smallest_magnitude: int = -5
-    biggest_magnitude: int = 13
+    smallest_magnitude: int = -10
+    biggest_magnitude: int = 10
 
     @property
     def cat_cardinalities(self):
         assert self.biggest_magnitude > self.smallest_magnitude
         new_cats = {}
-        new_cats[f"{self.name}_mag"] = (
-            self.biggest_magnitude - self.smallest_magnitude + 1
-        )
-        for i in range(1, self.n + 1):
-            new_cats[f"{self.name}_{i}"] = 10
+        for name in self.names + [self.time_name]:
+            new_cats[f"{name}_mag"] = (
+                self.biggest_magnitude - self.smallest_magnitude + 1
+            )
+            new_cats[f"{name}_sign"] = 2
+            for i in range(1, self.n + 1):
+                new_cats[f"{name}_{i}"] = 10
         return new_cats
 
     @property
     def num_names_removed(self) -> list[str] | None:
-        return [self.name]
+        return self.names
+
+    def new_focus_on(self, focus_on) -> list[str]:
+        res = [name for name in focus_on if name not in self.names + [self.time_name]]
+        for name in self.names + [self.time_name]:
+            if name in focus_on:
+                res += [f"{name}_mag", f"{name}_sign"]
+                res += [f"{name}_{i}" for i in range(1, self.n + 1)]
+        return res
 
     def __call__(self, batch: GenBatch):
-        assert self.name in batch.num_features_names
-        feature_id = batch.num_features_names.index(self.name)
-        feature = batch.num_features[:, :, feature_id]  # L, B
-        assert (feature >= 0).all(), "Dont support negative values"
-        original_magnitude = (
-            torch.floor(torch.log10(feature.abs() + 1e-12))
-            .clamp(self.smallest_magnitude, self.biggest_magnitude)
-            .to(torch.long)
-        )
-        adjusted_magnitude = original_magnitude - self.smallest_magnitude
+        assert self.names == batch.num_features_names
+        new_cat_features = []
+        for name in self.names + [self.time_name]:
+            if name == self.time_name:
+                feature = batch.time
+            else:
+                feature = batch[name]  # L, B
+            sign = (feature < 0).to(torch.long).unsqueeze(-1)
+            feature = feature.abs()
+            magnitude = torch.floor(torch.log10(feature.abs() + 1e-12))
+            magnitude = magnitude.clamp(self.smallest_magnitude, self.biggest_magnitude)
+            x_norm = (feature / (10 ** (magnitude - 3))).round()  # 1234.
+            x_norm = x_norm.int()
 
-        x_normalized = feature / (10.0 ** original_magnitude.float())
-        # Extract digits
-        digits = []
-        remainder = x_normalized
-        for _ in range(self.n):
-            digit = remainder.floor().to(torch.long)
-            digits.append(digit)
-            remainder = (remainder - digit) * 10
+            shifts = torch.pow(10, torch.arange(self.n, device=sign.device).flip(0))
+            shifted = x_norm.unsqueeze(-1) // shifts  # [L, B], n
+            digits = shifted.floor().long() % 10
+            mag_feature = (magnitude - self.smallest_magnitude).unsqueeze(-1).long()
+            new_cat_features += [torch.cat([mag_feature, sign, digits], dim=-1)]
 
-        # Prepare categorical features
-        mag_feature = adjusted_magnitude.unsqueeze(-1)
-        digit_features = [d.unsqueeze(-1) for d in digits]
-        new_cat_features = torch.cat([mag_feature] + digit_features, dim=-1)
-
-        # Update batch.cat_features
-        if batch.cat_features is None:
-            batch.cat_features = new_cat_features
-            batch.cat_features_names = list(self.cat_cardinalities)
-        else:
-            batch.cat_features = torch.cat(
-                [batch.cat_features, new_cat_features], dim=-1
-            )
-            batch.cat_features_names += list(self.cat_cardinalities)
-
-        # Remove numerical feature
-        if len(batch.num_features_names) == 1:
-            batch.num_features_names = None
-            batch.num_features = None
-        else:
-            remaining_ids = [
-                i for i in range(len(batch.num_features_names)) if i != feature_id
-            ]
-            batch.num_features = batch.num_features[remaining_ids]
-            batch.num_features_names = [
-                n for n in batch.num_features_names if n != self.name
-            ]
+        new_cat_features = torch.cat(new_cat_features, -1)
+        new_cat_names = list(self.cat_cardinalities)
+        if batch.cat_features is not None:
+            new_cat_features = torch.cat([batch.cat_features, new_cat_features], dim=-1)
+            new_cat_names = batch.cat_features_names + new_cat_names
+        batch.cat_features = new_cat_features
+        batch.cat_features_names = new_cat_names
+        batch.num_features_names = None
+        batch.num_features = None
+        # else:
+        #     remaining_ids = [
+        #         i for i in range(len(batch.num_features_names)) if i != feature_id
+        #     ]
+        #     batch.num_features = batch.num_features[remaining_ids]
+        #     batch.num_features_names = [
+        #         n for n in batch.num_features_names if n != name
+        #     ]
 
     def reverse(self, batch: GenBatch):
-        # Get the names of the added categorical features
-        all_names = list(self.cat_cardinalities)
-
-        # Check if these names are present in the batch's cat features
-        if batch.cat_features_names is None or not set(all_names).issubset(
-            batch.cat_features_names
-        ):
-            raise ValueError("Categorical features to reverse not found in batch")
-
-        # Get indices of the names to remove
-        new_indices = [batch.cat_features_names.index(name) for name in all_names]
-        cat_features = batch.cat_features[..., new_indices]
-
-        # Remove these features from batch
-        remaining_names = [
-            name for name in batch.cat_features_names if name not in all_names
-        ]
-        remaining_indices = [
-            i for i in range(len(batch.cat_features_names)) if i not in new_indices
-        ]
-        remaining_cat_features = batch.cat_features[..., remaining_indices]
+        new_names = list(self.cat_cardinalities)
+        new_mask = torch.tensor([n in new_names for n in batch.cat_features_names])
+        cat_features = batch.cat_features[..., new_mask]
+        remaining_cat_features = batch.cat_features[..., ~new_mask]
+        remaining_names = [n for n in batch.cat_features_names if n not in new_names]
 
         # Update batch's cat features and names
         batch.cat_features = remaining_cat_features
@@ -381,29 +372,26 @@ class VariableRangeDecimal(NewFeatureTransform):
             batch.cat_features_names = None
 
         # Reconstruct the original numerical feature
-        adjusted_magnitude = cat_features[..., 0]
-        digits = [cat_features[..., i] for i in range(1, self.n + 1)]
+        num_features = [batch.num_features] if batch.num_features is not None else []
+        num_names = [batch.num_features_names] if batch.num_features is not None else []
 
-        # Convert adjusted_magnitude back to original_magnitude
-        original_magnitude = adjusted_magnitude + self.smallest_magnitude
+        for i, name in enumerate(self.names + [self.time_name]):
+            start_id = i * (self.n + 2)
+            magnitude = cat_features[..., start_id] + self.smallest_magnitude
+            sign = cat_features[..., start_id + 1].bool()
+            digits = cat_features[..., start_id + 2 : start_id + 2 + self.n]
+            shifts = torch.pow(10.0, torch.arange(0, -self.n, -1, device=sign.device))
+            x_normalized = (digits.float() * shifts).sum(-1)
+            original_feature = x_normalized * (10.0 ** magnitude.float())
+            original_feature[sign] *= -1
+            if name == self.time_name:
+                batch.time = original_feature
+            else:
+                num_features += [original_feature.unsqueeze(-1)]
+                num_names += [name]
 
-        # Reconstruct x_normalized
-        x_normalized = torch.zeros_like(adjusted_magnitude, dtype=torch.float32)
-        for i in range(self.n):
-            x_normalized += digits[i].float() * (10.0 ** (-i))
-
-        # Compute original feature
-        original_feature = x_normalized * (10.0 ** original_magnitude.float())
-
-        # Add back to num_features
-        if batch.num_features is None:
-            batch.num_features = original_feature.unsqueeze(-1)
-            batch.num_features_names = [self.name]
-        else:
-            batch.num_features = torch.cat(
-                [batch.num_features, original_feature.unsqueeze(-1)], dim=-1
-            )
-            batch.num_features_names.append(self.name)
+        batch.num_features = torch.cat(num_features, -1)
+        batch.num_features_names = num_names
 
 
 @dataclass

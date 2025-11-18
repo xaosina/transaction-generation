@@ -1,0 +1,4 @@
+model:
+  params:
+    history_encoder:
+      name: GRU

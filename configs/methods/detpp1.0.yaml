@@ -1,5 +1,4 @@
 # MODEL
-# Removed time scaling
 # Hardcoded 1 layer
 # Always "_presence": 4
 # Increase max wd
@@ -49,6 +48,10 @@ loss:
 data_conf:
   batch_size: 32
   train_transforms:
+    "0":
+      RescaleTime:
+        loc: 0.0
+        scale: 1
     "1":
       TimeToDiff:
         disable: True

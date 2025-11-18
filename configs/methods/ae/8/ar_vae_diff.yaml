@@ -1,0 +1,87 @@
+config_factory: [start, datasets/age/age]
+
+evaluator:
+  devices: ["cuda:1", "cuda:2"]
+  topk: 1
+  temperature: 1.
+  metrics:
+    - OTD: {max_shift: 0, detailed: True}
+
+# trainer:
+#   metrics_on_train: True
+
+# MODEL
+model:
+  name: AR_VAE
+  autoencoder:
+    name: AR_VAE
+    params:
+      use_time: True
+      num_layers: 3
+      d_token: 8
+      n_head: 4
+      factor: 16
+    pretrain: True
+    frozen: False
+    checkpoint:
+    batch_transforms:
+  latent_encoder:
+
+data_conf:
+  batch_size: 32
+  train_transforms:
+    "0": null
+    "1":
+      TimeToDiff:
+        disable: False
+    "log_tfs": null
+    "vr_decimal":
+      VariableRangeDecimal:
+        names: ${data_conf.num_names}
+        time_name: ${data_conf.time_name}
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 1.e-3
+
+schedulers:
+  # "plateau":
+  #   ReduceLROnPlateau:
+  #     factor: 0.5
+  #     patience: 7
+  #     threshold: 0.01
+  "beta":
+    BetaScheduler:
+      init_beta: 1
+      factor: 0.7
+      patience: 5
+      min_beta: 0.005
+      verbose: True
+
+loss:
+  name: VAELoss
+
+optuna:
+  params:
+    n_trials: 50
+    n_startup_trials: 10
+    request_list: []
+    target_metric: loss #${trainer.ckpt_track_metric}
+  suggestions:
+    # - ["optimizer.params.weight_decay", ["suggest_float", {low: 1.e-15, high: 1.e-1, log: True}]]
+    - ["optimizer.params.lr", ["suggest_float", {low: 1.e-5, high: 0.1, log: True}]]
+
+    # - ["model.autoencoder.params.d_token", ["suggest_int", {"low": 8, "high": 128, "step": 8}]]
+    # - ["model.autoencoder.params.num_layers", ["suggest_int", {"low": 1, "high": 10, "log": false}]]
+    - ["model.autoencoder.params.n_head", ["suggest_categorical", {"choices": [1,2,4,8]}]]
+    - ["model.autoencoder.params.factor", ["suggest_int", {"low": 1, "high": 32, "log": true}]]
+
+    # - 
+    #   - ["data_conf.train_transforms.1.TimeToDiff.disable", "data_conf.val_transforms.1.TimeToDiff.disable"]
+    #   - ["suggest_categorical", {choices: [True, False]}]
+
+    # - ["schedulers.step.StepLR.step_size", ["suggest_int", {"low": 10, "high": 50, "step": 10, "log": false}]]
+    - ["schedulers.beta.BetaScheduler.init_beta", ["suggest_float", {"low": 0.005, "high": 10, "log": true}]]
+    - ["schedulers.beta.BetaScheduler.factor", ["suggest_float", {"low": 0.1, "high": 0.9, "step": 0.1}]]
+    # - ["schedulers.beta.BetaScheduler.patience", ["suggest_int", {"low": 2, "high": 5}]]
