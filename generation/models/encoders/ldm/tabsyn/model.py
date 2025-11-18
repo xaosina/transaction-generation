@@ -30,6 +30,7 @@ class Precond(nn.Module):
     def forward(
             self, x, sigma, 
             class_labels : torch.Tensor | None = None, 
+            time_deltas: torch.Tensor | None = None,
             history_embedding : torch.Tensor | None = None,
             reference: torch.Tensor | None = None,
         ):
@@ -50,6 +51,7 @@ class Precond(nn.Module):
         F_x = self.denoise_fn_F(
             (x_in).to(dtype), 
             c_noise.flatten(), 
+            time_deltas=time_deltas,
             class_labels=class_labels, 
             history_embedding=history_embedding, 
             reference=reference,
@@ -84,9 +86,10 @@ class EDM(nn.Module):
             x: torch.Tensor, 
             class_labels: torch.Tensor | None = None, 
             history_embedding: torch.Tensor | None = None,
+            time_deltas: torch.Tensor | None = None,
             reference: torch.Tensor | None = None,
             match_emb_size: int = None
         ):
 
-        loss = self.loss_fn(self.denoise_fn_D, x, class_labels, history_embedding, reference, match_emb_size)
+        loss = self.loss_fn(self.denoise_fn_D, x, class_labels, time_deltas, history_embedding, reference, match_emb_size)
         return loss.mean()

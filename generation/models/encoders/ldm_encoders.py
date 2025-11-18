@@ -76,6 +76,8 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         self.reference_len = params["reference_len"]
         self.latent_dim = params["input_size"]
         self.history_encoder_dim = params["history_encoder_dim"]
+        self.trans_time_conditional=params['time_deltas']
+
         if params.get("matching", False):
             self.match_emb_size = self.generation_len
         else:
@@ -99,6 +101,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         class_labels: torch.Tensor | None = None,
         history_embedding: torch.Tensor | None = None,
         reference_seq: Seq | None = None,
+        time_deltas: torch.Tensor | None = None,
     ) -> torch.Tensor:
 
         target_seq = seq2tensor(target_seq)  # (B, L_gen, D)
@@ -117,12 +120,16 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         if reference_seq is not None:
             assert reference_seq.shape == (bs, self.reference_len, self.latent_dim)
 
+        if time_deltas is not None:
+            assert time_deltas.shape == (bs, self.history_len + self.generation_len)
+
         if history_embedding is not None:
             assert history_embedding.shape == (bs, self.history_encoder_dim)
 
         return self.model(
             target_seq,
             class_labels,
+            time_deltas,
             history_embedding,
             reference_seq,
             match_emb_size=self.match_emb_size,
@@ -132,6 +139,7 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         self,
         n_seqs: int,
         class_labels: torch.Tensor | None = None,
+        time_deltas: torch.Tensor | None = None,
         history_embedding: torch.Tensor | None = None,
         reference_seq: Seq | None = None,
     ) -> Seq:
@@ -145,11 +153,15 @@ class ConditionalDiffusionEncoder(BaseSeq2Seq):
         if history_embedding is not None:
             assert history_embedding.shape == (n_seqs, self.history_encoder_dim)
 
+        if time_deltas is not None:
+            assert time_deltas.shape == (n_seqs, self.history_len + self.generation_len)
+
         _samp = tabsyn.sample(
             self.model.denoise_fn_D,
             n_seqs,
             dims=(self.generation_len, self.latent_dim),
             class_labels=class_labels,
+            time_deltas=time_deltas,
             history_embedding=history_embedding,
             reference=reference_seq,
             cfg_w=self.cfg_w,
