@@ -76,7 +76,6 @@ data_conf:
   val_transforms:
     "0": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
-    "tcd": ${data_conf.train_transforms.TCD}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":

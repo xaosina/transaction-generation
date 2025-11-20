@@ -1,4 +1,4 @@
-config_factory: [start, datasets/taobao/taobao, methods/gru, metrics/default]
+config_factory: [start, datasets/taobao/taobao, methods/gru, 1to1, metrics/default]
 
 optimizer:
   params:

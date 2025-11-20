@@ -3,12 +3,7 @@ evaluator:
   topk: 1
   temperature: 1.
   metrics:
+    - OTD: {focus_on: ["<target_token>"], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: ["<target_token>"], f1_average: micro}
     - Levenshtein
-    - OTD:
-        focus_on: [artist_id]
-        f1_average: micro
     - Cardinality
-    - F1Score:
-        average: macro
-    - F1Score:
-        average: micro
