@@ -19,6 +19,7 @@ import numpy as np
 import math
 from timm.models.vision_transformer import Attention, Mlp
 from .base import LDMDenoiser
+from .unet import num_module_params
 
 
 def modulate(x, shift, scale):
@@ -198,6 +199,7 @@ class DiT(LDMDenoiser):
         )
 
         self.initialize_weights()
+        num_module_params({'dit':self})
 
     def initialize_weights(self):
         # Initialize transformer layers:
