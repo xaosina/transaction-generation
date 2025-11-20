@@ -1,0 +1,10 @@
+data_conf:
+  focus_on: ["<time>", "<target_token>"]
+
+evaluator:
+  metrics:
+    - OTD: {f1_average: micro}
+    - OTD: {focus_on: ["<target_token>"], f1_average: micro}
+    - OTD: {max_shift: 0, focus_on: ["<target_token>"], f1_average: micro}
+    - Levenshtein
+    - Cardinality

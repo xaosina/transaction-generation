@@ -76,9 +76,13 @@ class DataConfig:
 
         focus = self.focus_on
         if focus:
-            new_focus = [
-                f if f != "<target_token>" else self.target_token for f in focus
-            ]
+            new_focus = []
+            for f in focus:
+                if f == "<target_token>":
+                    f = self.target_token
+                elif f == "<time>":
+                    f = self.time_name
+                new_focus += [f]
             object.__setattr__(self, "focus_on", new_focus)
             if not set(new_focus).issubset(self.seq_cols):
                 raise ValueError("focus_on must be a subset of seq_cols")

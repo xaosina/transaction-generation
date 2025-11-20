@@ -14,7 +14,6 @@ from ..trainer import Trainer
 from ..utils import (
     get_optimizer,
     suggest_conf,
-    weight_decay_groups_exclude_bias_layernorm
 )
 
 from .utils import PipelineConfig

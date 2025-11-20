@@ -59,7 +59,7 @@ class VAE(BaseAE):
         """
 
         assert not self.encoder.pretrained
-        x, params = self.encoder(x)
+        x, params = self.encoder(x, reparametrize=True)
         x = self.decoder(x)
         return x, params
 
@@ -74,8 +74,8 @@ class VAE(BaseAE):
         hist = deepcopy(hist)
         assert hist.target_time.shape[0] == gen_len, hist.target_time.shape
         x = self.encoder(hist.get_target_batch())
-        if not self.encoder.pretrained:
-            x = x[0]
+        # if not self.encoder.pretrained:
+        #     x = x[0]
         x = self.decoder.generate(x, topk=topk, temperature=temperature)
         if with_hist:
             hist.append(x)
@@ -136,7 +136,7 @@ class Encoder(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, batch: GenBatch, copy=True) -> Seq:
+    def forward(self, batch: GenBatch, copy=True, reparametrize=False) -> Seq:
         if copy:
             batch = deepcopy(batch)
 
@@ -173,7 +173,7 @@ class Encoder(nn.Module):
         mu_z = self.encoder_mu(x)  # (L*B)', D_num + D_cat, d_token
 
         # Handle VAE output based on training mode
-        if self.pretrained:
+        if not reparametrize:
             output = mu_z
         else:
             std_z = self.encoder_std(x)
@@ -185,7 +185,7 @@ class Encoder(nn.Module):
 
         # Prepare return values
         seq = Seq(tokens=with_pad, lengths=batch.lengths, time=time)
-        if self.frozen or self.pretrained:
+        if not reparametrize:
             return seq
         return (seq, {"mu_z": mu_z, "std_z": std_z})
 

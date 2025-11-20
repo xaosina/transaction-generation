@@ -17,7 +17,6 @@ import yaml
 from omegaconf import DictConfig, ListConfig
 from optuna import Trial
 from torch.profiler import ProfilerActivity, profile, record_function, schedule
-from collections import defaultdict
 
 
 class MeanDict:
@@ -286,30 +285,6 @@ def _auto_import_subclasses(current_dir, package_name, global_dict, parent_class
                 print(f"Error importing {full_module_name}: {e}")
                 continue
 
-def weight_decay_groups_exclude_bias_layernorm(model, weight_decay=1e-2):
-    '''
-    suggested by ChatGPT
-    '''
-    decay, no_decay = [], []
-    model_names = defaultdict(list)
-    no_decay_names = ["bias", "ln", "layernorm", "norm"]
-    for name, p in model.named_parameters():
-        model_names['all'].append(name)
-        if not p.requires_grad:
-            model_names['no_req_grad'].append(name)
-            continue
-        if any(nd in name.lower() for nd in no_decay_names):
-            no_decay.append(p)
-            model_names['no_decay'].append(name)
-        else:
-            decay.append(p)
-            model_names['decay'].append(name)
-
-    param_groups = [
-        {"params": decay, "weight_decay": weight_decay},
-        {"params": no_decay, "weight_decay": 0.0},
-    ]
-    return param_groups #, model_names
 
 # Printing dict values in a nice way
 
