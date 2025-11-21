@@ -1,0 +1,21 @@
+# Make time as delta from last seen event in history
+# Another time is absolute
+data_conf:
+  train_transforms:
+    "time_diff":
+      TimeToDiff:
+        disable: true
+    "target_time_prep":
+      PreprocessTime:
+        disable: false
+
+model:
+  params:
+    order_invariant_mode: True
+    fix_features: ["small_group", ]
+    diff_features: ["trans_date", "amount_rur"]
+    losses: ['time_loss']
+    help_net:
+      name: GroundTruthGenerator
+      # checkpoint:
+    

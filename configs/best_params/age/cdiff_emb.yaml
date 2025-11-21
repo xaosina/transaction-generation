@@ -1,0 +1,28 @@
+config_factory: [start, metrics/default, datasets/age/age, methods/cdiff/base, methods/cdiff/age/features, methods/cdiff/age/embedings/gru]
+
+schedulers:
+  step:
+    StepLR:
+      step_size: 18
+optimizer:
+  params:
+    weight_decay: 1.1119879441624236e-08
+    lr: 0.00016297921190666943
+model:
+  params:
+    diffusion_steps: 480
+    num_emb_dim_features_exp: 5
+    cat_emb_dim_features_exp: 6
+    time_emb_dim_features_exp: 7
+    dim_exp: 9
+    heads_exp: 1
+    hidden_scale_exp: 10
+    encoder_layer: 10
+    decoder_layer: 12
+    num_diffusion_t_type: discrete
+    cat_diffusion_t_type: discrete
+    history_encoder_causal_mask: true
+    use_rezero: true
+    use_simple_time_proj: false
+    use_post_norm: false
+    prefix_dim_exp: 4

@@ -31,7 +31,7 @@ class DiffusionTabularModel(torch.nn.Module):
         dim_feedforward = 1 << model_config.params["hidden_scale_exp"]
         num_encoder_layers = model_config.params["encoder_layer"]
         num_decoder_layers = model_config.params["decoder_layer"]
-        self.cfg_p_uncond = model_config.params["cfg_p", 0.0]
+        self.cfg_p_uncond = model_config.params.get("cfg_p", 0.0)
         self.order_invariant_mode = bool(model_config.params.get("order_invariant_mode", False))
 
         if (dim_feedforward % transformer_heads) != 0:

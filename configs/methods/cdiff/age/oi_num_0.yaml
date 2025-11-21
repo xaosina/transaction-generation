@@ -1,0 +1,11 @@
+# Just first try
+model:
+  params:
+    order_invariant_mode: True
+    fix_features: ["small_group", ]
+    diff_features: ["trans_date", "amount_rur"]
+    losses: ['time_loss']
+    help_net:
+      name: GroundTruthGenerator
+      # checkpoint:
+    

@@ -475,7 +475,7 @@ class Logarithm(BatchTransform):
 
 @dataclass
 class LogTime(BatchTransform):
-    """Apply natural logarithm to specific feature."""
+    """Apply natural logarithm to time feature."""
     
     disable: bool = True   
     clamp: int = 88
@@ -492,6 +492,24 @@ class LogTime(BatchTransform):
         assert batch.time is not None
         x = batch.time.clamp(-self.clamp, self.clamp)  # To prevent overflow
         batch.time = torch.expm1(torch.abs(x)) * torch.sign(x)
+
+
+@dataclass
+class PreprocessTime(BatchTransform):
+    disable: bool = True
+    
+    
+    def __call__(self, batch: GenBatch):
+        if self.disable:
+            return
+        assert batch.time is not None
+        batch.target_time = batch.target_time - batch.time.max(dim=0).values
+
+    def reverse(self, batch: GenBatch):
+        if self.disable:
+            return
+        assert batch.time is not None
+        batch.target_time = batch.target_time + batch.time.max(dim=0).values
 
 
 @dataclass

@@ -7,13 +7,12 @@ evaluator:
 
 
 data_conf:
-  train_resamples: 10
-  batch_size: 512
+  train_resamples: 5
+  batch_size: 128
   train_random_end: time
   train_transforms:
     "3":
       CutTargetSequence:
-        #target_len: ${data_conf.generation_len}
         target_len: 32
   
   
@@ -21,14 +20,15 @@ data_conf:
 model:
   name: CrossDiffusionModel
   params:
+    losses: ['time_loss', 'type_loss']
     history_len: 32
-    #generation_len:  ${data_conf.generation_len}
     generation_len: 32
+    # Model architecture params
     diffusion_steps: 700
     repeat_samples: 1
     num_emb_dim_features_exp: 3
     cat_emb_dim_features_exp: 3
-    time_emb_dim_features_exp: 5
+    time_emb_dim_features_exp: 5    
     dim_exp: 8
     heads_exp: 2
     hidden_scale_exp: 9
@@ -36,7 +36,6 @@ model:
     decoder_layer: 4
     num_diffusion_t_type: discrete
     cat_diffusion_t_type: discrete
-    losses: ['time_loss', 'type_loss']
     history_encoder_causal_mask: true
     use_rezero: true
     use_simple_time_proj: false

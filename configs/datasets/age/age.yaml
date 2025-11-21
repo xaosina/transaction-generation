@@ -57,11 +57,7 @@ data_conf:
         disable: true
     "time_diff":
       TimeToDiff:
-        disable: false
-    "log_time":
-      "LogTime":
         disable: true
-        clamp: 5
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
@@ -72,13 +68,16 @@ data_conf:
     "3":
       CutTargetSequence:
         target_len: 0
+    "target_time_prep":
+      PreprocessTime:
+        disable: true
 
   val_transforms:
     "rescale": ${data_conf.train_transforms.rescale}
     "time_diff": ${data_conf.train_transforms.time_diff}
-    "log_time": ${data_conf.train_transforms.log_time}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":
       CutTargetSequence:
         target_len: *generation_len
+    "target_time_prep": ${data_conf.train_transforms.target_time_prep}

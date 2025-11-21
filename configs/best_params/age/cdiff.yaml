@@ -1,0 +1,26 @@
+config_factory: [start, metrics/default, datasets/age/age, methods/cdiff/base, methods/cdiff/age/features]
+
+schedulers:
+  step:
+    StepLR:
+      step_size: 30
+optimizer:
+  params:
+    weight_decay: 3.6732888560409994e-08
+    lr: 0.00040422594210270745
+model:
+  params:
+    diffusion_steps: 410
+    num_emb_dim_features_exp: 7
+    cat_emb_dim_features_exp: 7
+    time_emb_dim_features_exp: 8
+    dim_exp: 9
+    heads_exp: 2
+    hidden_scale_exp: 10
+    encoder_layer: 2
+    decoder_layer: 6
+    num_diffusion_t_type: continuous
+    cat_diffusion_t_type: continuous
+    history_encoder_causal_mask: false
+    use_rezero: true
+    use_simple_time_proj: true

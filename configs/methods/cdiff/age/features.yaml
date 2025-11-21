@@ -1,0 +1,3 @@
+model:
+  params:
+    diff_features: ["small_group", "trans_date", "amount_rur"]
