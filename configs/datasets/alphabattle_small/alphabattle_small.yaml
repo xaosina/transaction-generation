@@ -73,7 +73,7 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "rescale_time": ${data_conf.train_transforms.0}
+    "rescale_time": ${data_conf.train_transforms.rescale_time}
     "1": ${data_conf.train_transforms.1}
     "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":

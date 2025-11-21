@@ -50,7 +50,7 @@ data_conf:
   val_random_end: time
   
   train_transforms:
-    "rescale":
+    "rescale_time":
       RescaleTime:
         loc: 0
         scale: 730
@@ -72,7 +72,7 @@ data_conf:
         disable: true
 
   val_transforms:
-    "rescale": ${data_conf.train_transforms.rescale}
+    "rescale_time": ${data_conf.train_transforms.rescale_time}
     "time_diff": ${data_conf.train_transforms.time_diff}
     "log_tfs": ${data_conf.train_transforms.log_tfs}
     "vr_decimal": ${data_conf.train_transforms.vr_decimal}

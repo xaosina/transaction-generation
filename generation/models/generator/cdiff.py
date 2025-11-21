@@ -218,6 +218,8 @@ class CrossDiffusionModel(BaseGenerator):
         provided_cat_features = []
         num_features_used = []
         cat_features_used = []
+        tgt_num = None
+        tgt_cat = None
         if self.help_net is not None:
             pred = self.help_net.generate(x, self.generation_len, topk=-1)
             num_features_number = 0
@@ -267,8 +269,8 @@ class CrossDiffusionModel(BaseGenerator):
                 gen_len,
                 cat_order,
                 tgt_e=tgt_cat.repeat_interleave(self.repeat_samples, dim=0) if provide_cats else None,
-                tgt_x=tgt_num.repeat_interleave(self.repeat_samples, dim=0),
-                hist_emb=embeddings.repeat_interleave(self.repeat_samples, dim=0),
+                tgt_x=tgt_num.repeat_interleave(self.repeat_samples, dim=0) if tgt_num is not None else None,
+                hist_emb=embeddings.repeat_interleave(self.repeat_samples, dim=0) if embeddings is not None else None,
                 cfg_w=self.cfg_w,
             )
         pred_cat = pred_cat.reshape(B, self.repeat_samples, self.generation_len, F_cat).permute(0, 2, 3, 1)

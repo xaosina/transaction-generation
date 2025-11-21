@@ -147,14 +147,17 @@ class DiffusionTabularModel(torch.nn.Module):
         self.time_diff_ = DiffusionTimeModel(
             n_steps=self.n_steps, denoise_func=self.denoise_fn_dt
         )
-        self.plug_hist = torch.nn.Parameter(
-            torch.zeros(1, self.data_config.generation_len, transformer_dim),
-            requires_grad=True,
-        )
-
-        self.plug_embedding = torch.nn.Parameter(
-            torch.zeros(1, outer_history_encoder_dim), requires_grad=True
-        )
+        self.plug_embedding = None
+        self.plug_hist = None
+        if self.cfg_p_uncond > 0:
+            self.plug_hist = torch.nn.Parameter(
+                torch.zeros(1, self.data_config.generation_len, transformer_dim),
+                requires_grad=True,
+            )
+            if outer_history_encoder_dim is not None:
+                self.plug_embedding = torch.nn.Parameter(
+                    torch.zeros(1, outer_history_encoder_dim), requires_grad=True
+                )
 
     def _permute_target(self, tgt_x, tgt_e):
         if tgt_x is None or tgt_e is None:
@@ -272,14 +275,15 @@ class DiffusionTabularModel(torch.nn.Module):
         T = tgt_len
 
         shape = (B, T, F_num)
-        diff_mask = self.time_diff_._diff_mask(tgt_x).bool()
-        fix_mask = ~diff_mask
+        fix_mask = None
 
         device = self.device
 
         if tgt_x is None:
             x_t = torch.randn(shape).to(device)
         else:
+            diff_mask = self.time_diff_._diff_mask(tgt_x).bool()
+            fix_mask = ~diff_mask
             x_t = tgt_x.clone()
             noise = torch.randn(shape).to(device)
             x_t = torch.where(diff_mask, noise, x_t)
@@ -323,8 +327,8 @@ class DiffusionTabularModel(torch.nn.Module):
                 cat_list,
                 hist_emb,
                 tgt_x,
-                fix_mask,
-                cfg_w,
+                fix_mask=fix_mask,
+                cfg_w=cfg_w,
                 plug_hist=plug_hist,
                 plug_emb=plug_emb,
             )
@@ -361,7 +365,7 @@ class DiffusionTabularModel(torch.nn.Module):
         cat_list,
         hist_emb,
         tgt_x,
-        fix_mask,
+        fix_mask=None,
         cfg_w=1.0,
         plug_hist=None,
         plug_emb=None,

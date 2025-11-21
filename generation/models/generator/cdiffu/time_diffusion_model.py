@@ -79,6 +79,8 @@ class DiffusionTimeModel(nn.Module):
         )
 
     def _diff_mask(self, x):
+        if x.ndim != 3:
+            breakpoint()
         # x shape: (B, L, F_num)
         assert x.ndim == 3
         B, L, F = x.shape
