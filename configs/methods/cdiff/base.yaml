@@ -16,7 +16,7 @@ data_conf:
         target_len: 32
     "rescale_time":
       RescaleTime:
-        disable: False
+        disable: True
   
   
 # MODEL
