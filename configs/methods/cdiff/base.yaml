@@ -14,6 +14,9 @@ data_conf:
     "3":
       CutTargetSequence:
         target_len: 32
+    "rescale_time":
+      RescaleTime:
+        disable: True
   
   
 # MODEL

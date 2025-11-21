@@ -57,13 +57,13 @@ data_conf:
   val_random_end: time
 
   train_transforms:
-    "0":
+    "rescale_time":
       RescaleTime:
         loc: 0.0
         scale: 11754.0
     "1":
       TimeToDiff:
-        disable: True
+        disable: false
     "vr_decimal": null
     "local_shuffle":
       LocalShuffle:
@@ -73,7 +73,7 @@ data_conf:
         target_len: 0
 
   val_transforms:
-    "0": ${data_conf.train_transforms.0}
+    "rescale_time": ${data_conf.train_transforms.0}
     "1": ${data_conf.train_transforms.1}
     "vr_decimal": ${data_conf.train_transforms.vr_decimal}
     "3":

@@ -54,10 +54,9 @@ data_conf:
       RescaleTime:
         loc: 0
         scale: 730
-        disable: true
     "time_diff":
       TimeToDiff:
-        disable: true
+        disable: false
     "log_tfs":
       Logarithm:
         names: ["amount_rur"]
