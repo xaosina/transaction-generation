@@ -1,0 +1,9 @@
+model:
+  params:
+    fix_features: ["mcc_category", "mcc", "payment_system", "card_type", ]
+    diff_features: ["amnt", "hours_since_first_tx"]
+    losses: ['time_loss']
+    help_net:
+      name: GroundTruthGenerator
+      # checkpoint:
+    

@@ -1,0 +1,3 @@
+model:
+  params:
+    diff_features: ["mcc_category", "mcc", "payment_system", "card_type", "amnt", "hours_since_first_tx"]
