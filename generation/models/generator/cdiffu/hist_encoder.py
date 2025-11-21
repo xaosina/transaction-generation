@@ -62,6 +62,9 @@ class HistoryEncoder(nn.Module):
             dynamic_feature_dim_sum += num_feature_dim
 
         self.total_d_model = dynamic_feature_dim_sum
+        
+        if dynamic_feature_dim_sum % transformer_heads != 0:
+            raise ValueError(f'd_model should be easy devided on nheads, but d_model = {dynamic_feature_dim_sum}, nheads={transformer_heads}')
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=dynamic_feature_dim_sum,
