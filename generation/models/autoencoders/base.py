@@ -48,8 +48,8 @@ class BaselineAE(BaseAE):
             data_conf, batch_transforms, ae_config
         )
 
-        if batch_transforms is not None:
-            assert ae_config.frozen, "Transformes are designed for pretrained models!"
+        #if batch_transforms is not None:
+        #    assert ae_config.frozen, "Transformes are designed for pretrained models!"
         self.encoder = Batch2TransformedSeq(
             cat_cardinalities=cat_cardinalities,
             num_features=num_names,

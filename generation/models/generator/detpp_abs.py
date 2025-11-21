@@ -12,59 +12,40 @@ from generation.utils import freeze_module
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch, valid_mask
 from ..encoders import AutoregressiveEncoder
 from . import BaseGenerator, ModelConfig
+from .detpp import ConditionalHead
 
+class SimpleMLP(nn.Module):
+    def __init__(self, input_size,output_size,hidden_size=32,num_hidden_layers=2):
+        super(SimpleMLP, self).__init__()
+        
+        # Define the first linear layer (Input -> Hidden)
+        self.input_layer = nn.Linear(input_size, hidden_size)
+        
+        # Define the activation function
+        self.relu = nn.ReLU()
+        
+        # Define the second linear layer (Hidden -> Output)
+        self.output_layer = nn.Linear(hidden_size, output_size)
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(num_hidden_layers):
+            # Each hidden layer takes hidden_size input and outputs hidden_size
+            self.hidden_layers.append(nn.Linear(hidden_size, hidden_size))
 
-class ConditionalHead(BaseSeq2Seq):
-    """FC head for the sequence encoder
+    def forward(self, x):
+        # 1. Pass through the Input Layer and apply activation
+        x = self.relu(self.input_layer(x))
 
-    Args:
-        input_size: Embedding size.
-        k: The number of output tokens.
-    """
+        # 2. Pass through the dynamic Hidden Layers
+        for layer in self.hidden_layers:
+            # Apply linear layer then ReLU activation
+            x = self.relu(layer(x))
+            
+        # 3. Pass through the Output Layer (no activation is typical for final layer)
+        x = self.output_layer(x)
 
-    def __init__(self, input_size, k):
-        super().__init__()
-        self.input_size = input_size
-        self.proj = torch.nn.Linear(input_size * 2, input_size)
-        self.relu = torch.nn.ReLU()
+        return x
 
-        self.queries = torch.nn.Parameter(torch.randn(k, input_size))  # (K, D).
-        self.k = k
-
-    @property
-    def output_dim(self):
-        return self.input_size * self.k
-
-    def forward_impl(self, ctx):
-        b, d = ctx.shape
-        x = self.queries[None].repeat(b, 1, 1)  # (B, K, D_x).
-        x = torch.cat([ctx.unsqueeze(1).repeat(1, self.k, 1), x], -1).flatten(
-            0, 1
-        )  # (BK, D)
-        x = self.proj(x)  # (BK, O).
-        x = self.relu(x)
-        return x.reshape(b, self.output_dim)  # (B, KO).
-
-    def forward(self, seq: Seq):
-        mask = valid_mask(seq)
-        x = seq.tokens
-        assert x.ndim > 2  # (L, B, D).
-        shape = list(x.shape)
-        x_masked = x[mask]  # (V, D).
-        v = len(x_masked)
-        x_mapped = self.forward_impl(x_masked.flatten(0, -2)).reshape(
-            *([v] + shape[2:-1] + [self.output_dim])
-        )  # (V, *, D).
-        x_new = torch.zeros(
-            *[shape[:-1] + [self.output_dim]],
-            dtype=x_mapped.dtype,
-            device=x_mapped.device
-        )  # (L, B, *, D).
-        x_new[mask] = x_mapped
-        return replace(seq, tokens=x_new)
-
-
-class DeTPP(BaseGenerator):
+class DeTPP_abs(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
 
@@ -102,6 +83,7 @@ class DeTPP(BaseGenerator):
     def _apply_delta(self, x: GenBatch):
         x = deepcopy(x)
         deltas = x.time
+
         deltas[1:,:] = deltas[1:,:] - deltas[:-1,:]
         deltas[0, :] = 0
         # deltas.clip_(min=0, max=self._max_time_delta)
@@ -126,7 +108,6 @@ class DeTPP(BaseGenerator):
 
     def forward(self, x: GenBatch) -> PredBatch:
         L, B = x.shape
-        x = deepcopy(x)
         if self.autoencoder_name == "BaselineAE":
             x = self._apply_delta(x)
         x = self.autoencoder.encoder(x, copy=False)  # Sequence of [L, B, D]
@@ -137,11 +118,13 @@ class DeTPP(BaseGenerator):
             lengths=x.lengths.repeat_interleave(self.k_output, 0),
             time=None,
         )
+
         presence_scores = self.presence_head(x.tokens).reshape(L, B, -1)  # [L, B, K]
+
         x = self.autoencoder.decoder(x)  # [L, B * K, preds]
         x = x.k_reshape(self.k_output)  # [L, B, K, pred]
 
-        return (x, presence_scores)
+        return (x, presence_scores,0)
 
     def get_embeddings(self, hist: GenBatch):
         hist = deepcopy(hist)
@@ -198,8 +181,8 @@ class DeTPP(BaseGenerator):
                 )
                 # Reconstruct
                 x = self.autoencoder.decoder.generate(x, topk=topk, temperature=temperature)
-                x.time = x.time.clip(min=0)
-                x = self._sort_time_and_revert_delta(hist, x)
+                # x.time = x.time.clip(min=0)
+                # x = self._sort_time_and_revert_delta(hist, x)
                 # 2. Save gen and append to history
                 already_generated += self.k_gen
                 hist.append(x)  # Append GenBatch, result is [L+K, B, D]

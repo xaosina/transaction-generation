@@ -12,59 +12,10 @@ from generation.utils import freeze_module
 from ...data.data_types import GenBatch, LatentDataConfig, PredBatch, valid_mask
 from ..encoders import AutoregressiveEncoder
 from . import BaseGenerator, ModelConfig
+from .detpp_abs_adapt import SimpleMLP
+from .detpp import ConditionalHead
 
-
-class ConditionalHead(BaseSeq2Seq):
-    """FC head for the sequence encoder
-
-    Args:
-        input_size: Embedding size.
-        k: The number of output tokens.
-    """
-
-    def __init__(self, input_size, k):
-        super().__init__()
-        self.input_size = input_size
-        self.proj = torch.nn.Linear(input_size * 2, input_size)
-        self.relu = torch.nn.ReLU()
-
-        self.queries = torch.nn.Parameter(torch.randn(k, input_size))  # (K, D).
-        self.k = k
-
-    @property
-    def output_dim(self):
-        return self.input_size * self.k
-
-    def forward_impl(self, ctx):
-        b, d = ctx.shape
-        x = self.queries[None].repeat(b, 1, 1)  # (B, K, D_x).
-        x = torch.cat([ctx.unsqueeze(1).repeat(1, self.k, 1), x], -1).flatten(
-            0, 1
-        )  # (BK, D)
-        x = self.proj(x)  # (BK, O).
-        x = self.relu(x)
-        return x.reshape(b, self.output_dim)  # (B, KO).
-
-    def forward(self, seq: Seq):
-        mask = valid_mask(seq)
-        x = seq.tokens
-        assert x.ndim > 2  # (L, B, D).
-        shape = list(x.shape)
-        x_masked = x[mask]  # (V, D).
-        v = len(x_masked)
-        x_mapped = self.forward_impl(x_masked.flatten(0, -2)).reshape(
-            *([v] + shape[2:-1] + [self.output_dim])
-        )  # (V, *, D).
-        x_new = torch.zeros(
-            *[shape[:-1] + [self.output_dim]],
-            dtype=x_mapped.dtype,
-            device=x_mapped.device
-        )  # (L, B, *, D).
-        x_new[mask] = x_mapped
-        return replace(seq, tokens=x_new)
-
-
-class DeTPP(BaseGenerator):
+class DeTPP_delta_adapt(BaseGenerator):
     def __init__(self, data_conf: LatentDataConfig, model_config: ModelConfig):
         super().__init__()
 
@@ -98,6 +49,8 @@ class DeTPP(BaseGenerator):
             self.autoencoder.encoder.output_dim, self.k_output
         )
         self.presence_head = nn.Linear(self.autoencoder.encoder.output_dim, 1)
+        self.adaptor = SimpleMLP(self.autoencoder.encoder.output_dim,self.autoencoder.encoder.output_dim)
+
 
     def _apply_delta(self, x: GenBatch):
         x = deepcopy(x)
@@ -138,6 +91,12 @@ class DeTPP(BaseGenerator):
             time=None,
         )
         presence_scores = self.presence_head(x.tokens).reshape(L, B, -1)  # [L, B, K]
+        ad_x = x.tokens + self.adaptor(x.tokens) ## adaptor learns residual now! eaiser than entire mapping
+        x = Seq(
+            tokens=ad_x,
+            lengths=x.lengths,
+            time=None,
+        )
         x = self.autoencoder.decoder(x)  # [L, B * K, preds]
         x = x.k_reshape(self.k_output)  # [L, B, K, pred]
 
@@ -196,7 +155,13 @@ class DeTPP(BaseGenerator):
                     lengths=torch.full((B,), self.k_gen, device=hist.device),
                     time=None,
                 )
-                # Reconstruct
+                # Reconstruct                
+                ad_x = x.tokens + self.adaptor(x.tokens)
+                x = Seq(
+                    tokens=ad_x,
+                    lengths=torch.full((B,), self.k_gen, device=hist.device),
+                    time=None,
+                )
                 x = self.autoencoder.decoder.generate(x, topk=topk, temperature=temperature)
                 x.time = x.time.clip(min=0)
                 x = self._sort_time_and_revert_delta(hist, x)

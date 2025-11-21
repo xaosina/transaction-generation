@@ -11,6 +11,8 @@ from .base import BaselineLoss, NoOrderLoss, TailLoss, VAELoss, AELoss
 from .oneshot import DistLoss, GaussianDistLoss, MatchedLoss, TargetLoss
 from .detpp.detpp import DeTPPLoss
 
+from .detpp.detpp_abs import DeTPPLoss_abs
+from .detpp.detpp_delta import DeTPPLoss_delta
 
 @dataclass(frozen=True)
 class LossConfig:

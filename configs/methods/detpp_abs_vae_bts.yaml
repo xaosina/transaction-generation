@@ -7,7 +7,7 @@
 #     Replace target metric to GenOTD
 
 model:
-  name: DeTPP
+  name: DeTPP_abs
   autoencoder:
     name: VAE
     params:
@@ -22,7 +22,9 @@ model:
     frozen: True
     checkpoint: /trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/vae_age/old_vae_age.ckpt
     batch_transforms:
-
+    # - RescaleTime:
+    #     loc: 0
+    #     scale: 730
 
   latent_encoder:
     name: GRU
@@ -44,7 +46,7 @@ schedulers:
       step_size: 30
 
 loss:
-  name: DeTPPLoss
+  name: DeTPPLoss_abs
   params: 
     loss_subset: 0.1
     matching_weights: {"_presence": 4}
@@ -56,7 +58,7 @@ data_conf:
     "0":
       RescaleTime:
         loc: 0.0
-        scale: 1.0
+        scale: 730.0
     "1":
       TimeToDiff:
         disable: True

@@ -20,7 +20,7 @@ model:
       num_emb_dim: 109
     pretrain: False
     frozen: False
-    checkpoint: /trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/vae_age/old_vae_age.ckpt
+    checkpoint: #/trinity/home/j.chen/2.SeqDiff/test/transaction-generation/ckpt/vae_age/old_vae_age.ckpt
 
   latent_encoder:
     name: GRU

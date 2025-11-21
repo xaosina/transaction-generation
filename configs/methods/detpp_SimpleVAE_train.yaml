@@ -19,8 +19,8 @@ model:
     frozen: False
     checkpoint: #/trinity/home/j.chen/2.SeqDiff/transaction-generation/ckpt/vae_age/ae.ckpt
     batch_transforms:
-      - TimeToDiff:
-          disable: False
+      # - TimeToDiff:
+      #     disable: False
 
   latent_encoder:
     name: GRU

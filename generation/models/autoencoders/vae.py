@@ -50,6 +50,20 @@ class VAE(BaseAE):
             batch_transforms=batch_transforms,
         )
 
+        # --- code to frozen encoder and decoder---
+        if model_config.params.get("frozen_encoder",False):
+            print("--- ❄️ frozing VAE encoder... ---")
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+            print("--- VAE frozen encoder done. (requires_grad = False)。 ---")
+
+        if model_config.params.get("frozen_decoder",False):
+            print("--- ❄️ frozing VAE decoder... ---")
+            for param in self.decoder.parameters():
+                param.requires_grad = False
+            print("--- VAE frozen decoder done. (requires_grad = False)。 ---")
+        # ------------------------------------
+
     def forward(self, x: GenBatch) -> PredBatch:
         """
         Forward pass of the Variational AutoEncoder
