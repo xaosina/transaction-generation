@@ -1,6 +1,6 @@
 trainer:
   metrics_on_train: True
-  total_iters: 1
+  total_iters: 1_000_000
 
 evaluator:
   devices: ["cuda:0", "cuda:0"]
